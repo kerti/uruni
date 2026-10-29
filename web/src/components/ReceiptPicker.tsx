@@ -12,7 +12,7 @@ const text = copy.receipts
  * round-trip. No `capture` attribute: skipping the photo is the normal path,
  * and forcing the camera would take away the "pick an existing photo" option
  * every phone's file picker offers. */
-const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp'
+export const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp'
 
 /**
  * A reusable optional-photo field: `<input type="file">` plus a small preview

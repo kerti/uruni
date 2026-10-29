@@ -11,14 +11,12 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { formatPeriod } from '@/lib/dates'
-import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { activeFilterCount, readFilters, writeFilters, type TransactionFilters } from '@/lib/transactionFilters'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
-import CorrectPurposeDialog from '@/screens/History/CorrectPurposeDialog'
 import TransactionFilterDialog from '@/screens/History/TransactionFilterDialog'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
@@ -38,11 +36,6 @@ interface Lookups {
   purposes: Purpose[]
   /** Every member, an inactive one too, for the filter dialog. */
   members: Member[]
-  /** For the correction dialog's picker. `selectable` excludes a closed
-   * envelope's purpose, which this picker must not offer: correcting INTO a
-   * closed amplop is one of ADR-033's two named refusals. Loaded with the
-   * first page so tapping a pos shows a filled picker instead of a spinner. */
-  selectable: Purpose[]
 }
 
 interface FirstPage {
@@ -102,17 +95,10 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const { month, purposeId, memberId, direction } = filters
   const filterCount = activeFilterCount(filters)
 
-  // The correction dialog is a search parameter, never component state
-  // (ADR-032), so back and Esc close it the same way and a deep link opens it.
-  // It shares `?edit=` with nothing else here, but parseDialogTarget still
-  // reads it - a bare Number() would treat a foreign value as this screen's.
-  const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
-  const correctionTarget = parseDialogTarget('purpose-correction', dialogValue)
+  // The filter dialog is a search parameter, never component state (ADR-032).
+  // The correction dialog shares `?edit=` and lives in TransactionList.
+  const { value: dialogValue, open: openDialog, close: closeDialog } = useDialogParam()
   const filterOpen = dialogValue === 'filter'
-  const [corrected, setCorrected] = useState(false)
-  // A reversal (ADR-042) - a one-shot banner like `corrected` above, not
-  // component state that would survive a search or a page change.
-  const [reversed, setReversed] = useState(false)
 
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order. Reset whenever the first page is
@@ -129,11 +115,11 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   // filter dialog, which stays open across loads and must not blank while the
   // page refetches.
   const lookups = useRef<Promise<Lookups> | null>(null)
-  const [options, setOptions] = useState<Lookups>({ purposes: [], members: [], selectable: [] })
+  const [options, setOptions] = useState<Lookups>({ purposes: [], members: [] })
   const loadLookups = useCallback(() => {
     if (lookups.current === null) {
-      const pending = Promise.all([listPurposes(), listAllMembers(), listPurposes(true)]).then(([purposes, members, selectable]) => {
-        const loaded = { purposes, members, selectable }
+      const pending = Promise.all([listPurposes(), listAllMembers()]).then(([purposes, members]) => {
+        const loaded = { purposes, members }
         setOptions(loaded)
         return loaded
       })
@@ -188,22 +174,6 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     return () => window.clearTimeout(timer)
   }, [draft, q, setSearchParams])
 
-  // A `purpose-correction:` value naming a row this page does not hold, or a
-  // malformed one: strip it once the page has loaded rather than leave an
-  // inert param in the URL. clear(), never close() - a dead link is not a
-  // navigation to undo (see Locations.tsx). A `foreign` value belongs to
-  // nothing on this screen and is left alone.
-  const correctionKind = correctionTarget.kind
-  const correctionId = correctionTarget.kind === 'edit' ? correctionTarget.id : null
-  const loadedData = state.data
-  useEffect(() => {
-    if (correctionKind === 'foreign' || correctionKind === 'new') return
-    if (state.status !== 'success' || !loadedData) return
-    const rows = more ? [...loadedData.page.transactions, ...more.transactions] : loadedData.page.transactions
-    if (correctionKind === 'edit' && rows.some((t) => t.id === correctionId)) return
-    clearDialog()
-  }, [dialogValue, correctionKind, correctionId, state.status, loadedData, more, clearDialog])
-
   /** Clears one filter and keeps the rest and whatever she searched. Not
    * `replace`: arriving from an envelope was a navigation, so back should
    * still lead to that envelope. */
@@ -255,11 +225,6 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
     const nextCursor = more ? more.nextCursor : page.nextCursor
 
-    // The row the dialog is about, found among the rows loaded. A
-    // `purpose-correction:` value naming a row on a page she has not loaded (a
-    // deep link, a stale link) opens nothing - and the effect below strips it.
-    const correcting = transactions.find((t) => correctionTarget.kind === 'edit' && t.id === correctionTarget.id) ?? null
-
     // An empty filtered list is not a failed search: nothing matched the
     // filters, not something she typed. A search inside the filters is still a
     // search, so `q` wins when both are set. A pos alone is an envelope's
@@ -306,47 +271,11 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             ))}
           </div>
         )}
-        {corrected && (
-          <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
-            {copy.purposeCorrection.success}
-          </p>
-        )}
-        {reversed && (
-          <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
-            {text.reverseSuccess}
-          </p>
-        )}
         <TransactionList
           transactions={transactions}
           purposeNames={purposeNames}
           emptyMessage={emptyMessage}
-          onCorrectPurpose={(transaction) => {
-            setCorrected(false)
-            openDialog(`purpose-correction:${transaction.id}`)
-          }}
-          onReceiptsChanged={() => void run(loadFirstPage, { silent: true })}
-          // The undo of any ordinary row (ADR-042), opened from the entry
-          // detail. Refetches the first page, as a correction does: the
-          // reversal's row (kind='adjustment') belongs at the top of a
-          // newest-first list.
-          onReversed={() => {
-            setReversed(true)
-            void run(loadFirstPage)
-          }}
-          onReversalRefresh={() => run(loadFirstPage, { silent: true })}
-        />
-        <CorrectPurposeDialog
-          transaction={correcting}
-          purposes={loaded.selectable}
-          purposeNames={purposeNames}
-          open={correcting !== null}
-          onClose={closeDialog}
-          onCorrected={() => {
-            closeDialog()
-            setCorrected(true)
-            void run(loadFirstPage)
-          }}
-          refresh={() => run(loadFirstPage, { silent: true })}
+          onRefresh={() => run(loadFirstPage, { silent: true })}
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -178,7 +178,7 @@ describe('Transactions tab', () => {
     expect(requests.filter((url) => url.searchParams.has('q')).map((url) => url.searchParams.get('q'))).toEqual(['galon'])
   })
 
-  // Pos names, the filter options and the correction picker do not change
+  // Pos names and the filter options do not change
   // with the search, so a search asks for the page alone.
   it('fetches its lookups once, then only the page on a search', async () => {
     const everything: string[] = []
@@ -199,13 +199,7 @@ describe('Transactions tab', () => {
     expect(screen.getAllByText('Kas Utama').length).toBeGreaterThan(0)
 
     expect(everything.toSorted()).toEqual(
-      [
-        'GET /api/members',
-        'GET /api/purposes',
-        'GET /api/purposes?selectable=true',
-        'GET /api/transactions',
-        'GET /api/transactions?q=galon',
-      ].toSorted(),
+      ['GET /api/members', 'GET /api/purposes', 'GET /api/transactions', 'GET /api/transactions?q=galon'].toSorted(),
     )
   })
 
@@ -393,13 +387,18 @@ describe('Transactions tab: filters (#424)', () => {
 })
 
 describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
-  it("opens the dialog from the row's pos and writes it to the URL", async () => {
+  it("opens the dialog from the detail's Perbaiki pos and writes it to the URL", async () => {
     stubApi(() => ({ transactions: [row(5, 'Setoran seragam')], next_cursor: null }))
     const user = userEvent.setup()
     renderAt('/history/transactions')
 
     await screen.findByText('Setoran seragam')
-    await user.click(screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }))
+    await user.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await user.click(
+      within(await screen.findByRole('dialog', { name: copy.transactionDetail.heading })).getByRole('button', {
+        name: copy.purposeCorrection.heading,
+      }),
+    )
 
     // The dialog is a search parameter, never component state (ADR-032), so
     // back and a deep link both agree with what is on screen.

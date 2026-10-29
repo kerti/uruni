@@ -667,6 +667,76 @@ describe('Incidentals', () => {
     expect(urls.some((u) => u.includes('/api/transactions') && u.includes('purpose_id=2'))).toBe(true)
   })
 
+  // The same row offers the same actions wherever it is opened (#739), and a
+  // correction re-reads the envelope: its collected and spent figures move.
+  it("offers Perbaiki pos and Batalkan transaksi in an activity row's detail, and a correction re-reads the envelope", async () => {
+    const row = {
+      id: 7,
+      account_id: 1,
+      purpose_id: 1,
+      direction: 'in',
+      amount: 75_000,
+      occurred_on: '2026-09-02',
+      kind: 'normal',
+      member_id: null,
+      dues_period: null,
+      reimbursement_id: null,
+      transfer_id: null,
+      reverses_transaction_id: null,
+      note: 'Iuran halal bihalal',
+      created_at: 7,
+      reversible: true,
+    } satisfies Transaction
+    const posts: string[] = []
+    const fetchMock = routedFetch([
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+        handle: () => Promise.resolve(jsonResponse(openEnvelope)),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'),
+        handle: () => Promise.resolve(jsonResponse({ transactions: [row], next_cursor: null })),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+        handle: () =>
+          Promise.resolve(
+            jsonResponse([
+              { id: 1, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
+              { id: 5, kind: 'main', name: 'Kas Utama', created_at: 1 },
+            ]),
+          ),
+      },
+      {
+        match: (m: string, u: string) => {
+          if (m === 'POST') posts.push(u)
+          return m === 'POST' && u.includes('/purpose-correction')
+        },
+        handle: () => Promise.resolve(jsonResponse({ id: 9, kind: 'transfer', created_at: 9 }, 201)),
+      },
+      ...getHandlers(),
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Lihat rincian:/ }))
+    const detail = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+    expect(within(detail).getByRole('button', { name: copy.history.transactions.reverse })).toBeInTheDocument()
+    await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))
+
+    await screen.findByRole('dialog', { name: copy.purposeCorrection.heading })
+    // Its dialog param sits beside the rename dialog's without either closing the other.
+    expect(currentSearch()).toContain('edit=purpose-correction%3A7')
+    const envelopeReads = () => fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/api/incidentals/1')).length
+    const before = envelopeReads()
+    await chooseOption(copy.purposeCorrection.pickerLabel, 'Kas Utama')
+    await userEvent.click(screen.getByRole('button', { name: copy.purposeCorrection.save }))
+
+    await waitFor(() => expect(posts.some((u) => u.includes('/api/transactions/7/purpose-correction'))).toBe(true))
+    await waitFor(() => expect(envelopeReads()).toBeGreaterThan(before))
+    expect(await screen.findByText(copy.purposeCorrection.success)).toBeInTheDocument()
+  })
+
   // --- The rollover, on every visit ----------------------------------------
   //
   // The readout is derived from the two figures on the detail, not kept in

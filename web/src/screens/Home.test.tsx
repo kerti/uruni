@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
+import { chooseOption } from '@/test/select'
 import { formatUnixSeconds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import type { Balances } from '@/lib/balances'
@@ -122,8 +123,10 @@ function stubHome({
   hasNewEntries = false,
   openIncidentals = [openIncidentalEnvelope] as Incidental[],
   balancesOverride = balances as Balances,
+  extra = [] as { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[],
 } = {}) {
   return routedFetch([
+    ...extra,
     { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesOverride)) },
     { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse(openIncidentals)) },
     {
@@ -371,6 +374,64 @@ describe('Home', () => {
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
     expect(screen.getByText(formatIDR(1_450_000))).toBeInTheDocument()
     expect(screen.queryByText(copy.common.loading)).not.toBeInTheDocument()
+  })
+
+  // The same row offers the same actions wherever it is opened (#739): Beranda's
+  // recent activity is not a read-only copy of Riwayat's.
+  it("offers Perbaiki pos and Batalkan transaksi in a recent row's detail, and a correction re-reads Beranda", async () => {
+    const reversibleRows = { ...transactionsPage, transactions: transactionsPage.transactions.map((t) => ({ ...t, reversible: true })) }
+    const posts: string[] = []
+    const fetchMock = stubHome({
+      extra: [
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/transactions'),
+          handle: () => Promise.resolve(jsonResponse(reversibleRows)),
+        },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () =>
+            Promise.resolve(
+              jsonResponse([
+                { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
+                { id: 12, kind: 'pass_through', name: 'Seragam', created_at: 1 },
+              ]),
+            ),
+        },
+        {
+          match: (m, u) => {
+            if (m === 'POST') posts.push(u)
+            return m === 'POST' && u.includes('/purpose-correction')
+          },
+          handle: () => Promise.resolve(jsonResponse({ id: 9, kind: 'transfer', created_at: 9 }, 201)),
+        },
+      ],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
+
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Lihat rincian:/ }))[0])
+    const detail = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+    expect(within(detail).getByRole('button', { name: copy.history.transactions.reverse })).toBeInTheDocument()
+    await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))
+
+    await screen.findByRole('dialog', { name: copy.purposeCorrection.heading })
+    const balanceReads = () => fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/balances')).length
+    const before = balanceReads()
+    await chooseOption(copy.purposeCorrection.pickerLabel, 'Seragam')
+    await userEvent.click(screen.getByRole('button', { name: copy.purposeCorrection.save }))
+
+    await waitFor(() => expect(posts.some((u) => u.includes('/api/transactions/2/purpose-correction'))).toBe(true))
+    await waitFor(() => expect(balanceReads()).toBeGreaterThan(before))
+    expect(await screen.findByText(copy.purposeCorrection.success)).toBeInTheDocument()
   })
 
   // The recent-five peek is evidence a record just worked (App.tsx's

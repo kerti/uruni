@@ -1,5 +1,7 @@
 import { readdirSync } from 'node:fs'
 
+import type { Page } from '@playwright/test'
+
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 import { chooseMenuItem } from './popper'
@@ -16,6 +18,17 @@ const TINY_JPEG = Buffer.from(
   '/9j/2wCEAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSgBBwcHCggKEwoKEygaFhooKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKP/AABEIAAgACAMBIgACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APNqKKK1PnT/2Q==',
   'base64',
 )
+
+/** The newest row's detail, then its Lihat nota: the row is one tap target and
+ * every action lives in the detail (#739). */
+async function openReceiptViewer(page: Page) {
+  await page
+    .getByRole('button', { name: /^Lihat rincian:/ })
+    .first()
+    .click()
+  await page.getByRole('dialog', { name: copy.transactionDetail.heading }).getByRole('button', { name: copy.receipts.viewReceipt }).click()
+  return page.getByRole('dialog', { name: copy.receipts.dialogHeading })
+}
 
 test.describe('receipt photos', () => {
   test.describe.configure({ mode: 'serial' })
@@ -58,14 +71,13 @@ test.describe('receipt photos', () => {
     // after-the-fact viewer lives, and this is the row just posted (Rp12.000,
     // the newest in the list).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
-    await expect(page.getByRole('button', { name: copy.receipts.viewReceipt }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: new RegExp(copy.transactionDetail.receiptCountAria(1)) }).first()).toBeVisible()
 
-    // Opens the dialog and shows a real photo read back from GET
+    // Opens the row's detail, then the viewer from its Lihat nota (#739) and shows a real photo read back from GET
     // /api/receipts/{id} - proving the round trip, not only the upload. Ganti
     // foto/Hapus foto live behind the per-photo "more" menu, so opening it
     // proves the photo and its actions are there.
-    await page.getByRole('button', { name: copy.receipts.viewReceipt }).first().click()
-    const dialog = page.getByRole('dialog')
+    const dialog = await openReceiptViewer(page)
     await dialog.getByRole('button', { name: copy.receipts.photoMenuAria }).click()
     await expect(page.getByRole('menuitem', { name: copy.receipts.change })).toBeVisible()
 
@@ -82,8 +94,7 @@ test.describe('receipt photos', () => {
     await logIn(page)
     await page.goto('/history')
 
-    await page.getByRole('button', { name: copy.receipts.viewReceipt }).first().click()
-    const dialog = page.getByRole('dialog')
+    const dialog = await openReceiptViewer(page)
     const photo = dialog.getByRole('button', { name: copy.receipts.zoomAria }).locator('img')
     await expect(photo).toHaveCount(1)
     const before = await photo.getAttribute('src')
@@ -112,8 +123,14 @@ test.describe('receipt photos', () => {
     await expect(photo).toHaveCount(0)
     expect(readdirSync(instance.paths.uploadsDir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())).toHaveLength(0)
 
-    // Closed, the row's control offers to add a photo again.
+    // Closed, the row's detail offers to add a photo again.
     await page.keyboard.press('Escape')
-    await expect(page.getByRole('button', { name: copy.receipts.viewReceipt })).toHaveCount(0)
+    await page
+      .getByRole('button', { name: /^Lihat rincian:/ })
+      .first()
+      .click()
+    const detail = page.getByRole('dialog', { name: copy.transactionDetail.heading })
+    await expect(detail.getByRole('button', { name: copy.receipts.addFromRow })).toBeVisible()
+    await expect(detail.getByRole('button', { name: copy.receipts.viewReceipt })).toHaveCount(0)
   })
 })
