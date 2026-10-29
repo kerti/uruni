@@ -188,7 +188,14 @@ const lineKeys: Keys<ReconciliationLine> = {
   remainder_amount: true,
 }
 const openLineKeys: Keys<OpenReconciliationLine> = { ...lineKeys, reconciliation_id: true }
-const latestKeys: Keys<LatestReconciliation> = { id: true, performed_at: true, through_transaction_id: true, note: true, created_at: true }
+const latestKeys: Keys<LatestReconciliation> = {
+  id: true,
+  performed_at: true,
+  through_transaction_id: true,
+  note: true,
+  created_at: true,
+  has_new_entries: true,
+}
 const detailKeys: Keys<ReconciliationDetail> = { ...latestKeys, lines: true }
 const listItemKeys: Keys<ReconciliationListItem> = { ...latestKeys, open_difference_amount: true }
 const duesStatusKeys: Keys<DuesStatusRow> = { member: true, owed_amount: true, paid_amount: true, status: true, paid_through: true }

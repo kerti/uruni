@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
+import { formatUnixSeconds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import type { Balances } from '@/lib/balances'
 import type { Incidental } from '@/lib/incidentals'
@@ -100,6 +101,7 @@ const latestReconciliation = {
   through_transaction_id: 5,
   note: null,
   created_at: 1_756_000_000,
+  has_new_entries: false,
 } satisfies LatestReconciliation
 
 /** Routes a stubbed fetch by method + path substring, as
@@ -117,6 +119,7 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
 function stubHome({
   openLines = [] as OpenReconciliationLine[],
   latest = 'ok' as 'ok' | 'not_found',
+  hasNewEntries = false,
   openIncidentals = [openIncidentalEnvelope] as Incidental[],
   balancesOverride = balances as Balances,
 } = {}) {
@@ -132,7 +135,7 @@ function stubHome({
       handle: () =>
         Promise.resolve(
           latest === 'ok'
-            ? jsonResponse(latestReconciliation)
+            ? jsonResponse({ ...latestReconciliation, has_new_entries: hasNewEntries })
             : jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404),
         ),
     },
@@ -210,6 +213,48 @@ describe('Home', () => {
 
     expect(await screen.findByText(copy.reconciliation.matched)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.neverChecked)).not.toBeInTheDocument()
+    // Nothing recorded since the count: the date line stays plain.
+    const date = formatUnixSeconds(latestReconciliation.performed_at)
+    expect(screen.getByText(copy.home.lastChecked(date, false))).toBeInTheDocument()
+    expect(screen.queryByText(/ada catatan baru/)).not.toBeInTheDocument()
+  })
+
+  // "Cocok" is a claim about the count; once the server says something was
+  // recorded since, the date line says so rather than letting it read as now.
+  it('says there are new entries since the count when the server reports has_new_entries', async () => {
+    vi.stubGlobal('fetch', stubHome({ latest: 'ok', hasNewEntries: true }))
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
+
+    const date = formatUnixSeconds(latestReconciliation.performed_at)
+    expect(await screen.findByText(copy.home.lastChecked(date, true))).toBeInTheDocument()
+    expect(screen.getByText(copy.reconciliation.matched)).toBeInTheDocument()
+  })
+
+  it('says it with a discrepancy too', async () => {
+    const openLine = { remainder_amount: 20_000 } as OpenReconciliationLine
+    vi.stubGlobal('fetch', stubHome({ latest: 'ok', hasNewEntries: true, openLines: [openLine] }))
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText(copy.reconciliation.discrepancy(formatIDR(20_000)))).toBeInTheDocument()
+    expect(screen.getByText(/ada catatan baru sejak itu$/)).toBeInTheDocument()
   })
 
   // The reconciliation banner is the reconcile screen's entry point - Home

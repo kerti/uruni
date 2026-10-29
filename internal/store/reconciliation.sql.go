@@ -43,6 +43,50 @@ func (q *Queries) CreateReconciliation(ctx context.Context, arg CreateReconcilia
 	return i, err
 }
 
+const fundHasTransactionsAfter = `-- name: FundHasTransactionsAfter :one
+SELECT EXISTS (
+  SELECT 1 FROM "transaction" t
+  WHERE t.fund_id = ?1
+    AND (CAST(?2 AS INTEGER) IS NULL OR t.id > CAST(?2 AS INTEGER))
+    AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
+    AND NOT EXISTS (
+      SELECT 1 FROM reconciliation_line rl
+      WHERE rl.reconciliation_id = ?4
+        AND rl.adjustment_transaction_id = t.id
+    )
+) AS has_transactions
+`
+
+type FundHasTransactionsAfterParams struct {
+	FundID           int64
+	AfterID          *int64
+	Through          *string
+	ReconciliationID int64
+}
+
+// Whether the fund holds any row after a count (#734): the yes/no behind "ada
+// catatan baru sejak itu". after_id is the count's through_transaction_id, the
+// ONE place id order may be relied on (see the reconciliation table); NULL is a
+// count taken over an empty ledger, so any row at all is newer. Every row
+// counts - reversals, transfer legs, corrections - since a yes/no cannot
+// over-count. The one exception is the count's own fixes: TakeReconciliation
+// posts an "adjusted" or "entry_added" entry after taking the cutoff, so it
+// always sits above it (ADR-024), and it is part of the count, not news since
+// it. through (the public report's past-month bound, a "YYYY-MM-DD" day) hides
+// rows dated after the bound, as the figures beside it do; NULL reads every
+// row. The CASTs keep sqlc from falling back to interface{} (ADR-024).
+func (q *Queries) FundHasTransactionsAfter(ctx context.Context, arg FundHasTransactionsAfterParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, fundHasTransactionsAfter,
+		arg.FundID,
+		arg.AfterID,
+		arg.Through,
+		arg.ReconciliationID,
+	)
+	var has_transactions bool
+	err := row.Scan(&has_transactions)
+	return has_transactions, err
+}
+
 const getReconciliation = `-- name: GetReconciliation :one
 SELECT id, fund_id, performed_at, through_transaction_id, note, created_at
 FROM reconciliation

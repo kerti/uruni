@@ -24,7 +24,7 @@ type Copy struct {
 	AsOf          func(date string) string
 	AsOfRunning   func(date string) string
 	BalanceLabel  string
-	LastChecked   func(date string) string
+	LastChecked   func(date string, newEntries bool) string
 	Matched       string
 	Discrepancy   func(amount string) string
 	NeverChecked  string
@@ -141,6 +141,15 @@ type Copy struct {
 	Months [12]string
 }
 
+// lastChecked is the count's date line. newEntries adds that something was
+// recorded since the count (#734), so "cocok" is never read as a claim about now.
+func lastChecked(date string, newEntries bool) string {
+	if newEntries {
+		return "Terakhir dicek " + date + " \u00b7 ada catatan baru sejak itu"
+	}
+	return "Terakhir dicek " + date
+}
+
 // Text is the report's copy, the only value of Copy.
 var Text = Copy{
 	Title:         func(fundName string) string { return fundName + " - Laporan kas" },
@@ -148,8 +157,8 @@ var Text = Copy{
 	AsOf:          func(date string) string { return "per " + date },
 	AsOfRunning:   func(date string) string { return "Bulan berjalan \u00b7 per " + date },
 	BalanceLabel:  "Saldo kas",
-	LastChecked:   func(date string) string { return "Terakhir dicek " + date },
-	Matched:       "Kas dan catatan sudah cocok.",
+	LastChecked:   lastChecked,
+	Matched:       "Kas dan catatan cocok saat dicek.",
 	Discrepancy:   func(amount string) string { return "Ada selisih " + amount + "." },
 	NeverChecked:  "Belum pernah dicek.",
 	OwedLabel:     "Talangan belum dibayar",

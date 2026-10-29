@@ -41,6 +41,44 @@ func TestReportPageCheckStates(t *testing.T) {
 	}
 }
 
+// "Cocok" is about the count, not about now: the date line grows the
+// "ada catatan baru sejak itu" suffix only when something was recorded since,
+// in the matched and the discrepancy state alike (#734).
+func TestReportPageCheckSaysWhenEntriesCameAfterTheCount(t *testing.T) {
+	t.Parallel()
+	base := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"}}
+	const suffix = " \u00b7 ada catatan baru sejak itu"
+
+	for _, tc := range []struct {
+		name       string
+		rec        ledger.ReportReconciliation
+		newEntries bool
+		want       string
+	}{
+		{"matched, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true}, false, "Terakhir dicek 30 September 2026"},
+		{"matched, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true, NewEntries: true}, true, "Terakhir dicek 30 September 2026" + suffix},
+		{"discrepancy, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000}, false, "Terakhir dicek 30 September 2026"},
+		{"discrepancy, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000, NewEntries: true}, true, "Terakhir dicek 30 September 2026" + suffix},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := base
+			rec := tc.rec
+			r.Reconciliation = &rec
+			if got := NewPage(r, false).Check.When; got != tc.want {
+				t.Errorf("When = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	if Text.Matched != "Kas dan catatan cocok saat dicek." {
+		t.Errorf("Matched = %q, want the count-scoped wording", Text.Matched)
+	}
+	if got := Text.Discrepancy("Rp15.000"); got != "Ada selisih Rp15.000." {
+		t.Errorf("Discrepancy = %q, want it short on purpose", got)
+	}
+}
+
 func TestReportPagePurposeBalances(t *testing.T) {
 	t.Parallel()
 	page := NewPage(ledger.Report{

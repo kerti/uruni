@@ -63,7 +63,7 @@ Resident databases · digital voting · complaint handling · inventory · QRIS 
 
 ## Voice
 
-Friendly, human, never corporate. *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan sudah cocok. 🎉"* · *"Ada selisih Rp15.000 — mau dicek bersama?"*
+Friendly, human, never corporate. *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan cocok saat dicek. 🎉"* · *"Ada selisih Rp15.000 — mau dicek bersama?"*
 
 ## The one-line identity
 

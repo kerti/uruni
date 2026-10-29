@@ -81,7 +81,7 @@ Details in [`docs/Tech-Design.md`](docs/Tech-Design.md); the decisions themselve
 Uruni speaks like a helpful friend, not software.
 
 - *"Pengeluaran berhasil dicatat."*
-- *"Kas dan catatan sudah cocok. 🎉"*
+- *"Kas dan catatan cocok saat dicek. 🎉"*
 - *"Ada selisih Rp15.000 — mau dicek bersama?"*
 
 Contributions to copy and UI should keep this tone: warm, human, never corporate. All user-facing copy is Bahasa Indonesia, sentence case.

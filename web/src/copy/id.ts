@@ -613,8 +613,11 @@ export const copy = {
     // come from the same fund), so this is a placeholder that keeps a row
     // readable rather than a state with meaning of its own.
     purposeUnknown: 'Tanpa pos',
-    // date is already formatted (Intl.DateTimeFormat) by the caller.
-    lastChecked: (date: string) => `Terakhir dicek ${date}`,
+    // date is already formatted (Intl.DateTimeFormat) by the caller. hasNewEntries
+    // is the server's yes/no (has_new_entries): something was recorded after the
+    // count, so the status above is about the count, not about now.
+    lastChecked: (date: string, hasNewEntries: boolean) =>
+      hasNewEntries ? `Terakhir dicek ${date} · ada catatan baru sejak itu` : `Terakhir dicek ${date}`,
   },
   // The label line TransactionList.tsx renders on a row the app itself created
   // - never a row she recorded herself (Decisions.md). Built at display time
@@ -700,11 +703,13 @@ export const copy = {
     // The first-run state, before any count: neutral on purpose. Uruni has
     // nothing to compare its ledger against yet, so it says so and invites the
     // count instead of claiming a match.
-    neverChecked: 'Belum pernah dicek — hitung uangnya kapan saja.',
-    matched: 'Kas dan catatan sudah cocok.',
+    neverChecked: 'Belum pernah dicek. Hitung uangnya kapan saja.',
+    // A claim about the count, not about now: Beranda's date line says when, and
+    // whether anything was recorded since (home.lastChecked).
+    matched: 'Kas dan catatan cocok saat dicek.',
     // amount is already formatted (formatIDR) by the caller - never a raw
     // number crosses into copy.
-    discrepancy: (amount: string) => `Ada selisih ${amount} — mau dicek bareng?`,
+    discrepancy: (amount: string) => `Ada selisih ${amount}. Mau dicek bareng?`,
     heading: 'Cek kas',
     intro: 'Hitung uang yang benar-benar ada di setiap lokasi, lalu bandingkan dengan catatan.',
     recordedLabel: 'Menurut catatan',

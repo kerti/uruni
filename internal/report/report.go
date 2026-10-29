@@ -502,12 +502,12 @@ func NewPage(r ledger.Report, empty bool) Page {
 	case rec == nil:
 		page.Check = &Check{Class: "never", Message: Text.NeverChecked}
 	case rec.Matched:
-		page.Check = &Check{Class: "matched", Message: Text.Matched, When: Text.LastChecked(Text.longDate(rec.Date))}
+		page.Check = &Check{Class: "matched", Message: Text.Matched, When: Text.LastChecked(Text.longDate(rec.Date), rec.NewEntries)}
 	default:
 		page.Check = &Check{
 			Class:   "discrepancy",
 			Message: Text.Discrepancy(money.FormatIDR(rec.Difference)),
-			When:    Text.LastChecked(Text.longDate(rec.Date)),
+			When:    Text.LastChecked(Text.longDate(rec.Date), rec.NewEntries),
 		}
 	}
 
