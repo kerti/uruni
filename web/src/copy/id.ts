@@ -690,10 +690,11 @@ export const copy = {
       text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
     },
     // The treasurer moving money between purposes on purpose (ADR-036,
-    // transfer.reason 'allocation'). The visible text opens with the kind word,
-    // so unlike the two above it needs no sr-only kind.
+    // transfer.reason 'allocation'). Shaped like every other transfer (#738):
+    // the kind word on the row's first line, from -> to under it.
     transferPurposeMove: {
-      text: (fromName: string, toName: string) => `Pindah pos · ${fromName} → ${toName}`,
+      kind: 'Pindah pos',
+      text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
     },
     // Every adjustment that is not a reversal: a cek kas fix or one she posted
     // herself - the report's word for both (ADR-038).

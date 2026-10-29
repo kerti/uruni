@@ -39,9 +39,10 @@ type effectiveCoverage struct {
 // which is refused) and holds, after every sequence:
 //
 //   - for every row, the SQL effective purpose - through both queries that read
-//     it, the Riwayat list and EffectivePurposeForTransaction - equals the
-//     destination foldCorrections gives the row, or its stored tag where the
-//     fold has no move for it (never corrected, or corrected back);
+//     it, the Riwayat list (which shows one row per transfer, #738, so it
+//     covers the listed rows) and EffectivePurposeForTransaction (every row) -
+//     equals the destination foldCorrections gives the row, or its stored tag
+//     where the fold has no move for it (never corrected, or corrected back);
 //   - Riwayat still lists the stored tag, never the effective one (ADR-033);
 //   - summing every non-correction row's signed amount by its effective purpose
 //     gives PurposeBalance for each purpose, which sums stored tags over the
@@ -152,9 +153,11 @@ func checkEffectivePurposeSequence(t *testing.T, seed int64, cov *effectiveCover
 
 	// A leg of a pair is half a movement, and refusing it is what keeps the
 	// effective purpose of a leg equal to its stored one.
-	legRows, err := q.ListTransactionsPage(ctx, store.ListTransactionsPageParams{FundID: f.fundID, PageLimit: 1_000_000})
+	// Every ledger row, not the Riwayat list: the list shows one row per transfer
+	// (#738), and both legs must refuse.
+	legRows, err := q.ListTransactionsByFund(ctx, f.fundID)
 	if err != nil {
-		t.Fatalf("ListTransactionsPage() = %v", err)
+		t.Fatalf("ListTransactionsByFund() = %v", err)
 	}
 	for _, r := range legRows {
 		if r.Kind != "transfer" {
@@ -186,10 +189,6 @@ func assertEffectivePurposeMatchesTheFold(t *testing.T, q *store.Queries, l *Led
 	t.Helper()
 	ctx := context.Background()
 
-	rows, err := q.ListTransactionsPage(ctx, store.ListTransactionsPageParams{FundID: fundID, PageLimit: 1_000_000})
-	if err != nil {
-		t.Fatalf("ListTransactionsPage() = %v", err)
-	}
 	report, err := q.ListReportTransactions(ctx, store.ListReportTransactionsParams{FundID: fundID, FromDate: "1900-01-01"})
 	if err != nil {
 		t.Fatalf("ListReportTransactions() = %v", err)
@@ -201,24 +200,45 @@ func assertEffectivePurposeMatchesTheFold(t *testing.T, q *store.Queries, l *Led
 
 	// The fold states a move as what happened to the row (#654), so its To is the
 	// row's destination whichever way the row went.
-	destination := func(r store.ListTransactionsPageRow) int64 {
-		if m, ok := folded[r.ID]; ok {
+	destinationOf := func(id, stored int64) int64 {
+		if m, ok := folded[id]; ok {
 			return m.ToPurposeID
 		}
-		return r.PurposeID
+		return stored
 	}
 
-	byEffective := map[int64]int64{}
-	for _, r := range rows {
+	// The list shows one row per transfer (#738), so it checks the listed rows
+	// only; the ledger-wide assertions below read every row.
+	listed, err := q.ListTransactionsPage(ctx, store.ListTransactionsPageParams{FundID: fundID, PageLimit: 1_000_000})
+	if err != nil {
+		t.Fatalf("ListTransactionsPage() = %v", err)
+	}
+	for _, r := range listed {
 		if want, ok := storedAt[r.ID]; ok && r.PurposeID != want {
 			t.Errorf("row %d: Riwayat lists purpose %d, want the stored tag %d", r.ID, r.PurposeID, want)
 		}
-
-		want := destination(r)
-		if r.EffectivePurposeID != want {
+		if want := destinationOf(r.ID, r.PurposeID); r.EffectivePurposeID != want {
 			t.Errorf("row %d (%s, stored %d): ListTransactionsPage effective purpose = %d, the display fold says %d",
 				r.ID, r.Direction, r.PurposeID, r.EffectivePurposeID, want)
 		}
+	}
+
+	transfers, err := q.ListTransfersByFund(ctx, fundID)
+	if err != nil {
+		t.Fatalf("ListTransfersByFund() = %v", err)
+	}
+	isCorrection := map[int64]bool{}
+	for _, tr := range transfers {
+		isCorrection[tr.ID] = tr.CorrectsTransactionID != nil
+	}
+
+	all, err := q.ListTransactionsByFund(ctx, fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v", err)
+	}
+	byEffective := map[int64]int64{}
+	for _, r := range all {
+		want := destinationOf(r.ID, r.PurposeID)
 		single, err := q.EffectivePurposeForTransaction(ctx, store.EffectivePurposeForTransactionParams{FundID: fundID, ID: r.ID})
 		if err != nil {
 			t.Fatalf("EffectivePurposeForTransaction(%d) = %v", r.ID, err)
@@ -229,14 +249,14 @@ func assertEffectivePurposeMatchesTheFold(t *testing.T, q *store.Queries, l *Led
 		}
 
 		// A correction's two legs carry the move; the original is what they move.
-		if r.TransferCorrectsTransactionID != nil {
+		if r.TransferID != nil && isCorrection[*r.TransferID] {
 			continue
 		}
 		signed := r.Amount
 		if r.Direction == "out" {
 			signed = -signed
 		}
-		byEffective[r.EffectivePurposeID] += signed
+		byEffective[single] += signed
 	}
 
 	for _, p := range purposes {

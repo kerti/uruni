@@ -1021,6 +1021,29 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 }
 
 const listTransactionsPage = `-- name: ListTransactionsPage :many
+WITH matched AS (
+  SELECT t.id, t.transfer_id,
+         ROW_NUMBER() OVER (PARTITION BY t.transfer_id ORDER BY (t.direction <> 'out'), t.id) AS leg_rank
+  FROM ledger_entry t
+  JOIN purpose p ON p.id = t.purpose_id
+  LEFT JOIN member m ON m.id = t.member_id
+  WHERE t.fund_id = ?4
+    AND (
+      ?5 IS NULL
+      OR INSTR(LOWER(t.note), LOWER(?5)) > 0
+      OR INSTR(LOWER(p.name), LOWER(?5)) > 0
+      OR INSTR(LOWER(m.name), LOWER(?5)) > 0
+      OR t.amount = ?6
+    )
+    AND (?7 IS NULL OR t.member_id = ?7)
+    AND (?8 IS NULL OR t.dues_period = ?8)
+    AND (?9 IS NULL OR t.purpose_id = ?9)
+    AND (?10 IS NULL OR substr(t.occurred_on, 1, 7) = ?10)
+    AND (?11 IS NULL OR (t.direction = ?11 AND t.kind <> 'transfer'))
+),
+kept AS (
+  SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
+)
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
        t.note, t.created_at,
@@ -1043,6 +1066,8 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
                     WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        ei.closed_on AS effective_closed_on,
+       tf.id AS transfer_out_leg_id,
+       tt.id AS transfer_in_leg_id,
        CAST(EXISTS (SELECT 1 FROM reconciliation rc
                     WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
 FROM ledger_entry t
@@ -1061,31 +1086,20 @@ LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
-WHERE t.fund_id = ?1
+WHERE t.id IN (SELECT id FROM kept)
   AND (
-    ?2 IS NULL
-    OR (t.occurred_on, t.id) < (?2, CAST(?3 AS INTEGER))
+    ?1 IS NULL
+    OR (t.occurred_on, t.id) < (?1, CAST(?2 AS INTEGER))
   )
-  AND (
-    ?4 IS NULL
-    OR INSTR(LOWER(t.note), LOWER(?4)) > 0
-    OR INSTR(LOWER(p.name), LOWER(?4)) > 0
-    OR INSTR(LOWER(m.name), LOWER(?4)) > 0
-    OR t.amount = ?5
-  )
-  AND (?6 IS NULL OR t.member_id = ?6)
-  AND (?7 IS NULL OR t.dues_period = ?7)
-  AND (?8 IS NULL OR t.purpose_id = ?8)
-  AND (?9 IS NULL OR substr(t.occurred_on, 1, 7) = ?9)
-  AND (?10 IS NULL OR t.direction = ?10)
 ORDER BY t.occurred_on DESC, t.id DESC
-LIMIT ?11
+LIMIT ?3
 `
 
 type ListTransactionsPageParams struct {
-	FundID           int64
 	CursorOccurredOn interface{}
 	CursorID         *int64
+	PageLimit        int64
+	FundID           int64
 	Q                interface{}
 	QAmount          *int64
 	MemberID         interface{}
@@ -1093,7 +1107,6 @@ type ListTransactionsPageParams struct {
 	PurposeID        interface{}
 	Month            interface{}
 	Direction        interface{}
-	PageLimit        int64
 }
 
 type ListTransactionsPageRow struct {
@@ -1130,6 +1143,8 @@ type ListTransactionsPageRow struct {
 	ReversesOccurredOn            *string
 	IsReconciliationFix           int64
 	EffectiveClosedOn             *string
+	TransferOutLegID              *int64
+	TransferInLegID               *int64
 	Counted                       int64
 }
 
@@ -1219,17 +1234,32 @@ type ListTransactionsPageRow struct {
 //     its pair from where the money actually is, and for the marker that says a
 //     correction exists.
 //
+//   - transfer_out_leg_id/transfer_in_leg_id (#738): the ids of the transfer's two
+//     legs, so the handler can merge both legs' receipts onto the one row.
+//
 //   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
 //     effective_closed_on (ADR-042): the facts of a reversal, one rule with
 //     Ledger.ReversalRefusal (GetReversalTarget has the reasoning).
 //     reverses_occurred_on is the original's date on a reversal row, so an
 //     unnamed reversal can state the day it reverses when the original is on
 //     another page.
+//
+// One row per movement (#738): a transfer pair is two ledger rows, but the list
+// shows it once. The `matched` CTE applies every filter to every leg FIRST, so
+// filtering by either leg's pos finds the pair; `kept` then keeps one matched
+// leg per transfer_id (the 'out' leg when both matched, the only one
+// otherwise; the id tiebreak only orders a malformed pair, it is not an order
+// the list relies on), and only then does the keyset cursor cut the page. The
+// representative is fixed by the filters alone, never by the cursor, so the
+// next page cannot return the other leg of a pair already shown. A transfer is
+// neither in nor out, so a direction filter excludes it outright. Non-transfer
+// rows (transfer_id NULL) pass untouched.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
-		arg.FundID,
 		arg.CursorOccurredOn,
 		arg.CursorID,
+		arg.PageLimit,
+		arg.FundID,
 		arg.Q,
 		arg.QAmount,
 		arg.MemberID,
@@ -1237,7 +1267,6 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 		arg.PurposeID,
 		arg.Month,
 		arg.Direction,
-		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -1280,6 +1309,8 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.ReversesOccurredOn,
 			&i.IsReconciliationFix,
 			&i.EffectiveClosedOn,
+			&i.TransferOutLegID,
+			&i.TransferInLegID,
 			&i.Counted,
 		); err != nil {
 			return nil, err

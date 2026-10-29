@@ -849,6 +849,34 @@ describe('Reconcile', () => {
     expect(screen.queryByText(copy.home.recentActivityEmpty)).not.toBeInTheDocument()
   })
 
+  it('lists a transfer once and neutrally: its movement for a name, no in/out arrow (#738)', async () => {
+    const page = {
+      transactions: [
+        transaction(20, {
+          kind: 'transfer',
+          direction: 'out',
+          transfer_id: 3,
+          transfer_kind: 'between_accounts',
+          transfer_from_name: 'Tunai',
+          transfer_to_name: 'Bank',
+        }),
+      ],
+      next_cursor: null,
+    }
+    vi.stubGlobal('fetch', routedFetch(stubLoad(balancesBody(100_000, 200_000), page)))
+    const { container } = render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.click(screen.getByText(copy.home.recentActivityHeading))
+
+    const rows = screen.getAllByRole('listitem')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent(copy.rowLabels.transferLocation.text('Tunai', 'Bank'))
+    expect(rows[0].querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument()
+    expect(rows[0].querySelector('.text-attention')).not.toBeInTheDocument()
+    expect(container.querySelector('.lucide-arrow-left-right')).toBeInTheDocument()
+  })
+
   it('shows the calm empty line when nothing has been recorded yet', async () => {
     vi.stubGlobal('fetch', routedFetch(stubLoad()))
     render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)

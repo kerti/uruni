@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/store"
 )
 
 func postTransfer(t *testing.T, r http.Handler, req transferRequest) *httptest.ResponseRecorder {
@@ -35,13 +37,15 @@ func TestPostTransfersRequiresAFund(t *testing.T) {
 }
 
 // TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer is the route's success
-// path and fund-neutrality proof here: the two rows GET /api/transactions
-// returns carry the same amount in opposite directions, the same purpose and
-// transfer id, so they sum to zero however the fund's total is derived.
-// internal/ledger/transfer_test.go asserts the balances.
+// path and fund-neutrality proof here: the two ledger rows carry the same
+// amount in opposite directions, the same purpose and transfer id, so they sum
+// to zero however the fund's total is derived, while GET /api/transactions
+// lists the pair once (#738). internal/ledger/transfer_test.go asserts the
+// balances.
 func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 
 	// Cash has to exist before it can be banked.
@@ -79,16 +83,22 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("GET /api/transactions = %d, want %d (body: %s)", listRec.Code, http.StatusOK, listRec.Body.String())
 	}
-	rows := decodeTransactionsPage(t, listRec).Transactions
-
-	legs := map[string]transactionResponse{}
-	for _, row := range rows {
+	listed := 0
+	for _, row := range decodeTransactionsPage(t, listRec).Transactions {
 		if row.TransferID != nil && *row.TransferID == transfer.ID {
-			legs[row.Direction] = row
+			listed++
 		}
 	}
+	if listed != 1 {
+		t.Errorf("listed rows for transfer %d = %d, want 1 (a pair lists once, #738)", transfer.ID, listed)
+	}
+
+	legs := map[string]store.Transaction{}
+	for _, leg := range ledgerLegs(t, sqlDB, setup.Fund.ID, transfer.ID) {
+		legs[leg.Direction] = leg
+	}
 	if len(legs) != 2 {
-		t.Fatalf("legs referencing transfer %d = %d, want 2 (rows: %+v)", transfer.ID, len(legs), rows)
+		t.Fatalf("legs referencing transfer %d = %d, want 2", transfer.ID, len(legs))
 	}
 
 	out, in := legs["out"], legs["in"]
@@ -105,7 +115,7 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 		t.Errorf("leg purposes = out %d / in %d, want %d for both - a transfer never changes what money is for",
 			out.PurposeID, in.PurposeID, setup.MainPurposeID)
 	}
-	for _, leg := range []transactionResponse{out, in} {
+	for _, leg := range []store.Transaction{out, in} {
 		if leg.Kind != "transfer" {
 			t.Errorf("leg %s kind = %q, want %q", leg.Direction, leg.Kind, "transfer")
 		}
@@ -205,7 +215,8 @@ func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
 // internal/ledger/transfer_test.go asserts on the rows.
 func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 
 	depositRec := postTransaction(t, r, transactionRequest{
@@ -234,21 +245,14 @@ func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 		t.Fatalf("decoding transfer response: %v", err)
 	}
 
-	listRec := getTransactions(t, r)
-	rows := decodeTransactionsPage(t, listRec).Transactions
-
-	legs := 0
-	for _, row := range rows {
-		if row.TransferID == nil || *row.TransferID != transfer.ID {
-			continue
-		}
-		legs++
-		if row.Note == nil || *row.Note != note {
-			t.Errorf("leg %s note = %v, want %q", row.Direction, row.Note, note)
+	legs := ledgerLegs(t, sqlDB, setup.Fund.ID, transfer.ID)
+	for _, leg := range legs {
+		if leg.Note == nil || *leg.Note != note {
+			t.Errorf("leg %s note = %v, want %q", leg.Direction, leg.Note, note)
 		}
 	}
-	if legs != 2 {
-		t.Fatalf("legs referencing transfer %d = %d, want 2", transfer.ID, legs)
+	if len(legs) != 2 {
+		t.Fatalf("legs referencing transfer %d = %d, want 2", transfer.ID, len(legs))
 	}
 }
 

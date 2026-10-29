@@ -5,6 +5,9 @@ import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReconciliationLines from '@/components/ReconciliationLines'
+import { transferKind } from '@/components/rowLabel'
+import TransactionRowLabel from '@/components/TransactionRowLabel'
+import TransactionGlyph from '@/components/TransactionGlyph'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -384,13 +387,14 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
                 className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
               >
                 <span className="flex min-w-0 items-start gap-2">
-                  {transaction.direction === 'in' ? (
-                    <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
-                  ) : (
-                    <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
-                  )}
+                  <TransactionGlyph transaction={transaction} />
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown}</span>
+                    <span className="truncate">
+                      {transferKind(transaction) ?? purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown}
+                    </span>
+                    {/* A transfer reads as it does in Riwayat (#738): its kind,
+                        then from -> to. */}
+                    {transferKind(transaction) !== null && <TransactionRowLabel transaction={transaction} bare kindShown />}
                     {transaction.note && <span className="truncate text-sm text-muted-foreground">{transaction.note}</span>}
                     <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
                   </span>

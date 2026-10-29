@@ -52,7 +52,8 @@ func findTransactionByKind(t *testing.T, rows []transactionResponse, kind string
 // /api/transfers (ADR-033).
 func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 
 	titipanRec := postPassThroughPurpose(t, r, "Titipan")
@@ -101,20 +102,28 @@ func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 			original.EffectivePurposeID, original.PurposeID)
 	}
 
-	// Both legs name the fix the way it was made, Titipan -> Kas Utama, though
-	// for this 'out' row the pair's money runs the other way (#654).
-	var correctionLegs int
+	// The pair lists as ONE row (#738), so the list is two rows in all: the
+	// original and the correction. It names the fix the way it was made, Titipan
+	// -> Kas Utama, though for this 'out' row the pair's money runs the other
+	// way (#654).
+	var correctionRows int
 	for _, row := range rows {
 		if row.Kind == "transfer" && row.TransferCorrectsTransactionID != nil && *row.TransferCorrectsTransactionID == posted.ID {
-			correctionLegs++
+			correctionRows++
 			if row.TransferFromName == nil || *row.TransferFromName != "Titipan" ||
 				row.TransferToName == nil || *row.TransferToName != "Kas Utama" {
-				t.Errorf("%s leg names = %q -> %q, want Titipan -> Kas Utama", row.Direction, derefOr(row.TransferFromName), derefOr(row.TransferToName))
+				t.Errorf("correction row names = %q -> %q, want Titipan -> Kas Utama", derefOr(row.TransferFromName), derefOr(row.TransferToName))
 			}
 		}
 	}
-	if correctionLegs != 2 {
-		t.Errorf("found %d transfer legs with transfer_corrects_transaction_id = %d, want 2", correctionLegs, posted.ID)
+	if correctionRows != 1 {
+		t.Errorf("found %d listed rows with transfer_corrects_transaction_id = %d, want 1", correctionRows, posted.ID)
+	}
+	if len(rows) != 2 {
+		t.Errorf("listed rows = %d, want 2 (the original and one correction row)", len(rows))
+	}
+	if legs := ledgerLegs(t, sqlDB, setup.Fund.ID, transfer.ID); len(legs) != 2 {
+		t.Errorf("ledger legs of the correction = %d, want 2", len(legs))
 	}
 }
 

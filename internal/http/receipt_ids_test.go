@@ -185,12 +185,14 @@ func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsTransferLegsReceiptIDsAreIndependent: a transfer's two
-// legs are two transaction rows, so a receipt on one never appears on the
-// other; there is no single "the transfer's receipt."
-func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
+// TestGetTransactionsTransferRowCarriesBothLegsReceiptIDs: a transfer is one
+// listed row (#738) for two ledger rows, and a photo may be on either, so the
+// row carries every receipt of both legs, oldest first, whichever leg the list
+// picked to represent it.
+func TestGetTransactionsTransferRowCarriesBothLegsReceiptIDs(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 
 	depositRec := postTransaction(t, r, transactionRequest{
@@ -216,37 +218,49 @@ func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
 		t.Fatalf("decoding transfer response: %v", err)
 	}
 
-	page := decodeTransactionsPage(t, getTransactions(t, r))
-	var outLeg, inLeg transactionResponse
-	for _, row := range page.Transactions {
-		if row.TransferID != nil && *row.TransferID == transfer.ID {
-			if row.Direction == "out" {
-				outLeg = row
-			} else {
-				inLeg = row
-			}
+	var outLeg, inLeg store.Transaction
+	for _, leg := range ledgerLegs(t, sqlDB, setup.Fund.ID, transfer.ID) {
+		if leg.Direction == "out" {
+			outLeg = leg
+		} else {
+			inLeg = leg
 		}
 	}
 	if outLeg.ID == 0 || inLeg.ID == 0 {
-		t.Fatalf("could not find both transfer legs in %+v", page.Transactions)
+		t.Fatalf("could not find both transfer legs for transfer %d", transfer.ID)
 	}
 
-	fixture := encodeTestJPEG(t, solidBlockImage(16, 16, 4, 4, fixtureBG, fixtureBlock))
-	uploadRec := postReceiptFile(t, r, "/api/transactions/"+strconv.FormatInt(outLeg.ID, 10)+"/receipts", fixture)
-	if uploadRec.Code != http.StatusCreated {
-		t.Fatalf("POST .../receipts on out leg = %d, want %d (body: %s)", uploadRec.Code, http.StatusCreated, uploadRec.Body.String())
+	upload := func(legID int64) int64 {
+		t.Helper()
+		fixture := encodeTestJPEG(t, solidBlockImage(16, 16, 4, 4, fixtureBG, fixtureBlock))
+		rec := postReceiptFile(t, r, "/api/transactions/"+strconv.FormatInt(legID, 10)+"/receipts", fixture)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST .../receipts on leg %d = %d, want %d (body: %s)", legID, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		return decodeReceiptResponse(t, rec).ID
 	}
-	receipt := decodeReceiptResponse(t, uploadRec)
-
-	page = decodeTransactionsPage(t, getTransactions(t, r))
-	outRow := findTransactionRow(t, page, outLeg.ID)
-	inRow := findTransactionRow(t, page, inLeg.ID)
-
-	if want := []int64{receipt.ID}; !slices.Equal(outRow.ReceiptIDs, want) {
-		t.Errorf("out leg receipt_ids = %v, want %v", outRow.ReceiptIDs, want)
+	listed := func() transactionResponse {
+		t.Helper()
+		var rows []transactionResponse
+		for _, row := range decodeTransactionsPage(t, getTransactions(t, r)).Transactions {
+			if row.TransferID != nil && *row.TransferID == transfer.ID {
+				rows = append(rows, row)
+			}
+		}
+		if len(rows) != 1 {
+			t.Fatalf("listed rows for transfer %d = %d, want 1", transfer.ID, len(rows))
+		}
+		return rows[0]
 	}
-	if len(inRow.ReceiptIDs) != 0 {
-		t.Errorf("in leg receipt_ids = %v, want empty - the receipt was only ever attached to the out leg", inRow.ReceiptIDs)
+
+	onOut := upload(outLeg.ID)
+	if got, want := listed().ReceiptIDs, []int64{onOut}; !slices.Equal(got, want) {
+		t.Errorf("receipt_ids with a photo on the out leg only = %v, want %v", got, want)
+	}
+
+	onIn := upload(inLeg.ID)
+	if got, want := listed().ReceiptIDs, []int64{onOut, onIn}; !slices.Equal(got, want) {
+		t.Errorf("receipt_ids with a photo on each leg = %v, want %v (both, oldest first)", got, want)
 	}
 }
 

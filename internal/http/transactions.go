@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -135,7 +136,7 @@ type transactionResponse struct {
 	// (every toTransactionResponse caller but toTransactionsPageResponse) gets
 	// [], since a receipt names an existing transaction id. GET
 	// /api/transactions overwrites it with a batched lookup (listTransactions).
-	// A transfer's two legs are ordinary rows, each with only its own receipts.
+	// A transfer's list row carries both legs' receipts (#738), oldest first.
 	ReceiptIDs []int64 `json:"receipt_ids"`
 }
 
@@ -319,6 +320,16 @@ func validDuesPeriod(s string) bool {
 // duplicate a row landing mid-list between page fetches. A direct-CRUD read
 // (ADR-027), so it calls a.queries directly.
 //
+// One row per movement (#738): the two legs of a transfer come back as ONE row,
+// chosen in SQL before the cursor cuts the page (see ListTransactionsPage), so a
+// page boundary can neither split a pair nor skip one. The row is a real leg:
+// the 'out' leg when both legs match the filters, otherwise whichever matched,
+// so its direction, account_id, purpose_id and account_name are THAT LEG'S and
+// mean nothing about the movement. A client renders a kind='transfer' row from
+// transfer_kind, transfer_from_name and transfer_to_name, which are the same
+// whichever leg it is. ?direction= excludes transfers: a movement between two
+// places is neither in nor out.
+//
 // ?q= searches note, purpose name and member name (case-insensitive
 // substring, see ListTransactionsPage) plus an exact amount match when q is
 // all digits. ?member_id=, ?purpose_id=, ?month= ("YYYY-MM") and
@@ -428,9 +439,11 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	// One batched, fund-scoped receipt lookup for the page (#154), never a query
 	// per row; see receiptIDsForTransactions.
-	ids := make([]int64, len(rows))
-	for i, t := range rows {
-		ids[i] = t.ID
+	// A transfer is one row here (#738) but two ledger rows, and a photo may sit on
+	// either leg, so a transfer's lookup covers both of its legs.
+	ids := make([]int64, 0, len(rows))
+	for _, t := range rows {
+		ids = append(ids, receiptParentIDs(t)...)
 	}
 	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
 	if err != nil {
@@ -441,10 +454,30 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	resp := make([]transactionResponse, 0, len(rows))
 	for _, t := range rows {
 		row := toTransactionsPageResponse(t, today)
-		row.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[t.ID])
+		parents := receiptParentIDs(t)
+		var merged []int64
+		for _, id := range parents {
+			merged = append(merged, receiptIDs[id]...)
+		}
+		// Receipt ids rise with upload time, so sorting two legs' lists keeps
+		// receipt_ids "oldest first". One list (any other row) is already in order.
+		if len(parents) > 1 {
+			slices.Sort(merged)
+		}
+		row.ReceiptIDs = orEmptyReceiptIDs(merged)
 		resp = append(resp, row)
 	}
 	writeJSON(w, http.StatusOK, transactionsPageResponse{Transactions: resp, NextCursor: nextCursor})
+}
+
+// receiptParentIDs is every transaction id whose receipts belong on one listed
+// row: its own, and for a transfer (one row standing for two legs, #738) both
+// legs', whichever leg ListTransactionsPage picked to represent it.
+func receiptParentIDs(t store.ListTransactionsPageRow) []int64 {
+	if t.TransferID == nil || t.TransferOutLegID == nil || t.TransferInLegID == nil {
+		return []int64{t.ID}
+	}
+	return []int64{*t.TransferOutLegID, *t.TransferInLegID}
 }
 
 // reverseTransactionRequest is POST /api/transactions/{id}/reversal's body: a

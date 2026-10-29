@@ -71,12 +71,13 @@ func TestPostPurposeMovesRequiresAFund(t *testing.T) {
 	}
 }
 
-// The success path: 201, a reclass_purpose transfer, and two legs in GET
-// /api/transactions with transfer_reason 'allocation', the two purpose names
-// and the one account, while the fund's pooled rows sum as before.
+// The success path: 201, a reclass_purpose transfer, one row in GET
+// /api/transactions (#738) with transfer_reason 'allocation', the two purpose
+// names and the one account, and two ledger legs that net to zero.
 func TestPostPurposeMovesPostsAnAllocationPair(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	w := newPurposeMoveWorld(t, r)
 
 	req := w.request(t, w.setup.MainPurposeID, w.envelope.PurposeID, 120_000)
@@ -94,27 +95,36 @@ func TestPostPurposeMovesPostsAnAllocationPair(t *testing.T) {
 		t.Errorf("Kind = %q, want reclass_purpose", transfer.Kind)
 	}
 
-	var legs []transactionResponse
+	var listed []transactionResponse
 	for _, row := range decodeTransactionsList(t, r) {
 		if row.Kind == "transfer" && row.TransferID != nil && *row.TransferID == transfer.ID {
-			legs = append(legs, row)
+			listed = append(listed, row)
 		}
 	}
+	if len(listed) != 1 {
+		t.Fatalf("found %d listed rows for the move, want 1 (a pair lists once, #738)", len(listed))
+	}
+	row := listed[0]
+	if row.TransferReason == nil || *row.TransferReason != "allocation" {
+		t.Errorf("transfer_reason = %v, want \"allocation\"", row.TransferReason)
+	}
+	if row.TransferCorrectsTransactionID != nil {
+		t.Errorf("row corrects transaction %d, want nothing", *row.TransferCorrectsTransactionID)
+	}
+	if row.TransferFromName == nil || *row.TransferFromName != "Kas Utama" || row.TransferToName == nil || *row.TransferToName != "Bereavement" {
+		t.Errorf("from/to = %v/%v, want Kas Utama/Bereavement", row.TransferFromName, row.TransferToName)
+	}
+	if row.AccountID != req.AccountID || row.Amount != 120_000 || row.Note == nil || *row.Note != "Duka cita" {
+		t.Errorf("row = account %d amount %d note %v, want account %d, 120000, the note", row.AccountID, row.Amount, row.Note, req.AccountID)
+	}
+
+	legs := ledgerLegs(t, sqlDB, w.setup.Fund.ID, transfer.ID)
 	if len(legs) != 2 {
-		t.Fatalf("found %d legs, want 2", len(legs))
+		t.Fatalf("found %d ledger legs, want 2", len(legs))
 	}
 	var net int64
 	for _, leg := range legs {
-		if leg.TransferReason == nil || *leg.TransferReason != "allocation" {
-			t.Errorf("%s leg transfer_reason = %v, want \"allocation\"", leg.Direction, leg.TransferReason)
-		}
-		if leg.TransferCorrectsTransactionID != nil {
-			t.Errorf("%s leg corrects transaction %d, want nothing", leg.Direction, *leg.TransferCorrectsTransactionID)
-		}
-		if leg.TransferFromName == nil || *leg.TransferFromName != "Kas Utama" || leg.TransferToName == nil || *leg.TransferToName != "Bereavement" {
-			t.Errorf("%s leg from/to = %v/%v, want Kas Utama/Bereavement", leg.Direction, leg.TransferFromName, leg.TransferToName)
-		}
-		if leg.AccountID != req.AccountID || leg.Amount != 120_000 || leg.Note == nil || *leg.Note != "Duka cita" {
+		if leg.Note == nil || *leg.Note != "Duka cita" || leg.AccountID != req.AccountID || leg.Amount != 120_000 {
 			t.Errorf("%s leg = account %d amount %d note %v, want account %d, 120000, the note", leg.Direction, leg.AccountID, leg.Amount, leg.Note, req.AccountID)
 		}
 		if leg.Direction == "in" {
@@ -161,17 +171,17 @@ func TestTransactionsCarryTheReasonOfEachKindOfPair(t *testing.T) {
 		case "between_accounts":
 			between++
 			if row.TransferReason != nil {
-				t.Errorf("between_accounts leg transfer_reason = %q, want null", *row.TransferReason)
+				t.Errorf("between_accounts row transfer_reason = %q, want null", *row.TransferReason)
 			}
 		case "reclass_purpose":
 			roll++
 			if row.TransferReason == nil || *row.TransferReason != "roll" {
-				t.Errorf("roll leg transfer_reason = %v, want \"roll\"", row.TransferReason)
+				t.Errorf("roll row transfer_reason = %v, want \"roll\"", row.TransferReason)
 			}
 		}
 	}
-	if between != 2 || roll != 2 {
-		t.Errorf("found %d between_accounts legs and %d roll legs, want 2 and 2", between, roll)
+	if between != 1 || roll != 1 {
+		t.Errorf("found %d between_accounts rows and %d roll rows, want 1 and 1 (a pair lists once, #738)", between, roll)
 	}
 }
 
