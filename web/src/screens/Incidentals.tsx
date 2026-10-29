@@ -503,7 +503,7 @@ function CloseForm({
 }
 
 /** One expected member's state -> its label and whether the amount shows
- * beside it (ADR-034): "Belum menyumbang" says nothing has come in, so "Rp 0"
+ * beside it (ADR-034): "Belum menyumbang" says nothing has come in, so "Rp0"
  * beside it would repeat the sentence in numbers; the other two states show
  * what has come in so far. */
 function participationStateText(state: ParticipationStateKind): { label: string; showAmount: boolean } {

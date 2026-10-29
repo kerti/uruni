@@ -8,7 +8,7 @@
 
 ## Who it's for
 
-The **accidental treasurer** — the person who got told *"Bu, jadi bendahara ya,"* didn't ask for it, and now looks after a small group's shared money. Validated with a real one: an office-unit treasurer, 8 people, ~Rp 1–2 million a month, running it all off a Google Sheet on her laptop and wishing she could just do it from her phone.
+The **accidental treasurer** — the person who got told *"Bu, jadi bendahara ya,"* didn't ask for it, and now looks after a small group's shared money. Validated with a real one: an office-unit treasurer, 8 people, ~Rp1–2 million a month, running it all off a Google Sheet on her laptop and wishing she could just do it from her phone.
 
 ## The core insight (from the interview)
 
@@ -30,7 +30,7 @@ A **mobile app** that makes the treasurer's job effortless capture and honest ma
 - **Two money locations tracked** (cash vs. bank), because that split is where her discrepancies come from.
 - **One pooled balance, with purpose tags** (kas utama, incidental collections, pass-through to kas bidang) — so funds stay separated *in meaning* without her juggling separate pots, and leftover incidental money folds back in cleanly.
 - **Per-member dues that vary by person** (by rank/role), and simple "who's paid" tracking — without turning into a nagging machine.
-- **Reimbursements in seconds, receipts optional** — because nobody wants a receipt for Rp 2.000 of parking.
+- **Reimbursements in seconds, receipts optional** — because nobody wants a receipt for Rp2.000 of parking.
 - **Records that can't be lost** — the source of truth lives on an always-on server, so a lost or broken phone never loses anything. This reliability is something she named unprompted.
 - **An optional, on-demand ledger export** for anyone who wants the full picture. Kept out of responsibility, not because members read it daily — they don't.
 
@@ -63,7 +63,7 @@ Resident databases · digital voting · complaint handling · inventory · QRIS 
 
 ## Voice
 
-Friendly, human, never corporate. *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan sudah cocok. 🎉"* · *"Ada selisih Rp 15.000 — mau dicek bersama?"*
+Friendly, human, never corporate. *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan sudah cocok. 🎉"* · *"Ada selisih Rp15.000 — mau dicek bersama?"*
 
 ## The one-line identity
 

@@ -25,14 +25,14 @@ import (
 // an int64. Every returned overflow error wraps it, so callers match with
 // errors.Is.
 //
-// At Uruni's scale this is unreachable: a fund moving Rp 1-2M/month would
+// At Uruni's scale this is unreachable: a fund moving Rp1-2M/month would
 // outlast recorded history before nearing the int64 ceiling, and SQLite's
 // SUM() raises an error before a query hands us a total near it. It is
 // checked anyway, as the schema puts a CHECK on every enum Go alone writes.
 var ErrOverflow = errors.New("money: result overflows int64")
 
 // MaxAmount is the largest single figure Uruni accepts for any amount a person
-// types or sends: Rp 999.999.999.999, twelve digits, inclusive (#499).
+// types or sends: Rp999.999.999.999, twelve digits, inclusive (#499).
 //
 // Nothing below int64 bounds a ledger on its own. SQLite raises an
 // integer-overflow error when an intermediate SUM passes int64, so two very
@@ -40,12 +40,12 @@ var ErrOverflow = errors.New("money: result overflows int64")
 // cannot be offset to repair it. The ceiling keeps every derived sum far
 // inside int64: reaching it needs about 9.2 million entries at the ceiling
 // (2^63 / MaxAmount). Twelve digits is also below 2^53, so the SPA's JS
-// number carries the figure exactly (rule 1 at the edge). Rp 1 trillion is
+// number carries the figure exactly (rule 1 at the edge). Rp1 trillion is
 // far beyond a community fund; the ceiling exists to make a slipped key
 // harmless, not to model a real balance.
 const MaxAmount Amount = 999_999_999_999
 
-// Amount is a quantity of integer rupiah. The zero value is Rp 0, an ordinary
+// Amount is a quantity of integer rupiah. The zero value is Rp0, an ordinary
 // balance (an empty fund, an account netting to zero), not a sentinel for
 // "unset".
 type Amount int64

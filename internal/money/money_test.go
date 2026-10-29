@@ -17,7 +17,7 @@ func TestAdd(t *testing.T) {
 		want     money.Amount
 		overflow bool
 	}{
-		{name: "zero values are Rp 0, not unset", a: 0, b: 0, want: 0},
+		{name: "zero values are Rp0, not unset", a: 0, b: 0, want: 0},
 		{name: "ordinary dues payment", a: 50_000, b: 70_000, want: 120_000},
 		{name: "an expense subtracted as a negative", a: 120_000, b: -2_000, want: 118_000},
 		{name: "a balance can legitimately go negative", a: 1_000, b: -3_000, want: -2_000},
@@ -45,7 +45,7 @@ func TestSub(t *testing.T) {
 		want     money.Amount
 		overflow bool
 	}{
-		{name: "zero values are Rp 0, not unset", a: 0, b: 0, want: 0},
+		{name: "zero values are Rp0, not unset", a: 0, b: 0, want: 0},
 		{name: "a reconciliation difference that matches", a: 500_000, b: 500_000, want: 0},
 		{name: "counted more than recorded", a: 520_000, b: 500_000, want: 20_000},
 		{name: "counted less than recorded", a: 480_000, b: 500_000, want: -20_000},

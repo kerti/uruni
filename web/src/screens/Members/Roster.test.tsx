@@ -117,7 +117,7 @@ describe('Roster', () => {
     renderAt()
 
     const cardOne = await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
-    expect(within(cardOne).getByText(text.tierRateLine('Pelaksana', 'Rp 50.000'))).toBeInTheDocument()
+    expect(within(cardOne).getByText(text.tierRateLine('Pelaksana', 'Rp50.000'))).toBeInTheDocument()
 
     const cardTwo = screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Dua') })
     // A member with no tier owes no dues - a real state, shown as such rather

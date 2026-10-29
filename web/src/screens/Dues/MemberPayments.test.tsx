@@ -72,9 +72,7 @@ function stubTransactions(body: Transaction[] = rows) {
   })
 }
 
-/** formatIDR puts a non-breaking space after "Rp", which testing-library's
- * string matchers normalize away - this one reads el.textContent, so the NBSP
- * is compared as-is. */
+/** Matches the amount's own span by its exact text, not a row that contains it. */
 function amountMatcher(amount: number) {
   return (_content: string, el: Element | null) => el?.tagName === 'SPAN' && el.textContent === formatIDR(amount)
 }

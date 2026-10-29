@@ -124,7 +124,7 @@ func TestReportEnvelopesListsOpenAndClosedInTheMonthWithSummary(t *testing.T) {
 	halal := sec[:strings.Index(sec, "Santunan")]
 	for _, want := range []string{
 		`<span class="badge open">Berjalan</span>`,
-		"Terkumpul: Rp\u00a042.000",
+		"Terkumpul: Rp42.000",
 		"2 dari 3 sudah menyumbang", // Ani and Budi of Ani, Budi, Cici
 	} {
 		if !strings.Contains(halal, want) {
@@ -134,7 +134,7 @@ func TestReportEnvelopesListsOpenAndClosedInTheMonthWithSummary(t *testing.T) {
 	closed := sec[strings.Index(sec, "Santunan"):]
 	for _, want := range []string{
 		`<span class="badge closed">Ditutup</span>`,
-		"Terkumpul: Rp\u00a010.000", // collected, not the zero balance after the roll
+		"Terkumpul: Rp10.000", // collected, not the zero balance after the roll
 		"Ani",
 	} {
 		if !strings.Contains(closed, want) {
@@ -153,11 +153,11 @@ func TestReportEnvelopesParticipationInTheAppsWords(t *testing.T) {
 		`<span class="state sudah">Sudah menyumbang</span>`,
 		`<span class="state belum">Belum menyumbang</span>`,
 		`<span class="state kurang">Kurang dari minimal</span>`,
-		"Rp\u00a025.000",
-		"Rp\u00a05.000",
+		"Rp25.000",
+		"Rp5.000",
 		"Sumbangan lain",
 		"Late",
-		"Rp\u00a012.000",
+		"Rp12.000",
 	} {
 		if !strings.Contains(halal, want) {
 			t.Errorf("open envelope lacks %q:\n%s", want, halal)

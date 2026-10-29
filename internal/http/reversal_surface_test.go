@@ -179,8 +179,8 @@ func TestANegativeTotalKeluarIsPrintedEverywhere(t *testing.T) {
 	if at < 0 || at+len(wantRuns) > len(runs) || !slices.Equal(runs[at:at+len(wantRuns)], wantRuns) {
 		t.Errorf("PDF walk runs do not read %q; runs:\n%s", wantRuns, strings.Join(runs, "\n"))
 	}
-	if !strings.Contains(strings.Join(runs, "|"), "-Rp\u00a012.000") {
-		t.Errorf("PDF has no %q run", "-Rp\u00a012.000")
+	if !strings.Contains(strings.Join(runs, "|"), "-Rp12.000") {
+		t.Errorf("PDF has no %q run", "-Rp12.000")
 	}
 
 	// Beranda reads the same walk through GET /api/balances, in the running month.

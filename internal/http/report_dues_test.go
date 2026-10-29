@@ -134,9 +134,9 @@ func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
 		`<span class="badge partial">Bayar sebagian</span>`,
 		"Lunas \u2014 sudah bayar di muka",
 		"Golongan Madya",
-		"Iuran: Rp\u00a025.000",
-		"Dibayar: Rp\u00a010.000",
-		"Dibayar: Rp\u00a00",
+		"Iuran: Rp25.000",
+		"Dibayar: Rp10.000",
+		"Dibayar: Rp0",
 		"Sudah dibayar sampai Oktober 2026",
 	} {
 		if !strings.Contains(sec, want) {

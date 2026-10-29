@@ -446,3 +446,7 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 ## Twelve months of dues on the report too (decided 2026-10-23)
 
 [#619](https://github.com/kerti/uruni/issues/619). **The maintainer put the twelve-month dues grid on the public report and its PDF, not only in the app** - every cell is already public month by month, and showing status is not chasing (PRD §4). The line kept: no count, no ranking, no amounts, and no report filter changes it ([ADR-044](./ADR/044-twelve-months-of-dues.md), superseding ADR-035 in part). In the app it is a second view of `/dues`; paying ahead draws as *Lunas*.
+
+## Rupiah is written `Rp1.450.000`, the same on every device (decided 2026-10-29)
+
+[#724](https://github.com/kerti/uruni/issues/724). **The maintainer chose the EYD form: `Rp` against the digits, no space.** Intl's `currency` style printed `Rp 1.450.000` in Chrome and `Rp1.450.000` in Safari, so one app showed two formats. `formatIDR` now builds the figure from the grouping alone and its test pins every character; the report's `money.FormatIDR` matches it.

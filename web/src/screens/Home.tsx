@@ -327,13 +327,15 @@ export default function Home({
 /**
  * The hero's type size, stepped down by how wide the figure is so it always
  * fits the card on one line: 36px for everyday figures, smaller as the
- * formatted figure grows toward Rp 999.999.999.999 and its minus (19
- * characters). Never a wrap or an ellipsis inside the number.
+ * formatted figure grows toward Rp999.999.999.999 and its minus (19
+ * characters with the word joiner). Never a wrap or an ellipsis inside the
+ * number. The steps were measured (#540) when "Rp" carried a space; #724 took
+ * it out, so each bound sits one lower and every figure keeps its step.
  */
 function heroSize(figure: string): string {
-  if (figure.length <= 15) return 'text-[36px]'
-  if (figure.length <= 17) return 'text-[32px]'
-  if (figure.length <= 20) return 'text-[28px]'
+  if (figure.length <= 14) return 'text-[36px]'
+  if (figure.length <= 16) return 'text-[32px]'
+  if (figure.length <= 19) return 'text-[28px]'
   return 'text-2xl'
 }
 

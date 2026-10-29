@@ -242,7 +242,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
-    expect(await screen.findByText(text.discrepancy('Rp 50.000'))).toBeInTheDocument()
+    expect(await screen.findByText(text.discrepancy('Rp50.000'))).toBeInTheDocument()
 
     // All three resolutions are reachable from the same gap.
     expect(screen.getByRole('button', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
@@ -255,7 +255,7 @@ describe('Reconcile', () => {
     // unrecorded inflow, so direction defaults to "in" and amount to the gap's
     // magnitude - nothing to type for the common case.
     expect(screen.getByRole('button', { name: copy.record.directionIn })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText(text.fixAmountLabel)).toHaveValue('Rp\u00a050.000')
+    expect(screen.getByLabelText(text.fixAmountLabel)).toHaveValue('Rp50.000')
 
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -328,10 +328,7 @@ describe('Reconcile', () => {
     expect(tunaiCount?.fix).toMatchObject({ direction: 'out', amount: 20_000 })
   })
 
-  // The form says what would still be open, live, before anything is saved. A
-  // rupiah figure is compared with its nbsp collapsed, as getByText normalizes
-  // the DOM text but never the matcher.
-  const plain = (s: string) => s.replace(/\u00a0/g, ' ')
+  // The form says what would still be open, live, before anything is saved.
 
   it('shows the remaining gap live as the fix is typed, and an entry may leave some of it open', async () => {
     vi.stubGlobal('fetch', routedFetch(stubLoad()))
@@ -344,13 +341,13 @@ describe('Reconcile', () => {
 
     // The default fix is the whole gap: nothing remains.
     expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
-    expect(screen.queryByText(plain(text.remainingGap(formatIDR(30_000))))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.remainingGap(formatIDR(30_000)))).not.toBeInTheDocument()
 
     // A smaller entry (one of two missing receipts): 50_000 - 20_000 remains.
     const amount = screen.getByLabelText(text.fixAmountLabel)
     await userEvent.clear(amount)
     await userEvent.type(amount, '20000')
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(30_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(30_000)))).toBeInTheDocument()
     expect(screen.queryByText(text.remainingNone)).not.toBeInTheDocument()
     // ...and an entry is allowed to leave it open.
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
@@ -358,13 +355,13 @@ describe('Reconcile', () => {
 
     // The wrong direction only grows the remainder: 50_000 + 20_000.
     await userEvent.click(screen.getByRole('button', { name: copy.record.directionOut }))
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(70_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(70_000)))).toBeInTheDocument()
 
     // More than the gap flips the sign; the line is still open, by magnitude.
     await userEvent.click(screen.getByRole('button', { name: copy.record.directionIn }))
     await userEvent.clear(amount)
     await userEvent.type(amount, '60000')
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(10_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(10_000)))).toBeInTheDocument()
   })
 
   it('keeps save off for a plug that does not equal the gap, and says why', async () => {
@@ -384,7 +381,7 @@ describe('Reconcile', () => {
     const amount = screen.getByLabelText(text.fixAmountLabel)
     await userEvent.clear(amount)
     await userEvent.type(amount, '5000')
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(15_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(15_000)))).toBeInTheDocument()
     expect(screen.getByText(text.adjustedMustMatch)).toBeInTheDocument()
     expect(submit).toBeDisabled()
 
@@ -396,7 +393,7 @@ describe('Reconcile', () => {
 
     // Wrong direction doubles the gap.
     await userEvent.click(screen.getByRole('button', { name: copy.record.directionIn }))
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(40_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(40_000)))).toBeInTheDocument()
     expect(submit).toBeDisabled()
   })
 
@@ -447,10 +444,10 @@ describe('Reconcile', () => {
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     // The headline reads the 30_000 left, not the 50_000 found and not cocok.
-    expect(await screen.findByText(plain(text.discrepancy(formatIDR(30_000))))).toBeInTheDocument()
+    expect(await screen.findByText(text.discrepancy(formatIDR(30_000)))).toBeInTheDocument()
     expect(screen.queryByText(text.matched)).not.toBeInTheDocument()
     // The line itself says how much it still has open.
-    expect(screen.getByText(plain(text.remainingGap(formatIDR(30_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.remainingGap(formatIDR(30_000)))).toBeInTheDocument()
   })
 
   it('shows the server copy when a plug is refused for not equalling the gap', async () => {
@@ -541,7 +538,7 @@ describe('Reconcile', () => {
 
     // The confirmation still reflects a remaining open gap - never the calm
     // "cocok" copy when a line was deliberately left open.
-    await waitFor(() => expect(screen.getByText(text.discrepancy('Rp 20.000'))).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(text.discrepancy('Rp20.000'))).toBeInTheDocument())
   })
 
   // The server rejects a "matched" line whose real difference is no longer 0
@@ -592,7 +589,7 @@ describe('Reconcile', () => {
     // shows against the updated recorded figure - all without a second POST
     // /api/reconciliations.
     await screen.findByText(text.staleNotice)
-    await waitFor(() => expect(screen.getByText(text.discrepancy('Rp 30.000'))).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(text.discrepancy('Rp30.000'))).toBeInTheDocument())
 
     const postCallsAfter = fetchMock.mock.calls.filter(([input]) => (input as string).toString().includes('/api/reconciliations')).length
     expect(postCallsAfter).toBe(1)
@@ -603,7 +600,7 @@ describe('Reconcile', () => {
     // Not an error screen and not a blank one - her typed figures are still
     // there and she is asked to resolve again, resolution buttons intact.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp\u00a0100.000')
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp100.000')
     expect(screen.getByRole('button', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
   })
 
@@ -634,7 +631,7 @@ describe('Reconcile', () => {
     expect(screen.queryByText(text.staleNotice)).not.toBeInTheDocument()
     // Her counts are still on screen either way. formatIDR puts a U+00A0 after
     // "Rp" and toHaveValue compares the raw value, unnormalized.
-    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue(`Rp\u00a0100.000`)
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue(`Rp100.000`)
   })
 
   // The server refuses a count that is not exactly the active locations. A
@@ -684,7 +681,7 @@ describe('Reconcile', () => {
 
     await screen.findByText(copy.common.errors.reconciliation_location_missing)
     expect(await screen.findByLabelText(text.actualLabel('Bank Baru'))).toBeInTheDocument()
-    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp\u00a0100.000')
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp100.000')
     expect(accountsCallCount).toBe(2)
   })
 
@@ -841,9 +838,9 @@ describe('Reconcile', () => {
     expect(rows).toHaveLength(5)
     expect(rows[0]).toHaveTextContent('Kas utama')
     expect(rows[0]).toHaveTextContent('Beli sapu')
-    expect(rows[0]).toHaveTextContent('Rp 25.000')
+    expect(rows[0]).toHaveTextContent('Rp25.000')
     expect(rows[1]).toHaveTextContent('Kas Bidang')
-    expect(rows[1]).toHaveTextContent('Rp 40.000')
+    expect(rows[1]).toHaveTextContent('Rp40.000')
     expect(screen.queryByText('Terlalu lama')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.home.recentActivityEmpty)).not.toBeInTheDocument()
   })

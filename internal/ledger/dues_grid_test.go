@@ -41,7 +41,7 @@ func TestDuesGridEqualsTwelveCallsToDuesStatusForPeriod(t *testing.T) {
 	r := newRichFund(t)
 	q := store.New(r.l.db)
 
-	// A free tier owes Rp 0, which DuesStatusForPeriod reads as paid.
+	// A free tier owes Rp0, which DuesStatusForPeriod reads as paid.
 	free := createDuesTier(t, q, r.f.fundID, "Free")
 	createDuesRate(t, q, free, 0, "2025-01")
 	joined := "2025-01-01"
@@ -195,7 +195,7 @@ func TestDuesGridNamedCells(t *testing.T) {
 		{got, "Lina", "2025-12", DuesCellPaid},     //
 		{got, "Lina", "2026-05", DuesCellUnpaid},   //
 		{got, "Lina", "2026-06", DuesCellNone},     // dropped to no tier in June
-		{got, "Zulaikha", "2026-10", DuesCellPaid}, // owes Rp 0: Lunas, as the one-month table says
+		{got, "Zulaikha", "2026-10", DuesCellPaid}, // owes Rp0: Lunas, as the one-month table says
 		{earlier, "Joko", "2025-05", DuesCellPartial},
 		{earlier, "Joko", "2025-08", DuesCellPaid},
 		{earlier, "Eka", "2025-05", DuesCellNone}, // joined in June

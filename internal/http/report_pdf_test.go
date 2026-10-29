@@ -239,9 +239,6 @@ func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
 			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
 		}
 	}
-	if !strings.Contains(strings.Join(runs, ""), "Rp\u00a0") {
-		t.Error("PDF text has no \"Rp\" + U+00A0: the non-breaking space did not survive the font")
-	}
 	if got, want := rec.Header().Get("Content-Length"), fmt.Sprint(rec.Body.Len()); got != want {
 		t.Errorf("Content-Length = %q, want %q", got, want)
 	}

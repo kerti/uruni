@@ -12,7 +12,7 @@ import (
 // summed, direction as sign. Pass-through and incidental purposes sum in like
 // main; there is no second "available" figure anywhere (PRD 7.6, ADR-024:
 // "either both leave the headline or neither does"). A fund with no
-// transactions returns Rp 0, not an error.
+// transactions returns Rp0, not an error.
 //
 // A read: it uses l.q directly, as one SELECT is already consistent (ADR-027).
 func (l *Ledger) FundBalance(ctx context.Context, fundID int64) (money.Amount, error) {
@@ -87,7 +87,7 @@ type HomeBalances struct {
 // refresh, and in a fixed number of reads however many accounts and purposes
 // the fund has (#532): one grouped sum over the ledger for the accounts and one
 // for the purposes, each merged onto its ordered list. An account or purpose
-// with no entry reads Rp 0.
+// with no entry reads Rp0.
 //
 // Every figure is what FundBalance, AccountBalance, PurposeBalance,
 // OwedToMembers and MonthInOut return for it. The total is its own sum, not the

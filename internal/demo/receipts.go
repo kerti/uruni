@@ -111,10 +111,10 @@ func drawSlip(s receiptSlip) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// slipAmount is money.FormatIDR without the no-break space, which the slip's
-// ASCII bitmap font cannot draw: "Rp 285.000".
+// slipAmount is how the shop printed it, with a space: "Rp 285.000". A
+// till's own slip, not Uruni's format.
 func slipAmount(n int64) string {
-	return strings.ReplaceAll(money.FormatIDR(money.FromDB(n)), "\u00a0", " ")
+	return strings.Replace(money.FormatIDR(money.FromDB(n)), "Rp", "Rp ", 1)
 }
 
 // attachReceipt stores a drawn slip as the receipt of a posted transaction or a

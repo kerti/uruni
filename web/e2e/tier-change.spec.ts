@@ -8,8 +8,8 @@ import { chooseOption, popperContent } from './popper'
 import { cardButton } from './card'
 
 // ADR-040: a tier is stated "from a month", and a rate is corrected with its
-// span named. One member is promoted from Reguler (Rp 50.000) to Senior
-// (Rp 80.000) two months back; the month before keeps the old tier and amount
+// span named. One member is promoted from Reguler (Rp50.000) to Senior
+// (Rp80.000) two months back; the month before keeps the old tier and amount
 // on Iuran and on the public report, and then a Senior rate is corrected and
 // the confirmation names the months it reprices.
 

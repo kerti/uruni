@@ -11,7 +11,7 @@ The individual decisions live as one-file-per-ADR in [`ADR/`](./ADR/README.md) �
 ## Constraints that drive the tech (from the PRD)
 
 - **Dead-simple self-host** — prebuilt Docker image + `docker compose`, minimal config, fewest possible moving parts. The single biggest force on the design.
-- **One small instance per community** — one treasurer, a handful of members, ~Rp 1–2M/month. Tiny data, negligible concurrency.
+- **One small instance per community** — one treasurer, a handful of members, ~Rp1–2M/month. Tiny data, negligible concurrency.
 - **PWA, connection-required** — no offline data store, no sync. This *removes* a whole class of complexity.
 - **Money integrity** — correctness beats cleverness; the reconciliation math must be trustworthy and tested.
 - **Public report page** — server-rendered, unauthenticated, filterable.

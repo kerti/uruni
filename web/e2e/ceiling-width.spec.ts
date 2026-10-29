@@ -4,7 +4,7 @@ import { copy } from '../src/copy/id'
 import { formatIDR, MAX_AMOUNT } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// The widest legal figure, Rp 999.999.999.999 (money.MaxAmount) and its
+// The widest legal figure, Rp999.999.999.999 (money.MaxAmount) and its
 // negative, laid out on a phone. Seeds ceiling-sized amounts over the API -
 // balances, Arus kas, a negative Titipan, a dues rate and payment, a Talangan,
 // an envelope with a ceiling target and minimum, and a Cek kas left open - then
@@ -14,7 +14,7 @@ import { expect, logIn, test } from './fixtures'
 // number). Layout is measured on real elements, so it is a browser's job
 // (Vitest has no layout).
 //
-// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Bank Uji Coba,
+// Serial, one story on the seeded fixture (Tunai Rp1.000.000, Bank Uji Coba,
 // Kas Utama, the envelope "Amplop Uji Laporan", two members on a tier).
 
 const ceiling = MAX_AMOUNT
@@ -49,7 +49,7 @@ async function seedCeilingFigures(request: APIRequestContext) {
   const post = (account_id: number, purpose_id: number, direction: 'in' | 'out', amount: number, note?: string) =>
     api(request, 'POST', '/api/transactions', { account_id, purpose_id, direction, amount, occurred_on: today, note })
 
-  // Tunai holds the ceiling (its opening Rp 1.000.000 spent first), and the
+  // Tunai holds the ceiling (its opening Rp1.000.000 spent first), and the
   // fund total, Kas Utama and this month's Masuk run past it.
   await post(tunai, main, 'out', 1_000_000)
   await post(tunai, main, 'in', ceiling, 'Dana hibah besar sekali untuk uji lebar')
@@ -223,7 +223,7 @@ test.describe('the ceiling figure fits', () => {
       for (let i = 0; i < count; i++) {
         // nth: every amount input on the form in turn; they share no distinct name.
         await inputs.nth(i).fill('999999999999')
-        // Typing: the bare digits fit; blurred: "Rp 999.999.999.999" does.
+        // Typing: the bare digits fit; blurred: "Rp999.999.999.999" does.
         await expectFiguresFit(page, `${path} input ${i} while typing`)
         await inputs.nth(i).blur()
         await expect(inputs.nth(i)).toHaveValue(widest)

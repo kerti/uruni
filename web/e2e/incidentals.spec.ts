@@ -104,7 +104,7 @@ test.describe('incidentals', () => {
       // whichever the navigation had not yet torn down (racy before it was
       // ambiguous). toContainText retries, so this waits for the detail view.
       const collectedRow = page.locator(`div:has(> span:text-is(${JSON.stringify(copy.incidentals.detail.collectedLabel)}))`)
-      await expect(collectedRow).toContainText('Rp 60.000')
+      await expect(collectedRow).toContainText('Rp60.000')
       await expectAccessible(page)
     },
   )
@@ -131,7 +131,7 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.incidentals.close.submit, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 
-    // The rollover (Rp 60.000 collected, nothing disbursed - all of it rolls
+    // The rollover (Rp60.000 collected, nothing disbursed - all of it rolls
     // out) is rendered, never hidden even if zero. rolled_amount is signed
     // (ADR-031): 60.000 is positive, so the "rolled out" sentence must show.
     // The double-close 409 is covered at the unit level (Incidentals.test.tsx);

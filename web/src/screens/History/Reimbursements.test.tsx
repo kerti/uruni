@@ -18,10 +18,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function money(amount: number): string {
-  return formatIDR(amount).replace(/\u00a0/g, ' ')
-}
-
 const members = [
   {
     id: 1,
@@ -167,7 +163,7 @@ describe('Reimbursements tab', () => {
 
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText('Parkir')).toBeInTheDocument()
-    expect(screen.getByText(money(15_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(15_000))).toBeInTheDocument()
     // The outstanding tab labels a still-owed claim "Belum dibayar". `settled`
     // rides the wire (the list queries compute it), so the badge is a fact, not
     // a tab-dependent guess.
@@ -283,7 +279,7 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: text.allTab })).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: text.allTab }))
 
-    await waitFor(() => expect(screen.getByText(money(25_000))).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(formatIDR(25_000))).toBeInTheDocument())
     expect(screen.getByText(text.status.settled, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.actions.settle })).not.toBeInTheDocument()

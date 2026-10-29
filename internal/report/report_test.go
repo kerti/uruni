@@ -100,8 +100,8 @@ func TestReportCopyDates(t *testing.T) {
 }
 
 // TestHeroSizeClassStepsDownAsTheFigureGrows pins #540's steps: everyday
-// figures keep the full hero size, and the widest legal figure (Rp
-// 999.999.999.999, with or without its minus) gets a smaller one.
+// figures keep the full hero size, and the widest legal figure
+// (Rp999.999.999.999, with or without its minus) gets a smaller one.
 func TestHeroSizeClassStepsDownAsTheFigureGrows(t *testing.T) {
 	for _, c := range []struct {
 		figure string
@@ -142,7 +142,7 @@ func TestPDFSafe(t *testing.T) {
 		{"Keluarga \U0001F468\u200D\U0001F469\u200D\U0001F467 Budi", "Keluarga Budi"},
 		{"\U0001F3E0", ""},
 		// Nothing dropped: the text comes back exactly, spaces and all.
-		{"Rp\u00a050.000  tunai ", "Rp\u00a050.000  tunai "},
+		{"Rp50.000  tunai ", "Rp50.000  tunai "},
 		{"Caf\u00e9 \u2615", "Caf\u00e9 \u2615"},
 		// The font has no arrow: the PDF writes it in ASCII.
 		{"Dipindah: Kas Utama \u2192 Duka", "Dipindah: Kas Utama -> Duka"},

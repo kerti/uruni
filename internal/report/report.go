@@ -93,7 +93,7 @@ type Page struct {
 	Envelopes []Envelope
 
 	// Empty is a fund with nothing recorded at all, not a quiet month: it gets
-	// the warm line instead of a bare Rp 0.
+	// the warm line instead of a bare Rp0.
 	Empty bool
 }
 
@@ -645,14 +645,16 @@ func render(w io.Writer, name string, page Page, nonce string) error {
 }
 
 // heroSizeClass names the report hero's type step for a formatted figure, the
-// same steps as Beranda's hero, by length in characters.
+// same steps as Beranda's hero, by length in characters. The steps were
+// measured (#540) when "Rp" carried a space; #724 took it out, so each bound
+// sits one lower and every figure keeps the step it had.
 func heroSizeClass(figure string) string {
 	switch n := len([]rune(figure)); {
-	case n <= 15:
+	case n <= 14:
 		return ""
-	case n <= 17:
+	case n <= 16:
 		return "s32"
-	case n <= 20:
+	case n <= 19:
 		return "s28"
 	default:
 		return "s24"
