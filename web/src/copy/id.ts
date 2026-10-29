@@ -1491,10 +1491,11 @@ export const copy = {
     },
     close: {
       heading: 'Tutup amplop',
-      // Direction-neutral (ADR-031): closing moves money either way - leftover
-      // out to Kas Utama, or a shortfall covered from it - so a label naming
-      // one direction ("Sisa dana masuk ke") would be true half the time.
-      accountLabel: 'Akun untuk pemindahan dana',
+      // The close moves money between pos inside one location, so the field
+      // is just "Lokasi" (#737). Still direction-neutral (ADR-031): leftover
+      // out to Kas Utama, or a shortfall covered from it - a label naming one
+      // direction ("Sisa dana masuk ke") would be true half the time.
+      accountLabel: 'Lokasi',
       dateLabel: 'Tanggal ditutup',
       noteLabel: 'Catatan (opsional)',
       notePlaceholder: 'Mis. sisa dana halal bihalal',

@@ -551,6 +551,32 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     expect(screen.queryByText(text.locationGoesNegative(formatIDR(30_000)))).not.toBeInTheDocument()
   })
 
+  function stubThreeLocations() {
+    const three = [...accounts, { id: 4, kind: 'bank', name: 'Bank kedua', inactive_on: null, created_at: 1 }]
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(three)) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      ]),
+    )
+  }
+
+  it('picks Ke lokasi by itself when exactly one other active location exists, and leaves it blank otherwise (#737)', async () => {
+    stubWith(135_000, 250_000)
+    const { unmount } = render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await startTransfer()
+    expect(selectedOptionName(text.fromLocationLabel)).toBe('Tunai')
+    expect(selectedOptionName(text.toLocationLabel)).toBe('Bank Uji Coba')
+    unmount()
+
+    stubThreeLocations()
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await startTransfer()
+    expect(selectedOptionName(text.toLocationLabel)).toBe('')
+  })
+
   it('swaps the two locations in one tap - the deposit/withdraw pair reversed', async () => {
     stubWith(135_000, 250_000)
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
@@ -802,7 +828,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     expect(document.getElementById('record-receipt')).toBeNull()
   })
 
-  it('opens on Kas Utama to the first envelope, and never offers Titipan on either side', async () => {
+  it('opens on Kas Utama to the only envelope, and never offers Titipan on either side', async () => {
     stubPurposeMove()
     await choosePurposeMove()
 
@@ -811,6 +837,16 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     expect(await selectOptionNames(text.fromPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
     await userEvent.keyboard('{Escape}')
     expect(await selectOptionNames(text.toPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
+  })
+
+  it('leaves Ke blank when more than one pos could receive (#737)', async () => {
+    stubPurposeMove(1_000_000, 0, [...purposes, { id: 13, kind: 'incidental', name: 'Kerja bakti', created_at: 1 }])
+    await choosePurposeMove()
+
+    expect(selectedOptionName(text.fromPurposeLabel)).toBe('Kas utama')
+    expect(selectedOptionName(text.toPurposeLabel)).toBe('')
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
+    expect(screen.getByRole('button', { name: text.swapPurposes })).toBeDisabled()
   })
 
   it('says there is no open envelope rather than leaving Ke empty', async () => {

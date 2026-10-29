@@ -79,7 +79,7 @@ test.describe('reimbursements', () => {
     await expect(page).toHaveURL(/\/reimbursements\/settle\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
 
-    // Pick where the money is paid from - the account has no default.
+    // Pick where the money is paid from (it opens on a default; picking is explicit).
     await chooseOption(page, copy.reimbursements.settle.accountLabel)
 
     // Submit settle (date defaults to today)

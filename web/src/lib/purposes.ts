@@ -29,6 +29,19 @@ export function listPurposes(selectable = false): Promise<Purpose[]> {
 }
 
 /**
+ * The one rule for which pos a picker lists (#737): closed envelopes are out.
+ * The server already applies it to `listPurposes(true)`, which Catat uses
+ * as-is; a screen that must also show a value it already holds (Perbaiki
+ * talangan, whose claim may name an envelope closed since) passes the full
+ * list, the selectable one, and that current id - the current pos stays
+ * listed even when closed, so its value still renders.
+ */
+export function selectablePurposes(all: Purpose[], selectable: Purpose[], currentId: number | null = null): Purpose[] {
+  const open = new Set(selectable.map((p) => p.id))
+  return all.filter((p) => open.has(p.id) || p.id === currentId)
+}
+
+/**
  * POST /api/pass-through-purposes - money the fund holds but does not own,
  * collected for something and paid straight out (PRD section 7.6). Name only:
  * the kind is pinned server-side so no caller can ask for a second 'main'.
