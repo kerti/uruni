@@ -1400,3 +1400,33 @@ func TestGetTransactionsRejectsAMalformedPurposeID(t *testing.T) {
 		}
 	}
 }
+
+// TestGetTransactionsCarriesThePurposeKind: the row names the kind of its
+// purpose, so an anonymous contribution into an envelope can label itself.
+func TestGetTransactionsCarriesThePurposeKind(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	incRec := postIncidental(t, r, openIncidentalRequest{Occasion: "Lebaran", OpenedOn: "2026-08-01"})
+	if incRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/incidentals = %d (body: %s)", incRec.Code, incRec.Body.String())
+	}
+	incidental := decodeIncidental(t, incRec)
+	for _, purposeID := range []int64{setup.MainPurposeID, incidental.PurposeID} {
+		if rec := postTransaction(t, r, transactionRequest{
+			AccountID: setup.CashAccountID(t), PurposeID: purposeID,
+			Direction: "in", Amount: 10_000, OccurredOn: "2026-08-06",
+		}); rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/transactions = %d (body: %s)", rec.Code, rec.Body.String())
+		}
+	}
+
+	kinds := map[int64]string{}
+	for _, row := range decodeTransactionsPage(t, getTransactions(t, r)).Transactions {
+		kinds[row.PurposeID] = row.PurposeKind
+	}
+	if kinds[setup.MainPurposeID] != "main" || kinds[incidental.PurposeID] != "incidental" {
+		t.Errorf("purpose_kind by purpose = %v, want main and incidental", kinds)
+	}
+}

@@ -113,6 +113,7 @@ const transactionKeys: Keys<Transaction> = {
   note: true,
   created_at: true,
   account_name: true,
+  purpose_kind: true,
   member_name: true,
   claim_note: true,
   transfer_kind: true,

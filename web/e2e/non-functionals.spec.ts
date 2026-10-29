@@ -185,14 +185,14 @@ test.describe('browser-only non-functionals', () => {
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     const loadFailed = page.getByRole('main').getByRole('alert').filter({ hasText: copy.common.errors.network_error })
     await expect(loadFailed).toBeVisible()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeHidden()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeHidden()
 
     // Back online, the retry brings the form; she fills it in, and the
     // connection drops again just before she taps Simpan.
     await page.context().setOffline(false)
     await expect(offlineBanner(page)).toBeHidden()
     await loadFailed.getByRole('button', { name: copy.common.retry }).click()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await page.getByLabel(copy.record.amountLabel).fill('77000')
     await page.context().setOffline(true)
@@ -204,7 +204,7 @@ test.describe('browser-only non-functionals', () => {
     // "response lost".
     await expect(page.getByRole('alert').filter({ hasText: copy.common.errors.write_outcome_unknown })).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeHidden()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await expect(offlineBanner(page)).toBeVisible()
 
     // Back online: the banner clears on its own.
@@ -214,7 +214,7 @@ test.describe('browser-only non-functionals', () => {
     // Nothing was queued: even after a reload and a wait, the ledger holds what
     // it held, and the balances have not moved.
     await page.reload()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.waitForLoadState('networkidle')
     const after = await api<Balances>(request, 'GET', '/api/balances')
     expect(after.fund_total).toBe(before.fund_total)

@@ -154,6 +154,11 @@ function demoFields(session: SessionStatus | undefined): Pick<SessionStatus, 'de
   return session ? { demo_email: session.demo_email, demo_password: session.demo_password } : {}
 }
 
+/** The envelope detail's origin, carried in the navigation's state. */
+interface EnvelopeOriginState {
+  from: 'home'
+}
+
 /** What a successful record hands to home through the history entry it
  * creates. photoFailed is true only when a photo was picked and the
  * transaction posted but the receipt upload failed - never set for a
@@ -273,6 +278,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const recorded = (location.state as HomeState | null)?.recorded
   const photoFailed = (location.state as HomeState | null)?.photoFailed === true
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
+  // Where the envelope detail was opened from: Beranda says so in the history
+  // entry's state, Pengaturan says nothing, and a deep link or reload has no
+  // state at all - both of those lead back to Pengaturan.
+  const envelopeFromHome = (location.state as EnvelopeOriginState | null)?.from === 'home'
   const recordFromDues = (location.state as RecordFromDuesState | null)?.fromDues === true
   const recordDues = searchParams.get('type') === 'dues'
   // "Pengeluaran ini ditalangi": form mode is a route (ADR-032), like
@@ -464,7 +473,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           ) : (
             <Shell title={title} onLoggedOut={onLoggedOut}>
               <Incidentals
-                onBack={() => navigate('/settings')}
+                onBack={() => navigate(envelopeFromHome ? '/' : '/settings')}
+                backLabel={envelopeFromHome ? copy.incidentals.detail.backToHome : copy.incidentals.detail.backToSettings}
                 onRecordFor={(purposeId, memberId) =>
                   navigate(`/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}`)
                 }
@@ -514,7 +524,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Home
               refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}
-              onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
+              onOpenIncidental={(purposeId) =>
+                navigate(`/incidentals?purpose=${purposeId}`, { state: { from: 'home' } satisfies EnvelopeOriginState })
+              }
               onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
               onViewOwed={() => navigate('/history/reimbursements')}

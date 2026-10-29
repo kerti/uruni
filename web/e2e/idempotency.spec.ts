@@ -49,7 +49,7 @@ test.describe('a lost response, then Simpan again', () => {
     })
 
     await page.goto('/record')
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await page.getByLabel(copy.record.amountLabel).fill(String(amount))
     await page.getByLabel(copy.record.noteLabel, { exact: true }).fill(note)

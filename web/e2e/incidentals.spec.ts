@@ -80,12 +80,12 @@ test.describe('incidentals', () => {
       await berandaRow(page).click()
       await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
-      // "Catat transaksi" hands off to the real record form with this envelope's
+      // "Catat" hands off to the real record form with this envelope's
       // purpose chosen via /record?purpose=<id>. exact: the participation list
       // gives every member row a "Catat sumbangan dari <name>" control, which a
       // substring match also hits.
       await page.getByRole('button', { name: copy.incidentals.actions.record, exact: true }).click()
-      await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+      await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
 
       // A contribution is money in - the record form's direction toggle, not a
       // choice this screen makes. Location keeps its default account; purpose
@@ -140,8 +140,12 @@ test.describe('incidentals', () => {
 
     // Once closed, the envelope leaves Pengaturan's list for the
     // closed-envelopes screen behind its one row - one tap away - and its card
-    // there opens the detail again.
-    await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
+    // there opens the detail again. Opened from Beranda, so the back control
+    // leads there (#736) - and the closed envelope is gone from its breakdown.
+    await page.getByRole('button', { name: copy.incidentals.detail.backToHome }).click()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+    await expect(berandaRow(page)).toBeHidden()
+    await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
     await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeHidden()
     await page.getByRole('button', { name: new RegExp(copy.settings.incidentals.closedRow) }).click()

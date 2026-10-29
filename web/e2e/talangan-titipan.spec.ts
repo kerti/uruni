@@ -91,7 +91,7 @@ async function removeClaim(card: Locator, page: Page) {
 // Catat -> Masuk or Keluar -> Pos -> amount -> Simpan; lands on Beranda.
 async function recordForPos(page: Page, direction: 'in' | 'out', pos: string, amount: number) {
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
-  await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+  await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
   await page.getByRole('button', { name: direction === 'in' ? copy.record.directionIn : copy.record.directionOut }).click()
   await chooseOption(page, copy.record.purposeLabel, pos)
   await page.getByLabel(copy.record.amountLabel).fill(String(amount))

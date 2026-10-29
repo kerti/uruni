@@ -84,11 +84,14 @@ function errorText(err: ApiError): string {
  */
 export default function Incidentals({
   onBack,
+  backLabel = copy.incidentals.detail.backToSettings,
   onRecordFor,
   onViewTransactionsFor,
   purposeId,
 }: {
   onBack: () => void
+  /** Names where onBack leads (Beranda or Pengaturan); defaults to Pengaturan. */
+  backLabel?: string
   /** Navigates to Catat, this envelope's purpose pre-chosen - and, when given,
    * a member pre-chosen too (ADR-034: one action per row, record a
    * contribution with the member already filled in). */
@@ -187,7 +190,7 @@ export default function Incidentals({
 
   // The way back from a closed envelope (ADR-031): reopening clears closed_on
   // and refetches the detail, which suffices - DetailView's isOpen block
-  // renders "Catat transaksi" and "Tutup amplop" for any open envelope, so a
+  // renders "Catat" and "Tutup" for any open envelope, so a
   // reopen leads straight into the close form a late entry is meant to end
   // at, not a bare toggle.
   function handleReopen() {
@@ -233,6 +236,7 @@ export default function Incidentals({
         onRename={() => openDialog(`incidental:${purposeId}`)}
         onRetry={() => void detailRun(() => getIncidental(purposeId))}
         onBack={onBack}
+        backLabel={backLabel}
       />
       <RenameIncidentalDialog
         envelope={detailState.data ?? null}
@@ -272,6 +276,7 @@ function DetailView({
   onRename,
   onRetry,
   onBack,
+  backLabel,
 }: {
   detailState: ReturnType<typeof useApi<IncidentalDetail>>[0]
   participationState: ReturnType<typeof useApi<IncidentalParticipation>>[0]
@@ -288,6 +293,7 @@ function DetailView({
   onRename: () => void
   onRetry: () => void
   onBack: () => void
+  backLabel: string
 }) {
   if (detailState.status === 'idle' || detailState.status === 'loading') {
     return <Loading />
@@ -326,7 +332,7 @@ function DetailView({
           back, rather than a full-width button competing with the real ones. */}
       <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
         <ArrowLeft aria-hidden="true" />
-        {text.detail.backToSettings}
+        {backLabel}
       </Button>
 
       <div className="flex items-start justify-between gap-3">

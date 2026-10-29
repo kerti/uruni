@@ -344,7 +344,7 @@ describe('App (record loop)', () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
 
-    await screen.findByRole('heading', { name: copy.record.heading })
+    await screen.findByRole('heading', { name: copy.record.headingOut })
     await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
     window.history.pushState({}, '', '/')
   })
@@ -365,7 +365,7 @@ describe('App (record loop)', () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes(zone))
     render(<App />)
 
-    await screen.findByRole('heading', { name: copy.record.heading })
+    await screen.findByRole('heading', { name: copy.record.headingOut })
     expect(screen.getByLabelText(copy.record.dateLabel)).toHaveTextContent(want)
     window.history.pushState({}, '', '/')
   })
@@ -403,7 +403,7 @@ describe('App (record loop)', () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
 
-    await screen.findByRole('heading', { name: copy.record.heading })
+    await screen.findByRole('heading', { name: copy.record.headingOut })
     await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Kas utama'))
     window.history.pushState({}, '', '/')
   })
@@ -412,52 +412,60 @@ describe('App (record loop)', () => {
   // envelope's record action must land on the real form with that envelope's
   // purpose chosen. The route is detail-only (its list moved to Pengaturan),
   // so it is reached directly with ?purpose=<id>.
-  it("routes an envelope's record action into the record form with its purpose chosen", async () => {
-    const envelope = {
-      purpose_id: 12,
-      occasion: 'Halal bihalal RT',
-      target_amount: null,
-      opened_on: '2026-09-01',
-      closed_on: null,
-      created_at: 1,
-      minimum_per_member: null,
-    } satisfies Incidental
-    window.history.pushState({}, '', '/incidentals?purpose=12')
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'),
-          handle: () =>
-            Promise.resolve(
-              jsonResponse({
-                ...envelope,
-                collected_amount: 0,
-                disbursed_amount: 0,
-                balance_amount: 0,
-                recipients: [],
-              } satisfies IncidentalDetail),
-            ),
-        },
-        {
-          match: (m, u) => m === 'GET' && u.includes('/api/session'),
-          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        },
-        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
-        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-        { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-        ...emptyHomeRoutes,
-      ]),
-    )
-    render(<App />)
+  it.each([
+    ['a deep link or reload, which carries no origin', null, copy.incidentals.detail.backToSettings],
+    ["Beranda's per-pos list", { from: 'home' }, copy.incidentals.detail.backToHome],
+  ])(
+    "routes an envelope's record action into the record form with its purpose chosen, and the back link follows %s",
+    async (_origin, state, backLabel) => {
+      const envelope = {
+        purpose_id: 12,
+        occasion: 'Halal bihalal RT',
+        target_amount: null,
+        opened_on: '2026-09-01',
+        closed_on: null,
+        created_at: 1,
+        minimum_per_member: null,
+      } satisfies Incidental
+      // react-router keeps navigate()'s state under `usr` in the history entry.
+      window.history.pushState(state === null ? {} : { usr: state, key: 'origin', idx: 0 }, '', '/incidentals?purpose=12')
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'),
+            handle: () =>
+              Promise.resolve(
+                jsonResponse({
+                  ...envelope,
+                  collected_amount: 0,
+                  disbursed_amount: 0,
+                  balance_amount: 0,
+                  recipients: [],
+                } satisfies IncidentalDetail),
+              ),
+          },
+          {
+            match: (m, u) => m === 'GET' && u.includes('/api/session'),
+            handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+          },
+          { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+          { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+          { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+          ...emptyHomeRoutes,
+        ]),
+      )
+      render(<App />)
 
-    await screen.findByText(copy.incidentals.detail.collectedLabel)
-    await userEvent.click(await screen.findByRole('button', { name: copy.incidentals.actions.record }))
+      await screen.findByText(copy.incidentals.detail.collectedLabel)
+      expect(screen.getByRole('button', { name: backLabel })).toBeInTheDocument()
+      await userEvent.click(await screen.findByRole('button', { name: copy.incidentals.actions.record }))
 
-    await screen.findByRole('heading', { name: copy.record.heading })
-    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
-    window.history.pushState({}, '', '/')
-  })
+      await screen.findByRole('heading', { name: copy.record.headingOut })
+      await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+      window.history.pushState({}, '', '/')
+    },
+  )
 
   // /incidentals with no ?purpose= (or an unparseable one) has nothing to show
   // now that its list is retired - it redirects to Pengaturan.
@@ -476,7 +484,7 @@ describe('App (record loop)', () => {
     await screen.findByText(copy.home.balanceHeading)
 
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
-    await screen.findByRole('heading', { name: copy.record.heading })
+    await screen.findByRole('heading', { name: copy.record.headingOut })
 
     await userEvent.type(screen.getByLabelText(copy.record.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
@@ -499,7 +507,7 @@ describe('App (record loop)', () => {
     await screen.findByText(copy.record.successOut)
 
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
-    await screen.findByRole('heading', { name: copy.record.heading })
+    await screen.findByRole('heading', { name: copy.record.headingOut })
     await userEvent.click(screen.getByRole('button', { name: copy.record.cancel }))
 
     expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()

@@ -360,6 +360,19 @@ export default function RecordTransaction({
   // refuses a posting to a closed one (ADR-031), and the picker excludes it
   // (selectable=true) before this field could show.
   const showContributorField = direction === 'in' && chosenPurpose?.kind === 'incidental'
+  const heading = duesChosen
+    ? copy.dues.payment.heading
+    : isTransfer
+      ? text.directionTransfer
+      : isPurposeMove
+        ? text.directionPurpose
+        : direction === 'in'
+          ? showContributorField
+            ? text.headingDonation
+            : text.headingIn
+          : isClaim
+            ? copy.reimbursements.record.heading
+            : text.headingOut
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -485,9 +498,9 @@ export default function RecordTransaction({
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {/* The heading names what is being recorded: a dues payment keeps the
-          title its own screen always had. */}
-      <h1 className="text-xl font-semibold">{duesChosen ? copy.dues.payment.heading : text.heading}</h1>
+      {/* The heading names what is being recorded, and follows the kind chosen
+          below: a dues payment keeps the title its own screen always had. */}
+      <h1 className="text-xl font-semibold">{heading}</h1>
 
       <div className="flex flex-col gap-1.5">
         {/* sr-only: the five captions below say what this is, so a visible

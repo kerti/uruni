@@ -27,7 +27,7 @@ test.describe('receipt photos', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
 
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await page.getByLabel(copy.record.amountLabel).fill('12000')

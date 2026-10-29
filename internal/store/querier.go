@@ -618,6 +618,8 @@ type Querier interface {
 	//   - account_name: this row's account - opening balance and a reconciliation
 	//     fix label themselves by it. INNER join: account_id is NOT NULL and
 	//     DeleteAccount refuses an account any transaction references.
+	//   - purpose_kind: the kind of the row's stored purpose, so a contribution
+	//     into an envelope that names nobody can label itself "Tanpa nama".
 	//   - member_name/settlement_member_name: the dues member for a dues payment
 	//     or reversal (t.member_id), or, separately, the settled claim's member
 	//     for a reimbursement payout (t.member_id is NULL on kind='reimbursement',

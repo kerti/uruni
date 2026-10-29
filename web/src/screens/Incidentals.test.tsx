@@ -512,6 +512,45 @@ describe('Incidentals', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
+  it('names where the back control leads from backLabel, and opens Catat on Keluar', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
+    const onBack = vi.fn()
+    const onRecordFor = vi.fn()
+    renderIncidentals(
+      <Incidentals
+        onBack={onBack}
+        backLabel={text.detail.backToHome}
+        onRecordFor={onRecordFor}
+        onViewTransactionsFor={vi.fn()}
+        purposeId={1}
+      />,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: text.detail.backToHome }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: text.detail.backToSettings })).not.toBeInTheDocument()
+
+    // Catat: no member, so the form opens on its Keluar default.
+    await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
+    expect(onRecordFor).toHaveBeenCalledWith(1, undefined)
+  })
+
   // A closed envelope is off Beranda (ADR-032), so this link is its only route
   // to its record - which is why the button is here for a closed envelope, not
   // only an open one.

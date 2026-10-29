@@ -4,7 +4,7 @@
 
 import { apiFetch, fetchBlob } from '@/lib/api'
 import { setFundTimeZone } from '@/lib/dates'
-import type { AccountKind, Direction, TransactionKind, TransferKind } from '@/lib/enums'
+import type { AccountKind, Direction, PurposeKind, TransactionKind, TransferKind } from '@/lib/enums'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
 export interface Account {
@@ -75,6 +75,8 @@ export interface Transaction {
 
   // List-only fields - see the doc comment above.
   account_name?: string
+  /** The kind of this row's purpose; tells an envelope contribution from the rest. */
+  purpose_kind?: PurposeKind
   member_name?: string | null
   claim_note?: string | null
   transfer_kind?: TransferKind | null
