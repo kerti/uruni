@@ -63,9 +63,9 @@ Key entities:
 
 - **Fund** — the shared kas. Has a name, a currency (IDR) and a time zone: WIB, WITA or WIT.
 - **Account/Location** — where money physically sits: a list the treasurer names, each entry either cash or bank. A fund may hold several of either kind, or only one; the display name is whatever she types, and the seeded default is "Tunai". Locations are added and renamed later, and one that has been used is retired rather than deleted - once its money has moved elsewhere, since a retired location is never counted again. The recorded balance is tracked *per location* because that split is the source of her discrepancies. (v1 assumes the bank is possibly a personal account; Uruni tracks only the kas portion the treasurer reports.)
-- **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. Kas Bidang). One pooled real balance, separated *in meaning*, not in separate pots.
+- **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. money collected for team uniforms, to be paid to the maker). One pooled real balance, separated *in meaning*, not in separate pots.
 - **Member** — name + role/tier, with the tier held month by month: a change takes effect from a month and never reprices the months before it. No email/phone required (minimize data held).
-- **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD), effective from a month until the next rate. A mistaken rate is corrected by stating its month again: every month it covers is repriced, the earlier row stays behind, and nothing already paid moves.
+- **Dues rate** — amount per tier (e.g. warga tetap 50k, kontrak 30k, a new tier not yet priced), effective from a month until the next rate. A mistaken rate is corrected by stating its month again: every month it covers is repriced, the earlier row stays behind, and nothing already paid moves.
 - **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional link to the transaction it reverses; optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy. An amount is at most Rp999.999.999.999 and a date falls from 2000 up to today in the fund's time zone, so a slipped thumb is refused instead of posted. Saving the same entry again right after a lost answer does not record it twice: each submission carries a key, and the server remembers it for a day (outside the backup).
 - **Incidental collection** — a lightweight envelope: target/occasion, contributions in, disbursement out, and a **leftover** that rolls into Kas Utama when it closes.
 - **Reconciliation snapshot** — a point-in-time record of expected vs. actual balance per location, any difference, and how it was resolved.
@@ -99,7 +99,7 @@ Key entities:
 - **Correct or remove a claim entered wrongly** — the wrong amount, the wrong member, or one that should never have existed. Only until it is settled: after that the payout is a posted ledger row, and the correction is an ordinary adjusting entry like any other.
 
 ### 7.5 Incidental collections
-- Create an incidental for an occasion (sickness, death, sunatan, pension).
+- Create an incidental for an occasion (sickness, a death, a birth, a wedding).
 - Collect one-off contributions and record the disbursement.
 - A contribution may name the member who gave it (optional - a guest or an anonymous giver stays unnamed). An envelope may set a **minimum per member** and name the members it is **for**, who are never expected to give.
 - Show who has contributed and how much against the members active on the day the envelope opened, on the envelope's screen and on the public report. A simple "not yet contributed" view. **No reminders, no nagging automation.** ([ADR-034](./ADR/034-envelope-participation.md))
@@ -107,8 +107,8 @@ Key entities:
 - On close, show the leftover and **roll it into Kas Utama** through one short form: the location the leftover sits in, the date, and an optional note.
 - The occasion can be corrected at any time, open or closed - renaming moves no money and posts no entry.
 
-### 7.6 Pass-through (Kas Bidang)
-- Record money collected on behalf of the parent org (e.g. Kas Bidang) and its forwarding, each as an ordinary transaction tagged `Pass-through`, so the report shows plainly what came in for the parent body and what went out to it.
+### 7.6 Pass-through (Titipan)
+- Record money collected on behalf of someone else (another group, a vendor, a relief drive) and its forwarding, each as an ordinary transaction tagged `Pass-through`, so the report shows plainly what came in for them and what went out to them.
 - **The balance does not exclude it.** While the money sits in the wallet it really is in the wallet, so it counts — §6's "one pooled real balance, separated in meaning, not in separate pots" applies here too. Uruni does not track a levy as owed-but-unpaid and has no second "available" figure; a levy is an ordinary expense on the day it is paid. (Revised 2026-08-12: the original wording promised the balance would never be inflated by pass-through money, which required a second balance the treasurer would have to reconcile in her head — and would have been inconsistent anyway, since incidental collections are earmarked just as firmly and were never excluded. See [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Balance & home screen

@@ -30,12 +30,12 @@ function stubPurposes(initial: Purpose[]) {
     const method = init?.method ?? 'GET'
     if (url.includes('/api/pass-through-purposes')) {
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-      return Promise.resolve(jsonResponse(purpose(9, 'pass_through', 'Kas Bidang')))
+      return Promise.resolve(jsonResponse(purpose(9, 'pass_through', 'Seragam')))
     }
     if (url.includes('/api/purposes') && method === 'GET') return Promise.resolve(jsonResponse(initial))
     if (url.includes('/api/purposes')) {
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-      return Promise.resolve(jsonResponse(purpose(2, 'pass_through', 'Kas Bidang')))
+      return Promise.resolve(jsonResponse(purpose(2, 'pass_through', 'Seragam')))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
@@ -75,13 +75,13 @@ describe('Settings pass-through', () => {
   it('lists only pass-through purposes', async () => {
     const { fetchMock } = stubPurposes([
       purpose(1, 'main', 'Kas utama'),
-      purpose(2, 'pass_through', 'Kas Bidang'),
+      purpose(2, 'pass_through', 'Seragam'),
       purpose(3, 'incidental', 'Kurban 2026'),
     ])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByText('Kas Bidang')).toBeInTheDocument()
+    expect(await screen.findByText('Seragam')).toBeInTheDocument()
     // GET /api/purposes answers every tag the fund has; the fund's own money
     // and an open incidental are not this section's business.
     expect(screen.queryByText('Kas utama')).not.toBeInTheDocument()
@@ -98,10 +98,10 @@ describe('Settings pass-through', () => {
 
   // Nothing on this section is a form until she asks for one.
   it('has no inline form on the section itself', async () => {
-    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Seragam')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByText('Kas Bidang')
+    await screen.findByText('Seragam')
 
     expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
   })
@@ -115,13 +115,13 @@ describe('Settings pass-through', () => {
     await userEvent.click(screen.getByRole('button', { name: text.add }))
     expect(currentSearch()).toBe('?edit=pass-through%3Anew')
 
-    await userEvent.type(await screen.findByLabelText(text.nameLabel), 'Kas Bidang')
+    await userEvent.type(await screen.findByLabelText(text.nameLabel), 'Seragam')
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: text.add }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
     // Name only - the kind is pinned server-side, and a caller that can name
     // the kind can ask for a second 'main'.
-    expect(calls[0]).toMatchObject({ method: 'POST', body: { name: 'Kas Bidang' } })
+    expect(calls[0]).toMatchObject({ method: 'POST', body: { name: 'Seragam' } })
     expect(calls[0].body).not.toHaveProperty('kind')
     await waitFor(() => expect(currentSearch()).toBe(''))
   })
@@ -139,23 +139,23 @@ describe('Settings pass-through', () => {
 
     const input = await screen.findByLabelText(text.nameLabel)
     await userEvent.clear(input)
-    await userEvent.type(input, 'Kas Bidang')
+    await userEvent.type(input, 'Seragam')
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: text.save }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
-    expect(calls[0]).toMatchObject({ method: 'PATCH', url: expect.stringContaining('/api/purposes/2'), body: { name: 'Kas Bidang' } })
+    expect(calls[0]).toMatchObject({ method: 'PATCH', url: expect.stringContaining('/api/purposes/2'), body: { name: 'Seragam' } })
   })
 
   it('opens the rename dialog straight from a deep link', async () => {
-    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Seragam')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=pass-through:2')
 
-    expect(await screen.findByLabelText(text.nameLabel)).toHaveValue('Kas Bidang')
+    expect(await screen.findByLabelText(text.nameLabel)).toHaveValue('Seragam')
   })
 
   it('strips a pass-through: id that names nothing, once the list has loaded', async () => {
-    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Seragam')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=pass-through:999')
 
@@ -165,17 +165,17 @@ describe('Settings pass-through', () => {
 
   // The case that keeps sibling sections from closing each other's dialogs.
   it("leaves another section's ?edit= alone", async () => {
-    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Seragam')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')
 
-    await screen.findByText('Kas Bidang')
+    await screen.findByText('Seragam')
     expect(currentSearch()).toBe('?edit=location:3')
   })
 
   // No delete anywhere in this section, and none on the server either.
   it('offers no way to remove a pass-through purpose', async () => {
-    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Seragam')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=pass-through:2')
 

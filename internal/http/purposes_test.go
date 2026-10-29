@@ -203,7 +203,7 @@ func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 		t.Fatalf("decoding create response: %v", err)
 	}
 
-	rec := patchPurpose(t, r, created.ID, `{"name":"Kas Bidang"}`)
+	rec := patchPurpose(t, r, created.ID, `{"name":"Seragam"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PATCH /api/purposes/{id} = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -211,8 +211,8 @@ func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	if updated.Name != "Kas Bidang" {
-		t.Errorf("Name = %q, want %q", updated.Name, "Kas Bidang")
+	if updated.Name != "Seragam" {
+		t.Errorf("Name = %q, want %q", updated.Name, "Seragam")
 	}
 	// The kind is not on the wire and cannot move: a caller naming it could ask
 	// for a second 'main'.
@@ -230,7 +230,7 @@ func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
-	rec := patchPurpose(t, r, setup.MainPurposeID, `{"name":"Kas Bidang"}`)
+	rec := patchPurpose(t, r, setup.MainPurposeID, `{"name":"Seragam"}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("PATCH /api/purposes/{main} = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
 	}
@@ -366,7 +366,7 @@ func TestPatchPurposeWithoutANameIsRejected(t *testing.T) {
 	r := testRouter(t)
 	setUpFund(t, r)
 
-	createRec := postPassThroughPurpose(t, r, "Kas Bidang")
+	createRec := postPassThroughPurpose(t, r, "Seragam")
 	var created purposeResponse
 	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
 		t.Fatalf("decoding create response: %v", err)

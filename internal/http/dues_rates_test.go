@@ -181,7 +181,7 @@ func TestGetDuesTiersListsATierWithNoRateYetWithAnEmptyList(t *testing.T) {
 	// dues_rate.sql: "a tier whose rate is undecided simply has no row", a
 	// legitimate state, not an error - and on the wire it is [], never null.
 	r := testRouter(t)
-	setUpTier(t, r, "Madya")
+	setUpTier(t, r, "Senior")
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))

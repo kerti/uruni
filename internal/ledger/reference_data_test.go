@@ -234,7 +234,7 @@ func TestRenamePurpose(t *testing.T) {
 		return p.Name
 	}
 
-	if _, err := l.RenamePurpose(ctx, RenamePurposeParams{FundID: f.fundID, PurposeID: f.mainID, Name: "Kas Bidang"}); !errors.Is(err, ErrPurposeNotRenameable) {
+	if _, err := l.RenamePurpose(ctx, RenamePurposeParams{FundID: f.fundID, PurposeID: f.mainID, Name: "Seragam"}); !errors.Is(err, ErrPurposeNotRenameable) {
 		t.Errorf("RenamePurpose(Kas Utama) = %v, want ErrPurposeNotRenameable", err)
 	}
 	if got := nameOf(f.mainID); got != "Primary Cash" {

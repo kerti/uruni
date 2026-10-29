@@ -69,7 +69,7 @@ function renderAt(entry = '/settings') {
             </>
           }
         />
-        {/* The golongan's own screen (#285) stands in for App.tsx's route
+        {/* The tier's own screen (#285) stands in for App.tsx's route
             here: this file's subject is the section, and what it has to
             prove is that the card leads there with the right id. */}
         <Route
@@ -91,17 +91,17 @@ function currentSearch() {
 
 describe('Settings dues tiers', () => {
   // The card answers the one question she opens this section for, without
-  // opening anything: what does this golongan cost now.
+  // opening anything: what does this tier cost now.
   it('shows each tier with the rate in force this month', async () => {
     const thisYear = new Date().getFullYear()
     const { fetchMock } = stubTiers(
-      [tier(1, 'Pelaksana')],
+      [tier(1, 'Reguler')],
       [rate(1, 1, 50_000, `${thisYear - 1}-01`), rate(2, 1, 60_000, `${thisYear + 1}-01`)],
     )
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByText('Pelaksana')).toBeInTheDocument()
+    expect(await screen.findByText('Reguler')).toBeInTheDocument()
     // The rate already in force, never the one that starts next year - the
     // same "latest row at or before this month" the server reads.
     await waitFor(() => expect(screen.getByText(/50\.000/)).toBeInTheDocument())
@@ -113,7 +113,7 @@ describe('Settings dues tiers', () => {
   it('prices every tier from one request', async () => {
     const thisYear = new Date().getFullYear()
     const { fetchMock } = stubTiers(
-      [tier(1, 'Pelaksana'), tier(2, 'Madya'), tier(3, 'Utama')],
+      [tier(1, 'Reguler'), tier(2, 'Senior'), tier(3, 'Utama')],
       [rate(1, 1, 50_000, `${thisYear - 1}-01`), rate(2, 2, 75_000, `${thisYear - 1}-01`), rate(3, 3, 120_000, `${thisYear - 1}-01`)],
     )
     vi.stubGlobal('fetch', fetchMock)
@@ -126,21 +126,21 @@ describe('Settings dues tiers', () => {
   })
 
   it('renders a tier with no rates plainly, not as an error', async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [])
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByText('Pelaksana')).toBeInTheDocument()
+    expect(await screen.findByText('Reguler')).toBeInTheDocument()
     // A tier whose price is not decided yet is a legal state (PRD section 6).
     expect(await screen.findByText(text.noRates)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('has no inline form on the section itself', async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [])
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByText('Pelaksana')
+    await screen.findByText('Reguler')
 
     expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: text.addRate })).not.toBeInTheDocument()
@@ -164,48 +164,48 @@ describe('Settings dues tiers', () => {
   })
 
   it('renders a duplicate tier name as the 409 it is', async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [], () =>
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [], () =>
       jsonResponse({ error: { code: 'unique_violation', message: 'conflict' } }, 409),
     )
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=tier:new')
 
     const dialog = within(await screen.findByRole('dialog'))
-    await userEvent.type(dialog.getByLabelText(text.nameLabel), 'Pelaksana')
+    await userEvent.type(dialog.getByLabelText(text.nameLabel), 'Reguler')
     await userEvent.click(dialog.getByRole('button', { name: text.add }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.unique_violation)
   })
 
-  // The card is the way into the golongan's screen, not into a dialog holding
+  // The card is the way into the tier's screen, not into a dialog holding
   // its whole life.
-  it("navigates to a golongan's own screen", async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')])
+  it("navigates to a tier's own screen", async () => {
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [rate(1, 1, 50_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await userEvent.click(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Pelaksana') }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Reguler') }))
 
     expect(await screen.findByTestId('tier-screen')).toHaveTextContent('tier=1')
   })
 
   // A stale link to the edit dialog this section no longer has.
   it('clears a tier parameter that no longer names a dialog here', async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [])
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=tier:1')
 
-    await screen.findByText('Pelaksana')
+    await screen.findByText('Reguler')
     await waitFor(() => expect(currentSearch()).toBe(''))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it("leaves another section's ?edit= alone", async () => {
-    const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [])
+    const { fetchMock } = stubTiers([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')
 
-    await screen.findByText('Pelaksana')
+    await screen.findByText('Reguler')
     expect(currentSearch()).toBe('?edit=location:3')
   })
 })

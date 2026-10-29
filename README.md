@@ -20,7 +20,7 @@ It does one job extremely well: **keep a small group's shared fund honest, with 
 - **One-tap capture, anywhere** — record a transaction from a phone at a market stall. The thing a spreadsheet can't do.
 - **A running balance that's always honest**, with a simple **reconciliation** check: does what's recorded match the cash in the wallet and the money in the account? Uruni flags the gap instead of making you hunt for it.
 - **Two money locations** (cash and bank), because that split is where the discrepancies come from.
-- **One pooled balance with purpose tags** — kas utama, incidental collections, pass-through to kas bidang — so funds stay separated *in meaning* without juggling separate pots.
+- **One pooled balance with purpose tags** — kas utama, incidental collections, pass-through money held for someone else — so funds stay separated *in meaning* without juggling separate pots.
 - **Per-member dues that vary by tier**, and a simple "who's paid" view.
 - **Reimbursements in seconds, receipts optional** — nobody wants a receipt for Rp2.000 of parking.
 - **A shareable public report** so anyone can see where the money went.

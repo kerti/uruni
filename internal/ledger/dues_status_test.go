@@ -373,7 +373,7 @@ func TestDuesStatusForPeriodMemberWithNoTierIsExcluded(t *testing.T) {
 	}
 }
 
-// The "madya TBD" case, PRD 6: a tier with no dues_rate row for the period.
+// The undecided-rate case, PRD 6: a tier with no dues_rate row for the period.
 // Uruni does not invent an amount, so the member is omitted.
 func TestDuesStatusForPeriodMemberWhoseTierHasNoRateForThePeriodIsOmitted(t *testing.T) {
 	t.Parallel()
@@ -803,7 +803,7 @@ func TestOutstandingDuesForMemberRatelessTierReturnsEmpty(t *testing.T) {
 	q := store.New(l.db)
 	ctx := context.Background()
 
-	tierID := createDuesTier(t, q, f.fundID, "Madya TBD") // deliberately no rate row
+	tierID := createDuesTier(t, q, f.fundID, "Senior TBD") // deliberately no rate row
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
 		name: "Jane", tierID: &tierID,
 	})

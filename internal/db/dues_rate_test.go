@@ -122,7 +122,7 @@ func TestDuesRateStandingViewKeepsTheHighestCorrectionAndDropsADeletedMonth(t *t
 	}
 
 	// A tier whose only month was withdrawn has no rate at all.
-	lone := createDuesTier(t, sqlDB, fundID, "madya")
+	lone := createDuesTier(t, sqlDB, fundID, "senior")
 	if _, err := q.CreateDuesRate(ctx, rateRow(lone, "2026-03", 5_000, 0, 0)); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestDuesRateStandingViewKeepsTheHighestCorrectionAndDropsADeletedMonth(t *t
 		t.Fatalf("ListDuesRatesByFund = %v, want no error", err)
 	}
 	if len(export) != 10 {
-		t.Errorf("ListDuesRatesByFund returned %d rows, want all 10 of the fund's rows (8 of warga, 2 of madya; superseded and deleting ones are the trail)", len(export))
+		t.Errorf("ListDuesRatesByFund returned %d rows, want all 10 of the fund's rows (8 of warga, 2 of senior; superseded and deleting ones are the trail)", len(export))
 	}
 
 	latest, err := q.LatestDuesRateOfMonth(ctx, store.LatestDuesRateOfMonthParams{TierID: tierID, EffectiveFrom: "2026-06"})

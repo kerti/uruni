@@ -12,7 +12,7 @@ import (
 
 // --- rate corrections leave a trail (ADR-040) --------------------------------
 //
-// One tier, Pelaksana, and one member who joined in January 2026 on it. Each test
+// One tier, Reguler, and one member who joined in January 2026 on it. Each test
 // writes rates through the ledger's three verbs (create, correct, delete) and
 // asks what a period reads, in the status roster, the outstanding walk, the
 // roster page's current_rate and GetEffectiveDuesRate.
@@ -30,7 +30,7 @@ func newRateFixture(t *testing.T) rateFixture {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
-	tier := createDuesTier(t, q, f.fundID, "Pelaksana")
+	tier := createDuesTier(t, q, f.fundID, "Reguler")
 	joinedOn := "2026-01-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Andi", tierID: &tier, joinedOn: &joinedOn})
 	return rateFixture{l: l, f: f, q: q, tier: tier, memberID: memberID}
@@ -273,7 +273,7 @@ func TestDeletingTheFirstRateLeavesTheTierUndecided(t *testing.T) {
 	h.remove(t, jan.ID)
 
 	if _, ok := h.owed(t, "2026-03"); ok {
-		t.Error("2026-03 lists the member, want no rate decided (the madya case): skipped, never invented")
+		t.Error("2026-03 lists the member, want no rate decided (the undecided-rate case): skipped, never invented")
 	}
 	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-05")
 	if err != nil || len(out) != 0 {

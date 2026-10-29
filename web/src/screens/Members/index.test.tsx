@@ -34,7 +34,7 @@ function jsonResponse(body: unknown, status = 200) {
  * not looking.
  */
 function stubMembersScreen() {
-  let tierName = 'Pelaksana'
+  let tierName = 'Reguler'
   const members = [
     {
       id: 1,
@@ -85,17 +85,17 @@ describe('Members screen', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const first = renderMembers()
-    await waitFor(() => expect(screen.getAllByText(/Pelaksana/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText(/Reguler/).length).toBeGreaterThan(0))
 
     // Renamed in Pengaturan, which this screen never saw happen.
     first.unmount()
-    renameTierElsewhere('Pelaksana Muda')
+    renameTierElsewhere('Reguler Baru')
 
     renderMembers()
 
     const card = await screen.findByRole('button', { name: cardName(copy.members.roster.editVerb, 'Warga Satu') })
-    const renamedLine = copy.members.roster.tierRateLine('Pelaksana Muda', 'Rp50.000')
-    const staleLine = copy.members.roster.tierRateLine('Pelaksana', 'Rp50.000')
+    const renamedLine = copy.members.roster.tierRateLine('Reguler Baru', 'Rp50.000')
+    const staleLine = copy.members.roster.tierRateLine('Reguler', 'Rp50.000')
     await waitFor(() => expect(within(card).getByText(renamedLine)).toBeInTheDocument())
     expect(within(card).queryByText(staleLine)).not.toBeInTheDocument()
 
@@ -103,7 +103,7 @@ describe('Members screen', () => {
     await userEvent.click(card)
     const dialog = screen.getByRole('dialog', { name: copy.members.roster.editTitle })
     const options = await openSelect(copy.members.roster.tierLabel, within(dialog))
-    expect(within(options).getByRole('option', { name: 'Pelaksana Muda' })).toBeInTheDocument()
+    expect(within(options).getByRole('option', { name: 'Reguler Baru' })).toBeInTheDocument()
   })
 
   // The screen is the roster alone - the tiers section is not on it.
@@ -112,7 +112,7 @@ describe('Members screen', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderMembers()
 
-    await waitFor(() => expect(screen.getAllByText(/Pelaksana/).length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText(/Reguler/).length).toBeGreaterThan(0))
     expect(screen.queryByText(copy.settings.tiers.heading)).not.toBeInTheDocument()
     expect(screen.queryByText(copy.settings.tiers.ratesHeading)).not.toBeInTheDocument()
   })

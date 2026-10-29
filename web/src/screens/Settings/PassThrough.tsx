@@ -18,7 +18,7 @@ const text = copy.settings.passThrough
 
 /**
  * The pass-through section of the settings screen (PRD section 7.6: "record
- * money collected on behalf of the parent org (e.g. Kas Bidang)"), as a
+ * money collected on behalf of another party"), as a
  * card-plus-dialog (ADR-032 "Every non-posting edit is a dialog"): add and edit
  * both open a dialog addressed by `?edit=pass-through:<id>` /
  * `?edit=pass-through:new`.

@@ -50,7 +50,7 @@ type memberResponse struct {
 	// nil on POST/PATCH's reply. Period-independent, so it is cheap per row.
 	TierName *string `json:"tier_name"`
 	// CurrentRate is the dues_rate in force for the member's current tier; nil
-	// when there is no tier or no rate effective yet (the "madya TBD" case, PRD
+	// when there is no tier or no rate effective yet (the undecided-rate case, PRD
 	// section 6), never an invented amount, and nil on POST/PATCH's reply.
 	CurrentRate *int64 `json:"current_rate"`
 	// ArrearsMonths is N whole months of periods strictly before the current one

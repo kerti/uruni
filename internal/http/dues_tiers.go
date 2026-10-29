@@ -81,7 +81,7 @@ func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 
 // listDuesTiers is GET /api/dues-tiers: every tier for the one fund, each
 // with its rate history (#672). Two queries however many tiers, so Pengaturan
-// reads its Golongan cards in one round trip rather than one per tier after the
+// reads its Kategori cards in one round trip rather than one per tier after the
 // list. A client derives "the rate in force on date X" by the latest row at or
 // before it.
 func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +117,7 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteDuesTier is DELETE /api/dues-tiers/{id} (#232): for a tier the fund
-// never put anyone in (a setup typo, a golongan named twice), never one with
+// never put anyone in (a setup typo, a tier named twice), never one with
 // members.
 //
 // The tier and its rates must go in one transaction, which the ledger owns (see

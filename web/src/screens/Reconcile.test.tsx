@@ -23,7 +23,7 @@ const accounts = [
 ] satisfies Account[]
 
 const purposes = [
-  { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
+  { id: 10, kind: 'pass_through', name: 'Seragam', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
 ] satisfies Purpose[]
 
@@ -38,7 +38,7 @@ function balancesBody(tunai: number, bankUjiCoba: number): Balances {
       { id: 3, kind: 'bank', name: 'Bank Uji Coba', balance: bankUjiCoba },
     ],
     purposes: [
-      { id: 10, kind: 'pass_through', name: 'Kas Bidang', balance: 0 },
+      { id: 10, kind: 'pass_through', name: 'Seragam', balance: 0 },
       { id: 11, kind: 'main', name: 'Kas utama', balance: tunai + bankUjiCoba },
     ],
   }
@@ -839,7 +839,7 @@ describe('Reconcile', () => {
     expect(rows[0]).toHaveTextContent('Kas utama')
     expect(rows[0]).toHaveTextContent('Beli sapu')
     expect(rows[0]).toHaveTextContent('Rp25.000')
-    expect(rows[1]).toHaveTextContent('Kas Bidang')
+    expect(rows[1]).toHaveTextContent('Seragam')
     expect(rows[1]).toHaveTextContent('Rp40.000')
     expect(screen.queryByText('Terlalu lama')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.home.recentActivityEmpty)).not.toBeInTheDocument()

@@ -30,7 +30,7 @@ const (
 	// pays ahead).
 	duesMonthsAhead = 12
 	// rateMonthsAhead is how far ahead a rate's start month may be: a rise agreed
-	// in advance. A pending rate is shown on the Golongan screen, which is why it
+	// in advance. A pending rate is shown on the Kategori screen, which is why it
 	// may reach further than a tier start (ADR-040).
 	rateMonthsAhead = 24
 )

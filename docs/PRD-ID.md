@@ -34,7 +34,7 @@ Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp1–2 juta/bulan):
 
 1. Mencatat transaksi apa pun dari ponsel dalam beberapa ketukan, di mana saja.
 2. Selalu menampilkan saldo berjalan yang jujur, dan membuat rekonsiliasi (catatan vs. uang tunai + bank yang sebenarnya) menjadi mudah.
-3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, pos, iuran per golongan, dan talangan (reimbursement).
+3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, pos, iuran per kategori, dan talangan (reimbursement).
 4. Cukup andal untuk menjadi satu-satunya catatan — aman meski ponsel hilang.
 5. Lebih sederhana daripada spreadsheet yang digantikannya.
 
@@ -65,9 +65,9 @@ Entitas utama:
 
 - **Dana (Fund)** — kas bersama. Memiliki nama, mata uang (IDR), dan zona waktu (WIB, WITA, atau WIT).
 - **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus - setelah uangnya dipindahkan ke tempat lain, karena lokasi yang nonaktif tidak pernah dihitung lagi. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
-- **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
-- **Anggota** — nama + peran/golongan, dengan golongan yang dicatat bulan demi bulan: perubahan berlaku mulai suatu bulan dan tidak pernah menghitung ulang bulan-bulan sebelumnya. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
-- **Tarif iuran** — nominal per golongan (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan), berlaku mulai suatu bulan sampai tarif berikutnya. Tarif yang salah diperbaiki dengan menyatakan bulannya lagi: semua bulan yang dicakupnya dihitung ulang, baris sebelumnya tetap tersimpan, dan yang sudah dibayar tidak bergerak.
+- **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. uang seragam tim yang nanti dibayarkan ke konveksi). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
+- **Anggota** — nama + kategori iuran, dengan kategori yang dicatat bulan demi bulan: perubahan berlaku mulai suatu bulan dan tidak pernah menghitung ulang bulan-bulan sebelumnya. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
+- **Nominal iuran** — besar iuran per kategori (mis. warga tetap 50rb, kontrak 30rb, kategori baru yang nominalnya belum ditentukan), berlaku mulai suatu bulan sampai nominal berikutnya. Nominal yang salah diperbaiki dengan menyatakan bulannya lagi: semua bulan yang dicakupnya dihitung ulang, baris sebelumnya tetap tersimpan, dan yang sudah dibayar tidak bergerak.
 - **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); kaitan opsional ke transaksi yang dibatalkannya; catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya. Nominal paling besar Rp999.999.999.999 dan tanggal jatuh dari tahun 2000 sampai hari ini menurut zona waktu dana, sehingga jempol yang terpeleset ditolak, bukan diposting. Menyimpan entri yang sama lagi tepat setelah jawabannya hilang tidak mencatatnya dua kali: tiap pengiriman membawa kunci, dan server mengingatnya selama sehari (di luar cadangan).
 - **Amplop** — pengumpulan ringan untuk satu peristiwa: keperluan/peristiwa, sumbangan masuk, penyaluran keluar, dan **sisa** yang dialihkan ke Kas Utama saat amplop ditutup.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
@@ -76,8 +76,8 @@ Entitas utama:
 
 ### 7.1 Penyiapan & akses
 - Bendahara masuk ke server *komunitasnya sendiri* (satu peran bendahara di v1; peran "hanya-lihat" opsional menyusul). Tidak ada akun Uruni terpusat.
-- Penyiapan awal: memberi nama dana dan memilih zona waktunya (WIB, WITA, atau WIT, terpilih otomatis dari ponsel), menambahkan anggota beserta golongannya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
-- **Riwayat Uruni dimulai saat mulai dipakai.** Saldo awal sudah memuat segala hal sebelumnya, sehingga tanggal bergabung dan tarif iuran mengikuti saat penyiapan dan tidak ada periode lampau yang dihitung sebagai tagihan. Pembayaran yang sudah lunas tidak dicatat ulang: uangnya sudah *ada di dalam* saldo awal, dan mencatatnya kedua kali akan membuat saldo tercatat menggelembung selamanya. Pengecualiannya adalah **tunggakan yang masih nyata** — iuran yang memang belum dibayar anggota tidak pernah masuk ke saldo awal, jadi memundurkan tanggal bergabung anggota itu (beserta bulan berlaku tarifnya) membuat periode-periode tersebut tampil sebagai belum terbayar, dan pembayarannya bertanggal hari uang itu benar-benar masuk.
+- Penyiapan awal: memberi nama dana dan memilih zona waktunya (WIB, WITA, atau WIT, terpilih otomatis dari ponsel), menambahkan anggota beserta kategorinya, mengatur nominal iuran, mengatur saldo awal untuk tiap lokasi.
+- **Riwayat Uruni dimulai saat mulai dipakai.** Saldo awal sudah memuat segala hal sebelumnya, sehingga tanggal bergabung dan nominal iuran mengikuti saat penyiapan dan tidak ada periode lampau yang dihitung sebagai tagihan. Pembayaran yang sudah lunas tidak dicatat ulang: uangnya sudah *ada di dalam* saldo awal, dan mencatatnya kedua kali akan membuat saldo tercatat menggelembung selamanya. Pengecualiannya adalah **tunggakan yang masih nyata** — iuran yang memang belum dibayar anggota tidak pernah masuk ke saldo awal, jadi memundurkan tanggal bergabung anggota itu (beserta bulan berlaku nominalnya) membuat periode-periode tersebut tampil sebagai belum terbayar, dan pembayarannya bertanggal hari uang itu benar-benar masuk.
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
@@ -89,7 +89,7 @@ Entitas utama:
 
 ### 7.3 Iuran
 - Melihat anggota dan, untuk periode berjalan, siapa yang sudah bayar / bayar sebagian / bayar di muka (ada yang membayar beberapa bulan sekaligus).
-- Menandai pembayaran iuran (nominal terisi otomatis dari golongan anggota, dapat diubah; lokasi; tunai/transfer).
+- Menandai pembayaran iuran (nominal terisi otomatis dari kategori anggota, dapat diubah; lokasi; tunai/transfer).
 - Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
 - Status tiap anggota selama dua belas bulan terakhir dalam sekali lihat - hanya status, tanpa hitungan atau nominal ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
@@ -101,7 +101,7 @@ Entitas utama:
 - **Perbaiki atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
 
 ### 7.5 Amplop
-- Membuka amplop untuk sebuah peristiwa (sakit, kematian, sunatan, pensiun).
+- Membuka amplop untuk sebuah peristiwa (sakit, duka, kelahiran, pernikahan).
 - Mengumpulkan sumbangan sekali jalan dan mencatat penyalurannya.
 - Sumbangan boleh mencantumkan anggota yang memberi (opsional — tamu atau penyumbang tanpa nama tetap tanpa nama). Amplop boleh menetapkan **sumbangan minimal per anggota** dan menyebut anggota yang **dituju**, yang tidak diharapkan menyumbang.
 - Menampilkan siapa yang sudah menyumbang dan berapa, dibandingkan anggota yang aktif pada hari amplop dibuka, di layar amplop dan di laporan publik. Tampilan sederhana "belum menyumbang". **Tanpa pengingat, tanpa penagihan otomatis.** ([ADR-034](./ADR/034-envelope-participation.md))
@@ -109,8 +109,8 @@ Entitas utama:
 - Saat ditutup, tampilkan sisanya dan **alihkan ke Kas Utama** lewat satu formulir singkat: lokasi tempat sisa itu berada, tanggal, dan catatan opsional.
 - Nama acaranya bisa diperbaiki kapan saja, saat amplop terbuka maupun sudah ditutup - mengganti nama tidak menggerakkan uang dan tidak membuat entri.
 
-### 7.6 Titipan (Kas Bidang)
-- Mencatat uang yang dikumpulkan atas nama organisasi di atasnya (mis. Kas Bidang) beserta penerusannya — masing-masing sebagai transaksi biasa dengan tag `Titipan`, supaya laporan menunjukkan dengan jelas apa yang masuk untuk organisasi di atasnya dan apa yang sudah diteruskan.
+### 7.6 Titipan
+- Mencatat uang yang dikumpulkan untuk pihak lain (kelompok lain, penjual, penggalangan bantuan) beserta penerusannya — masing-masing sebagai transaksi biasa dengan tag `Titipan`, supaya laporan menunjukkan dengan jelas apa yang masuk untuk pihak lain itu dan apa yang sudah diteruskan.
 - **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam kantong yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Saldo & layar utama

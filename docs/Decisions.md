@@ -450,3 +450,7 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 ## Rupiah is written `Rp1.450.000`, the same on every device (decided 2026-10-29)
 
 [#724](https://github.com/kerti/uruni/issues/724). **The maintainer chose the EYD form: `Rp` against the digits, no space.** Intl's `currency` style printed `Rp 1.450.000` in Chrome and `Rp1.450.000` in Safari, so one app showed two formats. `formatIDR` now builds the figure from the grouping alone and its test pins every character; the report's `money.FormatIDR` matches it.
+
+## Words any group would recognise (decided 2026-10-29)
+
+[#725](https://github.com/kerti/uruni/issues/725). **The maintainer dropped the vocabulary of the fund Uruni grew out of.** A member tier is a **kategori** (*Kategori iuran*, *Tanpa kategori*), its price a **nominal** (*Nominal iuran*): never *golongan*, a pay-grade word, and never plain *iuran*, which is the payment. *Kas bidang* is gone as the titipan example; the demo's titipan is *Titipan Seragam*. Identifiers (`member_tier`, `dues_rate`) are unchanged.

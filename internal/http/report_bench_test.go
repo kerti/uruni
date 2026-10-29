@@ -72,7 +72,7 @@ func seedYearFund(b *testing.B) (http.Handler, string) {
 		}
 	}
 
-	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: res.Fund.ID, Name: "Madya", CreatedAt: 1})
+	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: res.Fund.ID, Name: "Senior", CreatedAt: 1})
 	if err != nil {
 		b.Fatalf("CreateDuesTier() = %v", err)
 	}

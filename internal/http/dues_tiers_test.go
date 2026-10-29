@@ -84,7 +84,7 @@ func TestGetDuesTiersCarriesEachTiersRatesInForce(t *testing.T) {
 	}
 	full := decodeDuesTier(t, postDuesTier(t, r, "Penuh"))
 	half := decodeDuesTier(t, postDuesTier(t, r, "Separuh"))
-	empty := decodeDuesTier(t, postDuesTier(t, r, "Madya"))
+	empty := decodeDuesTier(t, postDuesTier(t, r, "Senior"))
 
 	post := func(tierID, amount int64, from string) duesRateResponse {
 		t.Helper()
@@ -321,7 +321,7 @@ func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
-	tier := decodeDuesTier(t, postDuesTier(t, r, "Madya"))
+	tier := decodeDuesTier(t, postDuesTier(t, r, "Senior"))
 	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2026-01"}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST rate = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}

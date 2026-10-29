@@ -24,7 +24,7 @@ import (
 //	Eka    paid 2026-09 and 2026-11, skipped October  Lunas - sudah bayar di muka
 //	Fina   joined 2026-10-01                          not owing September
 //	Gita   inactive from 2026-08-31                   not owing September
-//	Hadi   no golongan                                owes nothing
+//	Hadi   no tier                                owes nothing
 type duesScenario struct {
 	reportFixture
 	base string
@@ -36,7 +36,7 @@ func newDuesScenario(t *testing.T) duesScenario {
 	f := newReportFixture(t, "Kas RT 05")
 	q := store.New(f.db)
 
-	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Madya", CreatedAt: 1})
+	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Senior", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateDuesTier() = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
 		`<span class="badge unpaid">Belum bayar</span>`,
 		`<span class="badge partial">Bayar sebagian</span>`,
 		"Lunas \u2014 sudah bayar di muka",
-		"Golongan Madya",
+		"Kategori Senior",
 		"Iuran: Rp25.000",
 		"Dibayar: Rp10.000",
 		"Dibayar: Rp0",
@@ -285,7 +285,7 @@ func TestReportDuesSectionHidden(t *testing.T) {
 		f := newReportFixture(t, "Kas RT 05")
 		f.post(t, "in", 10_000, "2026-09-03")
 		q := store.New(f.db)
-		tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Madya", CreatedAt: 1})
+		tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Senior", CreatedAt: 1})
 		if err != nil {
 			t.Fatalf("CreateDuesTier() = %v", err)
 		}
@@ -338,9 +338,9 @@ func TestReportDuesAndTransactionFormsCarryEachOther(t *testing.T) {
 	}
 }
 
-// The report's Golongan column is the tier in force in the month shown (ADR-040),
+// The report's Kategori column is the tier in force in the month shown (ADR-040),
 // not today's: Ani is promoted from October, and September's report still reads
-// Madya beside the amount Madya set.
+// Senior beside the amount Senior set.
 func TestReportDuesShowsTheTierInForceInTheMonthShown(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -370,8 +370,8 @@ func TestReportDuesShowsTheTierInForceInTheMonthShown(t *testing.T) {
 	}
 
 	september := duesSection(t, s.get(t, s.base).Body.String())
-	if !strings.Contains(september, "Madya") || strings.Contains(september, "Sepuh") {
-		t.Errorf("September's dues section lists %q, want Madya for everyone and no Sepuh yet", september)
+	if !strings.Contains(september, "Senior") || strings.Contains(september, "Sepuh") {
+		t.Errorf("September's dues section lists %q, want Senior for everyone and no Sepuh yet", september)
 	}
 	october := duesSection(t, s.get(t, "/report/"+s.fund.ReportSlug+"?month=2026-10").Body.String())
 	if !strings.Contains(october, "Sepuh") {

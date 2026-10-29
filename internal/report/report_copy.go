@@ -180,7 +180,7 @@ var Text = Copy{
 
 	DuesLabel:         "Status iuran",
 	DuesFilter:        "Status iuran",
-	DuesTier:          "Golongan",
+	DuesTier:          "Kategori",
 	DuesOwed:          "Iuran",
 	DuesPaid:          "Dibayar",
 	DuesNoRows:        "Tidak ada anggota yang cocok bulan ini.",

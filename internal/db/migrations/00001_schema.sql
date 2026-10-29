@@ -114,7 +114,7 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- No effective_to and no fund_id: the rate for a period is the latest row at
   -- or before it, and ownership comes through tier_id. Two-sided intervals
   -- would need gaps and overlaps policed; this shape cannot express either.
-  -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
+  -- A tier with an undecided rate (PRD section 6) simply has no row.
   --
   -- ADR-040: a mistake is corrected by a new row, never an overwrite. The highest
   -- correction of a month stands (dues_rate_standing). A deleting correction

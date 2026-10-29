@@ -56,7 +56,7 @@ type MemberDuesStatus struct {
 //     force at the period, not today's (ADR-040), so a June promotion leaves
 //     January priced at the old tier.
 //   - A member whose tier has no dues_rate effective for this period (the
-//     "madya TBD" case, PRD 6) is omitted. Uruni does not invent an amount.
+//     undecided-rate case, PRD 6) is omitted. Uruni does not invent an amount.
 //   - joined_on / inactive_on bound the active window, inclusive by month at
 //     both ends: a member owes every period from the month containing
 //     joined_on through the month containing inactive_on, and a partial month
@@ -130,7 +130,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		}
 
 		// Either missing means nothing is owed: no tier is no obligation, and a
-		// tier with no rate yet effective is the "madya TBD" case.
+		// tier with no rate yet effective is the undecided-rate case.
 		tierID, rate, ok := prices.priceAt(m.ID, period)
 		if !ok {
 			continue

@@ -84,7 +84,7 @@ test.describe('report', () => {
     await expect(dues.getByRole('heading', { name: 'Status iuran', exact: true })).toBeVisible()
     const member = dues.locator('ul.dues li').filter({ hasText: 'Warga Satu' })
     await expect(member).toHaveCount(1)
-    await expect(member).toContainText('Golongan Reguler')
+    await expect(member).toContainText('Kategori Reguler')
 
     // Envelopes: the open one, with its status badge.
     // reportText.EnvelopesLabel / EnvelopeOpen

@@ -7,7 +7,7 @@ import type { Purpose } from '@/lib/purposes'
 
 const purposes: Purpose[] = [
   { id: 1, kind: 'main', name: 'Kas utama', created_at: 1 },
-  { id: 2, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
+  { id: 2, kind: 'pass_through', name: 'Seragam', created_at: 1 },
 ]
 
 describe('PurposePicker', () => {
@@ -16,6 +16,6 @@ describe('PurposePicker', () => {
   it('lists every purpose the fund has', async () => {
     render(<PurposePicker id="purpose" label="Pos" purposes={purposes} value={1} onChange={vi.fn()} />)
 
-    expect(await selectOptionNames('Pos')).toEqual(['Kas utama', 'Kas Bidang'])
+    expect(await selectOptionNames('Pos')).toEqual(['Kas utama', 'Seragam'])
   })
 })

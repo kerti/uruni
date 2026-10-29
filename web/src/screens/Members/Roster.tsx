@@ -293,7 +293,7 @@ function tierName(tiers: DuesTier[], tierId: number | null): string {
   return tiers.find((tier) => tier.id === tierId)?.name ?? text.tierNone
 }
 
-/** Golongan, as the same themed Select in both dialogs. */
+/** The tier, as the same themed Select in both dialogs. */
 function TierField({
   id,
   tiers,

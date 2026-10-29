@@ -857,7 +857,7 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 
 // foldCorrections nets every purpose correction of the same row into one
 // move, keyed by the corrected row's id (#280). A row corrected Perpisahan ->
-// Kas Bidang -> Kas Utama -> Kas Bidang reads as Perpisahan -> Kas Bidang;
+// Seragam -> Kas Utama -> Seragam reads as Perpisahan -> Seragam;
 // one corrected and then corrected back is absent. Display only: every leg
 // stays posted, and the balances are sums of them all.
 //

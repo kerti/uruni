@@ -141,7 +141,7 @@ export interface DuesTierWithRates extends DuesTier {
  * tier_name and current_rate are period-independent: dues_tier.name for
  * tier_id, and the dues_rate in force this month for it. Both are nil for a
  * member with no tier, and current_rate alone for a tier whose rate has not
- * started yet (the "madya TBD" case, PRD section 6). arrears_months is the
+ * started yet (the undecided-rate case, PRD section 6). arrears_months is the
  * Tunggakan badge's figure: whole months of periods strictly before the
  * current one still owed, 0 meaning no badge. All three are zero-valued on a
  * POST/PATCH reply - read them only from listMembersPage. */
