@@ -81,7 +81,7 @@ async function box(locator: Locator) {
 }
 
 // Every screen reachable from the footer, plus the ones it opens: the status
-// matrix, Cek kas, the amplop list and the tarif screen.
+// matrix, Cek kas, the amplop list and the rate screen.
 const screens = [
   '/',
   '/history/transactions',

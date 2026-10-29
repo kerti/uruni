@@ -140,11 +140,11 @@ test.describe('a tier change and a rate correction', () => {
     const fund = await api<{ report_slug: string }>(page.context().request, 'GET', '/api/fund')
     const row = (p: Page) => p.locator('#dues ul.dues li').filter({ hasText: member })
 
-    // reportText.DuesTier is "Golongan".
+    // reportText.DuesTier is "Kategori".
     await page.goto(`/report/${fund.report_slug}?month=${before}`)
-    await expect(row(page)).toContainText('Golongan Reguler')
+    await expect(row(page)).toContainText('Kategori Reguler')
     await page.goto(`/report/${fund.report_slug}?month=${promoted}`)
-    await expect(row(page)).toContainText('Golongan Senior')
+    await expect(row(page)).toContainText('Kategori Senior')
   })
 
   test('correcting a rate names the months it reprices, then reprices them', async ({ page }) => {

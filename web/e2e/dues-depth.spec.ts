@@ -9,7 +9,7 @@ import { cardButton } from './card'
 
 // Dues past the one multi-month payment dues.spec.ts walks: paying a month
 // ahead, paying part of a month, the belum-bayar filter, a backdated join date
-// that carries arrears onto the roster, and golongan and tarif in Pengaturan.
+// that carries arrears onto the roster, and tiers and rates in Pengaturan.
 //
 // Three members join this month on the fixture's Reguler tier (Rp50.000),
 // added over the API so each owes exactly the current month and nothing before
@@ -180,7 +180,7 @@ test.describe('dues in depth', () => {
     await expect(card).toContainText(text.arrearsBadge(3))
   })
 
-  test('golongan and tarif: add and rename a tier, add a past and a current rate, correct one, delete the rates and the tier', async ({
+  test('tiers and rates: add and rename a tier, add a past and a current rate, correct one, delete the rates and the tier', async ({
     page,
   }) => {
     await logIn(page)
@@ -189,18 +189,18 @@ test.describe('dues in depth', () => {
 
     await page.getByRole('button', { name: text.add }).click()
     const addDialog = page.getByRole('dialog', { name: text.add })
-    await addDialog.getByLabel(text.nameLabel).fill('Madya')
+    await addDialog.getByLabel(text.nameLabel).fill('Pengurus')
     await addDialog.getByRole('button', { name: text.add }).click()
     await expect(addDialog).toBeHidden()
 
     // A new tier has no rate yet; its screen adds one from a month (the form's
     // default, this month).
-    const tierCard = cardButton(page, text.cardVerb, 'Madya')
+    const tierCard = cardButton(page, text.cardVerb, 'Pengurus')
     await expect(tierCard).toContainText(text.noRates)
     await tierCard.click()
 
     // Rename: the name on its own section, saved by its own button.
-    const renamed = 'Madya Utama'
+    const renamed = 'Pengurus Inti'
     await page.getByLabel(text.nameLabel).fill(renamed)
     await page.getByRole('button', { name: text.saveName }).click()
     await expect(page.getByRole('heading', { name: renamed, level: 1 })).toBeVisible()
@@ -244,7 +244,7 @@ test.describe('dues in depth', () => {
     await expect(rateRow).toContainText(formatIDR(80_000))
     await expect(rateRow).toContainText(text.effectiveFrom(formatPeriod(jakartaMonth())))
 
-    // Hapus tarif, from the same editor.
+    // Hapus nominal, from the same editor.
     await rateRow.getByRole('button', { name: text.editRate }).click()
     await editor.getByRole('button', { name: text.deleteRate }).click()
     await expect(rateRow).toHaveCount(0)
@@ -253,7 +253,7 @@ test.describe('dues in depth', () => {
     await editor.getByRole('button', { name: text.deleteRate }).click()
     await expect(page.getByText(text.noRates)).toBeVisible()
 
-    // Hapus golongan: no member is on it, so it goes.
+    // Hapus kategori: no member is on it, so it goes.
     await page.getByRole('button', { name: text.delete }).click()
     await page.getByRole('button', { name: text.deleteConfirmAction }).click()
     await expect(cardButton(page, text.cardVerb, renamed)).toHaveCount(0)

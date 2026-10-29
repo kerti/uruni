@@ -47,7 +47,7 @@ type world struct {
 	bankID  int64
 	tiers   map[string]int64 // tier key -> id
 	members map[string]int64 // member name -> id
-	titipan int64            // the pass-through purpose for Kas Bidang
+	titipan int64            // the pass-through purpose for the uniforms
 }
 
 // story collects events.
@@ -434,8 +434,8 @@ func (s *story) everydaySpending() {
 
 func (s *story) passThrough() {
 	w := s.w
-	s.at(-9, 2, "opening the Kas Bidang pass-through", func(st *step) error {
-		p, err := st.l.CreatePassThroughPurpose(st.ctx, ledger.CreatePassThroughPurposeParams{FundID: w.fundID, Name: "Titipan Kas Bidang"})
+	s.at(-9, 2, "opening the uniform pass-through", func(st *step) error {
+		p, err := st.l.CreatePassThroughPurpose(st.ctx, ledger.CreatePassThroughPurposeParams{FundID: w.fundID, Name: "Titipan Seragam"})
 		w.titipan = p.ID
 		return err
 	})
@@ -443,18 +443,18 @@ func (s *story) passThrough() {
 		var total int64
 		for i, day := range days {
 			total += amounts[i]
-			s.at(month, day, "collecting for Kas Bidang", func(st *step) error {
+			s.at(month, day, "collecting for the uniforms", func(st *step) error {
 				_, err := st.post(ledger.DirectionIn, w.cashID, w.titipan, amounts[i], note)
 				return err
 			})
 		}
-		s.at(month, forwardDay, "forwarding to Kas Bidang", func(st *step) error {
-			_, err := st.post(ledger.DirectionOut, w.cashID, w.titipan, total, "Diteruskan ke Kas Bidang")
+		s.at(month, forwardDay, "paying the uniform maker", func(st *step) error {
+			_, err := st.post(ledger.DirectionOut, w.cashID, w.titipan, total, "Dibayar ke konveksi seragam")
 			return err
 		})
 	}
-	round(-9, []int{6, 13, 20}, []int64{150_000, 100_000, 150_000}, 22, "Titipan iuran Kas Bidang dari anggota")
-	round(-3, []int{7, 15}, []int64{125_000, 125_000}, 18, "Titipan iuran Kas Bidang dari anggota")
+	round(-9, []int{6, 13, 20}, []int64{150_000, 100_000, 150_000}, 22, "Uang seragam dari anggota")
+	round(-3, []int{7, 15}, []int64{125_000, 125_000}, 18, "Uang seragam dari anggota")
 }
 
 // --- reimbursements: one settled, one still owed; their receipts ---

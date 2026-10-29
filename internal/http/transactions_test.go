@@ -534,7 +534,7 @@ func TestGetTransactionsSearchHitsPurposeName(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
-	ppRec := postPassThroughPurpose(t, r, "Kas Bidang Olahraga")
+	ppRec := postPassThroughPurpose(t, r, "Seragam Olahraga")
 	if ppRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/pass-through-purposes = %d, want %d (body: %s)", ppRec.Code, http.StatusCreated, ppRec.Body.String())
 	}

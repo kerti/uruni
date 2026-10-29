@@ -39,7 +39,7 @@ const balances = {
   ],
   purposes: [
     { id: 11, kind: 'main', name: 'Kas Utama', balance: 1_000_000 },
-    { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: 150_000 },
+    { id: 12, kind: 'pass_through', name: 'Seragam', balance: 150_000 },
     { id: 13, kind: 'incidental', name: 'Halal bihalal RT', balance: 300_000 },
     { id: 14, kind: 'incidental', name: '17 Agustus', balance: 0 },
   ],
@@ -395,7 +395,7 @@ describe('Home', () => {
       )
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
-      expect(screen.getByText('Kas Bidang')).toBeInTheDocument()
+      expect(screen.getByText('Seragam')).toBeInTheDocument()
       expect(screen.getByText(formatIDR(150_000))).toBeInTheDocument()
     })
 
@@ -491,7 +491,7 @@ describe('Home', () => {
     it('renders a negative purpose balance in the attention (terracotta) treatment', async () => {
       const negativeBalances = {
         ...balances,
-        purposes: [balances.purposes[0], { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: -75_000 }, balances.purposes[2]],
+        purposes: [balances.purposes[0], { id: 12, kind: 'pass_through', name: 'Seragam', balance: -75_000 }, balances.purposes[2]],
       } satisfies Balances
       vi.stubGlobal('fetch', stubHome({ balancesOverride: negativeBalances }))
       render(
@@ -545,7 +545,7 @@ describe('Home', () => {
         />,
       )
 
-      await userEvent.click(await screen.findByRole('button', { name: /^Kas Bidang/ }))
+      await userEvent.click(await screen.findByRole('button', { name: /^Seragam/ }))
       expect(onViewTransactionsFor).toHaveBeenCalledWith(12)
       await userEvent.click(screen.getByRole('button', { name: /^Kas Utama/ }))
       expect(onViewTransactionsFor).toHaveBeenCalledWith(11)

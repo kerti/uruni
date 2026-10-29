@@ -412,7 +412,7 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 			t.Errorf("%d corrected rates, want one", n)
 		}
 
-		// A tier corrected (Mas Fajar), a member Tanpa golongan for a stretch (Pak
+		// A tier corrected (Mas Fajar), a member Tanpa kategori for a stretch (Pak
 		// Lingga), a promotion (Mbak Indri).
 		if n := s.count(t, `SELECT COUNT(*) FROM member_tier WHERE correction > 0 AND member_id = ?`, memberID("Mas Fajar")); n != 1 {
 			t.Errorf("%d tier corrections for Mas Fajar, want one", n)
@@ -422,7 +422,7 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 		}
 		for _, offset := range []int{-9, -8} {
 			if got := owedIn(periodAt(t, now, offset), "Pak Lingga"); got != -1 {
-				t.Errorf("Pak Lingga owes %d in M%d, want no obligation (Tanpa golongan)", got, offset)
+				t.Errorf("Pak Lingga owes %d in M%d, want no obligation (Tanpa kategori)", got, offset)
 			}
 		}
 		if got := owedIn(periodAt(t, now, -7), "Pak Lingga"); got != 25_000 {

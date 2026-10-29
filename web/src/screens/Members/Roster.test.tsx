@@ -27,7 +27,7 @@ function member(id: number, name: string, overrides: Partial<Member> = {}): Memb
     joined_on: '2026-01-05',
     inactive_on: null,
     created_at: 1,
-    tier_name: 'Pelaksana',
+    tier_name: 'Reguler',
     current_rate: 50_000,
     arrears_months: 0,
     ...overrides,
@@ -35,7 +35,7 @@ function member(id: number, name: string, overrides: Partial<Member> = {}): Memb
 }
 
 const tiers = [
-  { id: 1, name: 'Pelaksana', created_at: 1, rates: [] },
+  { id: 1, name: 'Reguler', created_at: 1, rates: [] },
   { id: 2, name: 'Fungsional', created_at: 1, rates: [] },
 ] satisfies DuesTierWithRates[]
 
@@ -117,7 +117,7 @@ describe('Roster', () => {
     renderAt()
 
     const cardOne = await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
-    expect(within(cardOne).getByText(text.tierRateLine('Pelaksana', 'Rp50.000'))).toBeInTheDocument()
+    expect(within(cardOne).getByText(text.tierRateLine('Reguler', 'Rp50.000'))).toBeInTheDocument()
 
     const cardTwo = screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Dua') })
     // A member with no tier owes no dues - a real state, shown as such rather
@@ -126,13 +126,13 @@ describe('Roster', () => {
     expect(within(cardTwo).getByText(text.inactiveBadge)).toBeInTheDocument()
   })
 
-  it('shows the "tarif belum ditentukan" line for a tier with no rate effective yet', async () => {
+  it('shows the "nominal belum ditentukan" line for a tier with no rate effective yet', async () => {
     const { fetchMock } = stubRoster([member(1, 'Warga Satu', { current_rate: null })])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
     const card = await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
-    expect(within(card).getByText(text.tierRateLine('Pelaksana', text.noRateYet))).toBeInTheDocument()
+    expect(within(card).getByText(text.tierRateLine('Reguler', text.noRateYet))).toBeInTheDocument()
   })
 
   it('shows the Tunggakan badge only on a member with arrears', async () => {
@@ -237,7 +237,7 @@ describe('Roster', () => {
     expect(calls[0].body).not.toHaveProperty('joined_on')
   })
 
-  it('clears the tier with an explicit null when "tanpa golongan" is chosen', async () => {
+  it('clears the tier with an explicit null when "tanpa kategori" is chosen', async () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
@@ -412,7 +412,7 @@ describe('Roster', () => {
       expect(calls[0].body).toMatchObject({ tier_id: 2, tier_effective_from: '2026-12' })
     })
 
-    it('sends the start month for "tanpa golongan" too', async () => {
+    it('sends the start month for "tanpa kategori" too', async () => {
       const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
       vi.stubGlobal('fetch', fetchMock)
       renderAt()

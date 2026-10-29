@@ -30,7 +30,7 @@ import type { Fund } from '@/lib/setup'
  * parses that param against its own prefix and leaves every other value alone
  * - see lib/dialogTarget.ts for why that is load-bearing.
  *
- * Golongan & tarif lives here (moved from Anggota, see screens/Members/index.tsx).
+ * Kategori iuran lives here (moved from Anggota, see screens/Members/index.tsx).
  * Incidentals (ADR-032) sits beside Titipan - the two are kinds of one
  * `purpose` (CONTEXT.md). Laporan publik (ADR-035) comes after the admin
  * sections, then Akun bendahara (#386): it is about the login, not the fund,

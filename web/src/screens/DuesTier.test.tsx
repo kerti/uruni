@@ -62,34 +62,34 @@ function renderScreen(tierId = 1) {
   return { onBack }
 }
 
-describe('A golongan screen', () => {
-  it("shows the golongan's name and its whole rate history", async () => {
-    const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')])
+describe('A tier screen', () => {
+  it("shows the tier's name and its whole rate history", async () => {
+    const { fetchMock } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
-    expect(await screen.findByRole('heading', { name: 'Pelaksana', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Reguler', level: 1 })).toBeInTheDocument()
     // The old rate stays: it is what explains the months it covered.
     expect(screen.getByText(text.effectiveFrom('Januari 2026'))).toBeInTheDocument()
     expect(screen.getByText(text.effectiveFrom('Juli 2026'))).toBeInTheDocument()
   })
 
-  it('renders a golongan with no rates plainly, not as an error', async () => {
-    const { fetchMock } = stubTier([tier(1, 'Madya')], [])
+  it('renders a tier with no rates plainly, not as an error', async () => {
+    const { fetchMock } = stubTier([tier(1, 'Senior')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
-    // A golongan whose price is not decided yet is a legal state (PRD section 6).
+    // A tier whose price is not decided yet is a legal state (PRD section 6).
     expect(await screen.findByText(text.noRates)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   // The whole reason this is a screen: no dialog anywhere on it.
   it('holds no dialog at all', async () => {
-    const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')])
+    const { fetchMock } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 50_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
-    await screen.findByRole('heading', { name: 'Pelaksana', level: 1 })
+    await screen.findByRole('heading', { name: 'Reguler', level: 1 })
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
@@ -101,26 +101,26 @@ describe('A golongan screen', () => {
     expect(screen.getAllByRole('button', { name: text.saveRate })).toHaveLength(1)
   })
 
-  it('renames the golongan', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksan')], [], () => jsonResponse(tier(1, 'Pelaksana')))
+  it('renames the tier', async () => {
+    const { fetchMock, calls } = stubTier([tier(1, 'Regule')], [], () => jsonResponse(tier(1, 'Reguler')))
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
     const input = await screen.findByLabelText(text.nameLabel)
     await userEvent.clear(input)
-    await userEvent.type(input, 'Pelaksana')
+    await userEvent.type(input, 'Reguler')
     await userEvent.click(screen.getByRole('button', { name: text.saveName }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({
       method: 'PATCH',
       url: expect.stringContaining('/api/dues-tiers/1'),
-      body: { name: 'Pelaksana' },
+      body: { name: 'Reguler' },
     })
   })
 
   it('adds a rate effective from a month', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], [])
+    const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
@@ -140,7 +140,7 @@ describe('A golongan screen', () => {
   // PRD section 7.1's live-arrears escape hatch depends on this: a rate can
   // start in a month that has already passed.
   it('lets a rate be backdated to a month already gone', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], [])
+    const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
@@ -155,7 +155,7 @@ describe('A golongan screen', () => {
   // PATCH is for a mistyped amount, never a price change - the amount is the
   // only field it carries, so effective_from cannot move through an edit.
   it("corrects a rate's amount and nothing else", async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 5_000, '2026-01')])
+    const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 5_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
     await screen.findByText(text.effectiveFrom('Januari 2026'))
@@ -181,10 +181,10 @@ describe('A golongan screen', () => {
   // confirmation names them before anything is sent.
   describe('confirming a correction', () => {
     async function startCorrection(rates: DuesRate[], rateId: number, typed: string) {
-      const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], rates)
+      const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], rates)
       vi.stubGlobal('fetch', fetchMock)
       renderScreen()
-      await screen.findByRole('heading', { name: 'Pelaksana', level: 1 })
+      await screen.findByRole('heading', { name: 'Reguler', level: 1 })
       const row = screen.getByText(text.effectiveFrom(formatPeriod(rates.find((r) => r.id === rateId)!.effective_from))).closest('li')!
       await userEvent.click(within(row).getByRole('button', { name: text.editRate }))
       const input = within(row).getByLabelText(text.rateAmountLabel)
@@ -252,7 +252,7 @@ describe('A golongan screen', () => {
       }
       if (url.includes('/api/dues-tiers')) {
         rateReads++
-        return Promise.resolve(jsonResponse(withRates([tier(1, 'Pelaksana')], listed)))
+        return Promise.resolve(jsonResponse(withRates([tier(1, 'Reguler')], listed)))
       }
       return Promise.reject(new Error(`unstubbed fetch: ${url}`))
     })
@@ -274,7 +274,7 @@ describe('A golongan screen', () => {
   })
 
   it('backs out of a correction without sending anything', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')])
+    const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 50_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
     await screen.findByText(text.effectiveFrom('Januari 2026'))
@@ -289,11 +289,7 @@ describe('A golongan screen', () => {
   // Deleting is what makes a wrong-month rate fixable at all: UNIQUE
   // (tier_id, effective_from) refuses the corrected row while it stands.
   it('deletes a rate filed against the wrong month', async () => {
-    const { fetchMock, calls } = stubTier(
-      [tier(1, 'Pelaksana')],
-      [rate(1, 1, 50_000, '2026-01')],
-      () => new Response(null, { status: 204 }),
-    )
+    const { fetchMock, calls } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 50_000, '2026-01')], () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
     await screen.findByText(text.effectiveFrom('Januari 2026'))
@@ -305,10 +301,10 @@ describe('A golongan screen', () => {
     expect(calls[0]).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/api/dues-rates/1') })
   })
 
-  // Deleting takes the golongan's rates with it, and confirms in place -
+  // Deleting takes the tier's rates with it, and confirms in place -
   // never window.confirm(), and on a screen there is no dialog to nest.
-  it('deletes the golongan after confirming in place', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Madya')], [rate(1, 1, 25_000, '2026-01')], () => new Response(null, { status: 204 }))
+  it('deletes the tier after confirming in place', async () => {
+    const { fetchMock, calls } = stubTier([tier(1, 'Senior')], [rate(1, 1, 25_000, '2026-01')], () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     const { onBack } = renderScreen()
 
@@ -325,7 +321,7 @@ describe('A golongan screen', () => {
     await waitFor(() => expect(onBack).toHaveBeenCalled())
   })
 
-  it('says why a golongan a member is in cannot be deleted', async () => {
+  it('says why a tier a member is in cannot be deleted', async () => {
     const { fetchMock } = stubTier([tier(1, 'Penuh')], [], () =>
       jsonResponse({ error: { code: 'referenced_by_other_records', message: 'referenced' } }, 409),
     )
@@ -340,11 +336,11 @@ describe('A golongan screen', () => {
     expect(onBack).not.toHaveBeenCalled()
   })
 
-  // A stale bookmark, or a golongan deleted from another device: App.tsx
+  // A stale bookmark, or a tier deleted from another device: App.tsx
   // answers a missing parameter, and this answers a parameter that named
   // something real once.
-  it('goes back when the id names no golongan', async () => {
-    const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [])
+  it('goes back when the id names no tier', async () => {
+    const { fetchMock } = stubTier([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     const { onBack } = renderScreen(99)
 
@@ -352,7 +348,7 @@ describe('A golongan screen', () => {
   })
 
   it('leaves through its own back control', async () => {
-    const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [])
+    const { fetchMock } = stubTier([tier(1, 'Reguler')], [])
     vi.stubGlobal('fetch', fetchMock)
     const { onBack } = renderScreen()
 

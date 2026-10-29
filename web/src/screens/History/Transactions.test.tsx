@@ -394,11 +394,11 @@ describe('Transactions tab: filters (#424)', () => {
 
 describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
   it("opens the dialog from the row's pos and writes it to the URL", async () => {
-    stubApi(() => ({ transactions: [row(5, 'Setoran Kas Bidang')], next_cursor: null }))
+    stubApi(() => ({ transactions: [row(5, 'Setoran seragam')], next_cursor: null }))
     const user = userEvent.setup()
     renderAt('/history/transactions')
 
-    await screen.findByText('Setoran Kas Bidang')
+    await screen.findByText('Setoran seragam')
     await user.click(screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }))
 
     // The dialog is a search parameter, never component state (ADR-032), so
@@ -408,7 +408,7 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
   })
 
   it('posts the correction for the row named in the URL and reloads the list', async () => {
-    const requests = stubApi(() => ({ transactions: [row(6, 'Setoran Kas Bidang')], next_cursor: null }))
+    const requests = stubApi(() => ({ transactions: [row(6, 'Setoran seragam')], next_cursor: null }))
     const user = userEvent.setup()
     renderAt('/history/transactions?edit=purpose-correction:6')
 
@@ -432,7 +432,7 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
     // tags (ADR-033) - so without this line the dialog and the row would
     // appear to disagree about the same entry.
     stubApi(() => ({
-      transactions: [{ ...row(7, 'Setoran Kas Bidang'), purpose_id: 12, effective_purpose_id: 11 }],
+      transactions: [{ ...row(7, 'Setoran seragam'), purpose_id: 12, effective_purpose_id: 11 }],
       next_cursor: null,
     }))
     renderAt('/history/transactions?edit=purpose-correction:7')

@@ -124,7 +124,7 @@ type Purpose struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// DuesTier mirrors the "dues_tier" table verbatim: a golongan the
+// DuesTier mirrors the "dues_tier" table verbatim: a tier the
 // treasurer named (CONTEXT.md).
 type DuesTier struct {
 	ID        int64  `json:"id"`

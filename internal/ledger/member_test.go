@@ -60,7 +60,7 @@ func TestCreateMemberWritesTheFirstTierRowAtTheJoinMonth(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
-	tier := createDuesTier(t, q, f.fundID, "Pelaksana")
+	tier := createDuesTier(t, q, f.fundID, "Reguler")
 
 	m, err := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &tier, JoinedOn: "2026-03-17"})
 	if err != nil {

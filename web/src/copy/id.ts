@@ -262,7 +262,7 @@ export const copy = {
       referenced_by_other_records: 'Data ini sudah dipakai di catatan lain, jadi tidak bisa dihapus.',
       // ADR-040: a rate a correction has since replaced or deleted (a stale screen).
       // The list reloads when this arrives, so the sentence says to look again.
-      dues_rate_superseded: 'Tarif ini sudah diperbaiki atau dihapus. Daftar tarif sudah dimuat ulang, silakan periksa lagi.',
+      dues_rate_superseded: 'Nominal ini sudah diperbaiki atau dihapus. Daftarnya sudah dimuat ulang, silakan periksa lagi.',
       // Renaming the fund's kas utama through this route - the one purpose it
       // refuses. A titipan and an amplop are renameable.
       purpose_not_renameable: 'Nama kas utama tidak bisa diganti.',
@@ -459,7 +459,7 @@ export const copy = {
     roster: {
       heading: 'Tambah anggota dan iuran (opsional)',
       body: 'Bisa dilewati dan diisi nanti kapan saja lewat menu anggota.',
-      tierNameLabel: 'Nama golongan iuran',
+      tierNameLabel: 'Nama kategori iuran',
       rateAmountLabel: 'Besar iuran per bulan',
       memberNameLabel: 'Nama anggota',
       addMember: 'Tambah anggota',
@@ -893,13 +893,13 @@ export const copy = {
       searchPlaceholder: 'Nama anggota',
       loadMore: 'Muat lebih banyak',
       nameLabel: 'Nama anggota',
-      tierLabel: 'Golongan',
+      tierLabel: 'Kategori',
       // The "no tier" option: a member with no tier owes no dues, a real state
       // (PRD section 6), not a blank to be filled in later.
-      tierNone: 'Tanpa golongan',
+      tierNone: 'Tanpa kategori',
       // A tier that exists but has no rate effective yet (PRD section 6's
-      // "madya TBD") - never an invented amount.
-      noRateYet: 'Tarif belum ditentukan',
+      // undecided-rate) - never an invented amount.
+      noRateYet: 'Nominal belum ditentukan',
       // The row's second line: tier name and what it costs this month, joined
       // by a middle dot - copy/id.ts is the one file the ASCII rule exempts
       // (CLAUDE.md rule 10), so the dot is written directly.
@@ -910,8 +910,8 @@ export const copy = {
       // "Tunggakan" is PRD-ID's word, not a coinage.
       arrearsBadge: (months: number) => `Tunggakan ${months} bulan`,
       joinedOnLabel: 'Mulai ikut',
-      // ADR-040: from which month a changed golongan holds. The same two words
-      // as a tarif's start month (settings.tiers.effectiveFromLabel).
+      // ADR-040: from which month a changed tier holds. The same two words
+      // as a rate's start month (settings.tiers.effectiveFromLabel).
       tierFromLabel: 'Mulai bulan',
       add: 'Tambah anggota',
       adding: 'Menambahkan…',
@@ -1082,7 +1082,7 @@ export const copy = {
     },
     passThrough: {
       heading: 'Titipan',
-      body: 'Uang yang dikumpulkan untuk diteruskan ke pihak lain, misalnya kas bidang. Bukan milik kas ini, hanya lewat. Namanya bisa diperbaiki kapan saja.',
+      body: 'Uang yang dikumpulkan untuk diteruskan ke pihak lain. Bukan milik kas ini, hanya lewat. Namanya bisa diperbaiki kapan saja.',
       empty: 'Belum ada titipan.',
       nameLabel: 'Nama titipan',
       add: 'Tambah titipan',
@@ -1100,14 +1100,14 @@ export const copy = {
       cancel: 'Batal',
     },
     tiers: {
-      heading: 'Golongan & tarif',
-      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, jadi bulan-bulan sebelumnya tetap memakai tarif lama. Memperbaiki nominal tarif mengubah semua bulan yang dipakainya.',
-      empty: 'Belum ada golongan.',
-      nameLabel: 'Nama golongan',
-      add: 'Tambah golongan',
+      heading: 'Kategori iuran',
+      body: 'Besar iuran per bulan menurut kategori. Nominal baru ditambahkan mulai bulan tertentu, jadi bulan-bulan sebelumnya tetap memakai nominal lama. Memperbaiki nominal mengubah semua bulan yang dipakainya.',
+      empty: 'Belum ada kategori.',
+      nameLabel: 'Nama kategori',
+      add: 'Tambah kategori',
       adding: 'Menambahkan…',
-      // The card opens the golongan's screen, as an Amplop card opens its
-      // envelope: a golongan holds a name AND a price history, and a dialog has
+      // The card opens the tier's screen, as an Amplop card opens its
+      // envelope: a tier holds a name AND a price history, and a dialog has
       // neither the height for the second nor one unambiguous way out of
       // correcting a row inside it. The card still answers what it costs this
       // month without going in.
@@ -1116,38 +1116,38 @@ export const copy = {
       // only place it is reached from - as the envelope detail's back control.
       backToSettings: 'Kembali ke pengaturan',
       // The heading over the name field on that screen. The screen's h1 is the
-      // golongan's name, so this names the field's purpose rather than
+      // tier's name, so this names the field's purpose rather than
       // repeating it.
       nameHeading: 'Nama',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
-      // On the golongan's screen the name and a tarif correction are both
+      // On the tier's screen the name and a rate correction are both
       // saveable at once, so a bare "Simpan" twice would leave two identical
       // buttons - ambiguous read aloud and to a test query. Each names what it
       // saves.
       saveName: 'Simpan nama',
-      saveRate: 'Simpan tarif',
-      // Deleting a golongan. Only for one nobody was ever put in - a setup typo,
-      // a golongan named twice - so the confirm says what goes with it, and the
+      saveRate: 'Simpan nominal',
+      // Deleting a tier. Only for one nobody was ever put in - a setup typo,
+      // a tier named twice - so the confirm says what goes with it, and the
       // refusal points at the reason rather than restating the wire message
       // (ADR-014). The locations section's pair of words.
-      delete: 'Hapus golongan',
+      delete: 'Hapus kategori',
       deleting: 'Menghapus…',
       deleteConfirm:
-        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum pernah dipakai anggota mana pun.',
+        'Kategori ini akan dihapus selamanya, beserta riwayat nominalnya. Hanya bisa untuk kategori yang belum pernah dipakai anggota mana pun.',
       deleteConfirmAction: 'Ya, hapus',
-      deleteRefused: 'Golongan ini pernah dipakai anggota, jadi tidak bisa dihapus. Kalau perlu, ganti saja namanya.',
+      deleteRefused: 'Kategori ini pernah dipakai anggota, jadi tidak bisa dihapus. Kalau perlu, ganti saja namanya.',
       // A tier with no rate yet is an ordinary state, not a problem.
-      noRates: 'Tarif belum ditentukan.',
-      ratesHeading: 'Tarif',
+      noRates: 'Nominal belum ditentukan.',
+      ratesHeading: 'Nominal',
       rateAmountLabel: 'Besar iuran per bulan',
       effectiveFromLabel: 'Mulai bulan',
-      addRate: 'Tambah tarif',
+      addRate: 'Tambah nominal',
       addingRate: 'Menambahkan…',
-      // The heading over the new-tarif fields, so the history above and the
+      // The heading over the new-rate fields, so the history above and the
       // thing being added below are told apart without a bordered box.
-      addRateHeading: 'Tarif baru',
+      addRateHeading: 'Nominal baru',
       editRate: 'Perbaiki nominal',
       // The step before a correction: it reprices every month the rate covers (ADR-040),
       // so it names that span first. span is rateSpanRange, rateSpanOpen or one bare month.
@@ -1159,7 +1159,7 @@ export const copy = {
       // before the next rate starts. Open-ended when no later rate stands.
       rateSpanRange: (from: string, to: string) => `${from} sampai ${to}`,
       rateSpanOpen: (from: string) => `${from} seterusnya`,
-      deleteRate: 'Hapus tarif',
+      deleteRate: 'Hapus nominal',
       deletingRate: 'Menghapus…',
       // From effective_from onward, since a rate has no end date - the next
       // one starting is what ends it.

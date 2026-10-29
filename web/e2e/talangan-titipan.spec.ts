@@ -27,8 +27,8 @@ const TINY_JPEG = Buffer.from(
   'base64',
 )
 
-const titipan = 'Kas Bidang Uji'
-const titipanRenamed = 'Kas Bidang Pusat'
+const titipan = 'Seragam Uji'
+const titipanRenamed = 'Seragam Tim'
 
 type Named = { id: number; name: string }
 

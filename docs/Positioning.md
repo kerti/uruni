@@ -28,7 +28,7 @@ A **mobile app** that makes the treasurer's job effortless capture and honest ma
 - **One-tap transaction capture, anywhere** — the thing a spreadsheet can't do from a phone at a market stall. This is the wedge.
 - **A running balance that's always honest**, with a simple **reconciliation check**: does what's recorded match the cash in the wallet and the money in the account? Flag the gap, don't make her hunt for it.
 - **Two money locations tracked** (cash vs. bank), because that split is where her discrepancies come from.
-- **One pooled balance, with purpose tags** (kas utama, incidental collections, pass-through to kas bidang) — so funds stay separated *in meaning* without her juggling separate pots, and leftover incidental money folds back in cleanly.
+- **One pooled balance, with purpose tags** (kas utama, incidental collections, pass-through money held for someone else) — so funds stay separated *in meaning* without her juggling separate pots, and leftover incidental money folds back in cleanly.
 - **Per-member dues that vary by person** (by rank/role), and simple "who's paid" tracking — without turning into a nagging machine.
 - **Reimbursements in seconds, receipts optional** — because nobody wants a receipt for Rp2.000 of parking.
 - **Records that can't be lost** — the source of truth lives on an always-on server, so a lost or broken phone never loses anything. This reliability is something she named unprompted.

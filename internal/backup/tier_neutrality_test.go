@@ -42,8 +42,8 @@ func richV1Fixture() documentV1 {
 		Accounts:      []Account{{ID: 1, FundID: 1, Kind: "cash", Name: "Kas", CreatedAt: created}},
 		Purposes:      []Purpose{{ID: 1, FundID: 1, Kind: "main", Name: "Kas Utama", CreatedAt: created}},
 		DuesTiers: []DuesTier{
-			{ID: 1, FundID: 1, Name: "Pelaksana", CreatedAt: created},
-			{ID: 2, FundID: 1, Name: "Madya", CreatedAt: created}, // no rate: "madya TBD"
+			{ID: 1, FundID: 1, Name: "Reguler", CreatedAt: created},
+			{ID: 2, FundID: 1, Name: "Senior", CreatedAt: created}, // no rate: undecided
 			{ID: 3, FundID: 1, Name: "Sepuh", CreatedAt: created},
 			{ID: 4, FundID: 1, Name: "Kolam", CreatedAt: created},
 		},

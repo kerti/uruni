@@ -49,8 +49,8 @@ func TestPatchMemberTierFromAMonthLeavesEarlierMonthsAtTheOldTier(t *testing.T) 
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d", rec.Code)
 	}
-	tierA := mustTier(t, r, "Pelaksana", 10_000)
-	tierB := mustTier(t, r, "Madya", 50_000)
+	tierA := mustTier(t, r, "Reguler", 10_000)
+	tierB := mustTier(t, r, "Senior", 50_000)
 	joined := "2026-01-01"
 	member := decodeMember(t, postMember(t, r, memberRequest{Name: "Jane", TierID: &tierA, JoinedOn: &joined}), http.StatusCreated)
 	if member.TierID == nil || *member.TierID != tierA {
@@ -98,7 +98,7 @@ func TestPatchMemberTierStartMonthIsRefusedOutsideItsBounds(t *testing.T) {
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d", rec.Code)
 	}
-	tier := mustTier(t, r, "Pelaksana", 10_000)
+	tier := mustTier(t, r, "Reguler", 10_000)
 	joined := "2026-03-01"
 	member := decodeMember(t, postMember(t, r, memberRequest{Name: "Jane", JoinedOn: &joined}), http.StatusCreated)
 
@@ -131,7 +131,7 @@ func TestPatchMemberJoinDateBackdatedCarriesTheTierBackToTheNewJoinMonth(t *test
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d", rec.Code)
 	}
-	tier := mustTier(t, r, "Pelaksana", 10_000)
+	tier := mustTier(t, r, "Reguler", 10_000)
 	joined := ledger.CurrentDuesPeriod(time.Now(), wib) + "-01"
 	member := decodeMember(t, postMember(t, r, memberRequest{Name: "Jane", TierID: &tier, JoinedOn: &joined}), http.StatusCreated)
 

@@ -59,7 +59,7 @@ func TestReportGridIsAbsentUnderTwoMonths(t *testing.T) {
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 10_000, "2026-10-01")
 	q := store.New(f.db)
-	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Madya", CreatedAt: 1})
+	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: f.fund.ID, Name: "Senior", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateDuesTier() = %v", err)
 	}

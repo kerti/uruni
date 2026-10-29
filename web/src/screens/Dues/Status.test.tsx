@@ -53,7 +53,7 @@ function member(id: number, name: string): Member {
 // One row per status the schema defines, plus a tier-less member left out of
 // the fixture - GET /api/dues-status never synthesizes a row for a member with
 // no dues tier, so this suite proves the exclusion by never including "Tanpa
-// golongan" in the stubbed response and asserting it never renders.
+// tier" in the stubbed response and asserting it never renders.
 const rows = [
   { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid', paid_through: null },
   { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null },
@@ -110,7 +110,7 @@ describe('DuesStatus', () => {
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
 
     await screen.findByText('Warga Satu')
-    expect(screen.queryByText('Tanpa Golongan')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tanpa Kategori')).not.toBeInTheDocument()
   })
 
   it('the "belum bayar" filter isolates unpaid + partial only, with no reminder affordance', async () => {

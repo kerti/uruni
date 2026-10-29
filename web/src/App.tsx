@@ -215,7 +215,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const parsedMember = rawMember === null || rawMember.trim() === '' ? NaN : Number(rawMember)
   const initialMemberId = Number.isInteger(parsedMember) && parsedMember > 0 ? parsedMember : null
 
-  // /dues-tiers?tier=<id> is a golongan's screen, reached from the Golongan
+  // /dues-tiers?tier=<id> is a tier's screen, reached from the Kategori
   // card in Pengaturan only - parsed like /incidentals?purpose=<id> above.
   const rawTier = searchParams.get('tier')
   const parsedTier = rawTier === null || rawTier.trim() === '' ? NaN : Number(rawTier)
@@ -475,7 +475,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           )
         }
       />
-      {/* #285: a golongan holds a name and a price history, which a dialog
+      {/* #285: a tier holds a name and a price history, which a dialog
           has neither the height for nor one unambiguous way out of. Like
           /incidentals, this route is only ever a detail view: without a
           usable ?tier=<id> there is nothing to show, so it redirects to

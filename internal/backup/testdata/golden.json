@@ -48,7 +48,7 @@
       "id": 2,
       "fund_id": 1,
       "kind": "pass_through",
-      "name": "Kas Bidang",
+      "name": "Seragam",
       "created_at": 1700000000
     },
     {
@@ -63,13 +63,13 @@
     {
       "id": 1,
       "fund_id": 1,
-      "name": "Pelaksana",
+      "name": "Reguler",
       "created_at": 1700000000
     },
     {
       "id": 2,
       "fund_id": 1,
-      "name": "Madya",
+      "name": "Senior",
       "created_at": 1700000000
     }
   ],

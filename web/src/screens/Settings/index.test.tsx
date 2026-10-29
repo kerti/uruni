@@ -57,7 +57,7 @@ function stubSettings() {
       )
     }
     if (url.includes('/api/purposes')) {
-      return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 }] satisfies Purpose[]))
+      return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Seragam', created_at: 1 }] satisfies Purpose[]))
     }
     if (url.includes('/api/user')) {
       return Promise.resolve(jsonResponse({ id: 1, email: 'bendahara@example.org', created_at: 1 } satisfies AuthUser))
@@ -135,7 +135,7 @@ describe('Settings, all sections against one URL', () => {
     // background section while a dialog is up, and a wait written that way fails
     // whether or not the bug is present.
     await screen.findByText('Dompet Bendahara')
-    await waitFor(() => expect(screen.getByText('Kas Bidang')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Seragam')).toBeInTheDocument())
     await flushEffects()
 
     // The literal value, not percent-encoded: this entry was pushed as a

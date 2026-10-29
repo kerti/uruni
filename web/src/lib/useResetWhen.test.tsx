@@ -22,42 +22,42 @@ function Field({ open, seed, tick }: { open: boolean; seed: string; tick?: numbe
 
 describe('useResetWhen (#361)', () => {
   it('seeds on the very first render, the moment an effect would have', () => {
-    render(<Field open seed="Pelaksan" />)
-    expect(screen.getByRole('textbox')).toHaveValue('Pelaksan')
+    render(<Field open seed="Regule" />)
+    expect(screen.getByRole('textbox')).toHaveValue('Regule')
   })
 
   it('applies the seed before anything can be typed, so a clear and retype is never undone', async () => {
-    render(<Field open seed="Pelaksan" />)
+    render(<Field open seed="Regule" />)
     const input = screen.getByRole('textbox')
 
     await userEvent.clear(input)
-    await userEvent.type(input, 'Pelaksana')
+    await userEvent.type(input, 'Reguler')
 
-    expect(input).toHaveValue('Pelaksana')
+    expect(input).toHaveValue('Reguler')
   })
 
   it('leaves her typing alone across re-renders that do not change the key', async () => {
-    const { rerender } = render(<Field open seed="Pelaksan" tick={1} />)
-    await userEvent.type(screen.getByRole('textbox'), 'a')
+    const { rerender } = render(<Field open seed="Regule" tick={1} />)
+    await userEvent.type(screen.getByRole('textbox'), 'r')
 
-    rerender(<Field open seed="Pelaksan" tick={2} />)
+    rerender(<Field open seed="Regule" tick={2} />)
 
-    expect(screen.getByRole('textbox')).toHaveValue('Pelaksana')
+    expect(screen.getByRole('textbox')).toHaveValue('Reguler')
   })
 
   it('starts over when the dialog closes and opens again', async () => {
-    const { rerender } = render(<Field open seed="Pelaksan" />)
+    const { rerender } = render(<Field open seed="Regule" />)
     await userEvent.type(screen.getByRole('textbox'), ' (batal)')
 
-    rerender(<Field open={false} seed="Pelaksan" />)
-    rerender(<Field open seed="Pelaksan" />)
+    rerender(<Field open={false} seed="Regule" />)
+    rerender(<Field open seed="Regule" />)
 
-    expect(screen.getByRole('textbox')).toHaveValue('Pelaksan')
+    expect(screen.getByRole('textbox')).toHaveValue('Regule')
   })
 
   it('re-seeds when the thing it was seeded from changes', () => {
-    const { rerender } = render(<Field open seed="Pelaksan" />)
-    rerender(<Field open seed="Pelaksana" />)
-    expect(screen.getByRole('textbox')).toHaveValue('Pelaksana')
+    const { rerender } = render(<Field open seed="Regule" />)
+    rerender(<Field open seed="Reguler" />)
+    expect(screen.getByRole('textbox')).toHaveValue('Reguler')
   })
 })

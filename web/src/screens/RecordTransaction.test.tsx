@@ -30,7 +30,7 @@ const accounts = [
 ] satisfies Account[]
 
 const purposes = [
-  { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
+  { id: 10, kind: 'pass_through', name: 'Seragam', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
   { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
 ] satisfies Purpose[]
@@ -73,7 +73,7 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
 }
 
 /** Purpose balances, which the form fetches so the Titipan warning can answer
- * as she types. Kas Bidang holds 30.000 of somebody else's money; an out
+ * as she types. Seragam holds 30.000 of somebody else's money; an out
  * larger than that is the mis-tag the warning is about. */
 function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bankBalance = 250_000): Balances {
   return {
@@ -85,7 +85,7 @@ function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bank
       { id: 3, kind: 'bank', name: 'Bank Uji Coba', balance: bankBalance },
     ],
     purposes: [
-      { id: 10, kind: 'pass_through', name: 'Kas Bidang', balance: passThroughBalance },
+      { id: 10, kind: 'pass_through', name: 'Seragam', balance: passThroughBalance },
       { id: 11, kind: 'main', name: 'Kas utama', balance: 1_000_000 },
       { id: 12, kind: 'incidental', name: 'Halal bihalal RT', balance: 0 },
     ],
@@ -126,7 +126,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    // id 11 "Kas utama", not id 10 "Kas Bidang", which sorts first.
+    // id 11 "Kas utama", not id 10 "Seragam", which sorts first.
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
   })
 
@@ -280,9 +280,9 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
-    await fillOut('50000', 'Kas Bidang')
+    await fillOut('50000', 'Seragam')
 
-    expect(await screen.findByText(text.passThroughNegativeHint('Kas Bidang'))).toBeInTheDocument()
+    expect(await screen.findByText(text.passThroughNegativeHint('Seragam'))).toBeInTheDocument()
   })
 
   it('stays silent on a forward the titipan actually holds the money for', async () => {
@@ -290,9 +290,9 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
-    await fillOut('50000', 'Kas Bidang')
+    await fillOut('50000', 'Seragam')
 
-    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.passThroughNegativeHint('Seragam'))).not.toBeInTheDocument()
   })
 
   it('stays silent on money coming in, whatever the titipan holds', async () => {
@@ -302,9 +302,9 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: text.directionIn }))
-    await fillOut('50000', 'Kas Bidang')
+    await fillOut('50000', 'Seragam')
 
-    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.passThroughNegativeHint('Seragam'))).not.toBeInTheDocument()
   })
 
   it('stays silent for Kas Utama and for an amplop, which may go negative on their own terms', async () => {
@@ -316,7 +316,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 
     await fillOut('5000000', 'Halal bihalal RT')
 
-    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.passThroughNegativeHint('Seragam'))).not.toBeInTheDocument()
     expect(screen.queryByText(text.passThroughNegativeHint('Halal bihalal RT'))).not.toBeInTheDocument()
   })
 
@@ -325,9 +325,9 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
-    await fillOut('50000', 'Kas Bidang')
+    await fillOut('50000', 'Seragam')
 
-    await screen.findByText(text.passThroughNegativeHint('Kas Bidang'))
+    await screen.findByText(text.passThroughNegativeHint('Seragam'))
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 })
@@ -1058,9 +1058,9 @@ describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
     stub()
     renderRouted(vi.fn(), '/record?fronted=1')
     await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
-    await chooseOption(text.purposeLabel, 'Kas Bidang')
+    await chooseOption(text.purposeLabel, 'Seragam')
     await userEvent.type(screen.getByLabelText(text.amountLabel), '90000')
-    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.passThroughNegativeHint('Seragam'))).not.toBeInTheDocument()
   })
 
   async function fillClaimWithPhoto() {

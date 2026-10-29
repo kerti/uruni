@@ -19,9 +19,9 @@ func TestListsReadInTheirStatedOrder(t *testing.T) {
 	f := newFixture(t, l)
 	q := store.New(l.db)
 
-	tier := createDuesTier(t, q, f.fundID, "pelaksana")
+	tier := createDuesTier(t, q, f.fundID, "reguler")
 	createDuesTier(t, q, f.fundID, "Fungsional")
-	createDuesTier(t, q, f.fundID, "Madya")
+	createDuesTier(t, q, f.fundID, "Senior")
 	createDuesRate(t, q, tier, 25_000, "2026-01")
 	for _, name := range []string{"budi", "Zul", "Ani", "Cici"} {
 		createDuesMember(t, q, f.fundID, duesMemberParams{name: name, tierID: &tier})

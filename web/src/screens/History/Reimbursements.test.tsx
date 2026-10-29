@@ -44,7 +44,7 @@ const members = [
 ] satisfies Member[]
 
 const purposes = [
-  { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
+  { id: 10, kind: 'pass_through', name: 'Seragam', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
 ] satisfies Purpose[]
 

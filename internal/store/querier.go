@@ -437,7 +437,7 @@ type Querier interface {
 	// Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 	// purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 	// codebase's CAST idiom means "never NULL" - the opposite of what current_rate
-	// must say. A tier with no rate yet effective (the "madya TBD" case, PRD
+	// must say. A tier with no rate yet effective (the undecided-rate case, PRD
 	// section 6) and a member with no tier (NULL = NULL is never true) both read
 	// NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
 	// single row with the latest effective_from <= current_period per tier

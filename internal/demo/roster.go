@@ -46,7 +46,7 @@ func rate(key string, offset int) int64 {
 type when struct{ month, day int }
 
 // tierFrom is "from this month on the member is in this tier"; an empty tier is
-// Tanpa golongan (no dues obligation).
+// Tanpa kategori (no dues obligation).
 type tierFrom struct {
 	month int
 	tier  string
@@ -107,7 +107,7 @@ func ptr[T any](v T) *T { return &v }
 //	Mas Yoga      Agen          resigns in M-4
 //	Mas Rizki     Agen          falls behind from M-5
 //	Mbak Wulan    Agen          falls behind from M-3
-//	Pak Lingga    Agen          Tanpa golongan for M-9 and M-8
+//	Pak Lingga    Agen          Tanpa kategori for M-9 and M-8
 //	Mbak Anisa    Agen          joins from Shift Pagi in M-10
 //	Mas Fajar     Agen          joins in M-3
 var roster = []person{

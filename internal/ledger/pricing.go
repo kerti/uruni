@@ -77,7 +77,7 @@ func (p pricing) tierAt(memberID int64, period string) (tierID int64, ok bool) {
 
 // rateAt is the tier's rate at period: the latest month at or before it that
 // still has a rate (a deleted month is not among them). ok is false when no
-// rate is decided (the "madya TBD" case, or only deleted ones): the period is
+// rate is decided (the undecided-rate case, or only deleted ones): the period is
 // skipped, never invented.
 func (p pricing) rateAt(tierID int64, period string) (amount int64, ok bool) {
 	spans := p.rates[tierID]

@@ -22,7 +22,7 @@ const text = copy.settings.tiers
 /**
  * The rate in force for `month` - the latest row at or before it, as the
  * server's GetEffectiveDuesRate reads. Null when the tier has no rate yet, or
- * none that has started: both are legal states (PRD section 6's madya), not
+ * none that has started: both are legal states (PRD section 6's undecided rate), not
  * errors.
  */
 function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
@@ -41,7 +41,7 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
  *
  * **A new price is added; a mistyped one is corrected.** A new price is a new row
  * effective from a new month, because the old one still explains the months it
- * covered. A correction (PATCH of the amount, on the golongan's screen) reprices
+ * covered. A correction (PATCH of the amount, on the tier's screen) reprices
  * every month the rate covers and leaves a superseded row behind (ADR-040), so that
  * screen names the span and asks first. DELETE withdraws a rate filed against the
  * wrong month, so it can be added again at the right one.
@@ -68,7 +68,7 @@ export default function DuesTiers() {
   const tiers = state.data ?? []
   const target = parseDialogTarget('tier', value)
 
-  // This section owns one dialog - `tier:new` (editing lives on the golongan's
+  // This section owns one dialog - `tier:new` (editing lives on the tier's
   // screen) - so any other `tier:` value is a stale link to a dialog that no
   // longer exists here. Strip it rather than leave a parameter naming nothing:
   // `clear` and never `close`, and never a `foreign` value, for the reasons

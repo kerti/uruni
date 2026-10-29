@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 /** Where to look for the trigger. Two fields can share a label - a row being
- * edited and the add form below it both say "Golongan" - so a caller passes
+ * edited and the add form below it both say "Kategori" - so a caller passes
  * the row (or the form) to disambiguate. The *listbox* is always found on
  * `screen`: Radix portals it to the body, outside any scope. */
 type Scope = { getByRole: typeof screen.getByRole }

@@ -21,19 +21,19 @@ import type { DuesRate, DuesTier } from '@/lib/setup'
 
 const text = copy.settings.tiers
 
-/** One golongan and its rates, fetched together - the screen needs both. */
+/** One tier and its rates, fetched together - the screen needs both. */
 interface TierData {
   tier: DuesTier | null
   rates: DuesRate[]
 }
 
 /**
- * One golongan's screen, reached as `/dues-tiers?tier=<id>` from the Golongan
+ * One tier's screen, reached as `/dues-tiers?tier=<id>` from the Kategori
  * card in Pengaturan - the shape ADR-032 kept for the envelope detail view at
  * `/incidentals?purpose=<id>`, with the same single entry point and the same
  * redirect to Pengaturan when the parameter names nothing.
  *
- * It is a screen and not a dialog because a golongan holds a name and a price
+ * It is a screen and not a dialog because a tier holds a name and a price
  * history, and splitting them across dialogs does not fix two problems. The
  * rate history is an unbounded list, and ADR-032 draws the line itself -
  * "tabs when every panel is an unbounded list, sections when the panels are
@@ -52,7 +52,7 @@ interface TierData {
  * against the wrong month; add one at the right month. Either way the row that stood
  * is replaced by a new id, so the list reloads after every write.
  *
- * The rate history is deliberately not paged. A golongan carries a handful of
+ * The rate history is deliberately not paged. A tier carries a handful of
  * rates for all of 0.x, and paging for a volume that does not exist is the
  * creep CLAUDE.md's prime directive names.
  */
@@ -78,7 +78,7 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 
   const tier = state.data?.tier ?? null
 
-  // A `tier` id naming no golongan - a stale bookmark, or one deleted from
+  // A `tier` id naming no tier - a stale bookmark, or one deleted from
   // another device - goes back to Pengaturan, the screen that owns the list.
   // The answer App.tsx gives a missing or unparseable parameter, decided one
   // step later because only a fetch can tell.
@@ -406,8 +406,8 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
   )
 }
 
-/** Deleting the golongan itself, confirmed in place - never window.confirm(),
- * and on a screen there is no dialog to nest one inside. A golongan a member
+/** Deleting the tier itself, confirmed in place - never window.confirm(),
+ * and on a screen there is no dialog to nest one inside. A tier a member
  * is in comes back 409 referenced_by_other_records from that member's foreign
  * key, and the copy names why rather than restating the wire message
  * (ADR-014). */

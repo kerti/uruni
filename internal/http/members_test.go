@@ -815,12 +815,12 @@ func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
 }
 
 // A member's row carries its tier's name and the rate effective this month;
-// both read nil for a tier with no rate decided (the "madya TBD" case, PRD
+// both read nil for a tier with no rate decided (the undecided-rate case, PRD
 // section 6), never an invented amount.
 func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
-	tier := setUpTier(t, r, "Madya")
+	tier := setUpTier(t, r, "Senior")
 	// No rate posted for this tier at all: "TBD".
 
 	rec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID})
@@ -833,8 +833,8 @@ func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) 
 		t.Fatalf("GET /api/members = %d members, want 1", len(page.Members))
 	}
 	got := page.Members[0]
-	if got.TierName == nil || *got.TierName != "Madya" {
-		t.Errorf("tier_name = %v, want %q", got.TierName, "Madya")
+	if got.TierName == nil || *got.TierName != "Senior" {
+		t.Errorf("tier_name = %v, want %q", got.TierName, "Senior")
 	}
 	if got.CurrentRate != nil {
 		t.Errorf("current_rate = %v, want nil (tier has no rate effective yet)", got.CurrentRate)
