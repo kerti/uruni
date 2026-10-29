@@ -463,7 +463,7 @@ func (d *pdfDoc) transactions(p Page) {
 		d.text(pdfLine{text: Text.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		return
 	}
-	// amountW fits "+Rp 999.999.999.999" (33mm in bold 9.5pt, #540) with room
+	// amountW fits "+Rp999.999.999.999" (33mm in bold 9.5pt, #540) with room
 	// to spare: a figure that did not would wrap at its space.
 	const dateW, amountW = 32.0, 40.0
 	noteW := pdfContentW - dateW - amountW

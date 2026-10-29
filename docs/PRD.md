@@ -12,7 +12,7 @@ Uruni is a mobile app, backed by a community's **own self-hosted always-on serve
 
 ## 2. The problem (validated)
 
-From interview #1 (office-unit treasurer, 8 people, ~Rp 1–2M/month):
+From interview #1 (office-unit treasurer, 8 people, ~Rp1–2M/month):
 
 - Her hardest, most-hated task is **reconciliation** — making the recorded balance match the real money. Money sits in two places (cash wallet + a *personal* bank account mixed with her salary), the routine and incidental funds get lumped together, and people take cash to shop and forget to record it. So the numbers drift and she has to hunt down the gap.
 - **Chasing late payers is not a pain** (small group, everyone pays after payday, in-person nudge works).
@@ -66,7 +66,7 @@ Key entities:
 - **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. Kas Bidang). One pooled real balance, separated *in meaning*, not in separate pots.
 - **Member** — name + role/tier, with the tier held month by month: a change takes effect from a month and never reprices the months before it. No email/phone required (minimize data held).
 - **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD), effective from a month until the next rate. A mistaken rate is corrected by stating its month again: every month it covers is repriced, the earlier row stays behind, and nothing already paid moves.
-- **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional link to the transaction it reverses; optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy. An amount is at most Rp 999.999.999.999 and a date falls from 2000 up to today in the fund's time zone, so a slipped thumb is refused instead of posted. Saving the same entry again right after a lost answer does not record it twice: each submission carries a key, and the server remembers it for a day (outside the backup).
+- **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional link to the transaction it reverses; optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy. An amount is at most Rp999.999.999.999 and a date falls from 2000 up to today in the fund's time zone, so a slipped thumb is refused instead of posted. Saving the same entry again right after a lost answer does not record it twice: each submission carries a key, and the server remembers it for a day (outside the backup).
 - **Incidental collection** — a lightweight envelope: target/occasion, contributions in, disbursement out, and a **leftover** that rolls into Kas Utama when it closes.
 - **Reconciliation snapshot** — a point-in-time record of expected vs. actual balance per location, any difference, and how it was resolved.
 
@@ -94,7 +94,7 @@ Key entities:
 
 ### 7.4 Reimbursements
 - Record that a member fronted money → it becomes owed to them.
-- Settle the reimbursement when repaid. Receipt optional and never required (parking Rp 2.000 needs no nota). The payout's ledger row is described automatically — which member was reimbursed and the claim's own note — so recent activity and the report read the repayment instead of a bare amount. (Added 2026-09-08.)
+- Settle the reimbursement when repaid. Receipt optional and never required (parking Rp2.000 needs no nota). The payout's ledger row is described automatically — which member was reimbursed and the claim's own note — so recent activity and the report read the repayment instead of a bare amount. (Added 2026-09-08.)
 - **Waive it** when the member forgives the debt — the UI label is **"Putihkan"**. The claim was real and stays in the history; it just stops being owed. Reversible, because a waive can be mis-entered too. (Added 2026-08-27: settlement was the only exit the model had, so a claim nobody would ever repay sat in "what the fund owes" forever.)
 - **Correct or remove a claim entered wrongly** — the wrong amount, the wrong member, or one that should never have existed. Only until it is settled: after that the payout is a posted ledger row, and the correction is an ordinary adjusting entry like any other.
 
@@ -112,7 +112,7 @@ Key entities:
 - **The balance does not exclude it.** While the money sits in the wallet it really is in the wallet, so it counts — §6's "one pooled real balance, separated in meaning, not in separate pots" applies here too. Uruni does not track a levy as owed-but-unpaid and has no second "available" figure; a levy is an ordinary expense on the day it is paid. (Revised 2026-08-12: the original wording promised the balance would never be inflated by pass-through money, which required a second balance the treasurer would have to reconcile in her head — and would have been inconsistent anyway, since incidental collections are earmarked just as firmly and were never excluded. See [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Balance & home screen
-- Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
+- Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih RpX — cek?".
 - Optional breakdown by purpose tag.
 - **What the fund owes members** who fronted an expense (talangan not yet settled or waived), as one total, only when above zero. That money is still inside the balance; showing it beside the balance keeps the balance from reading as more spendable than it is. It opens the outstanding talangan list.
 - **Cash flow (Arus kas):** the running month's money in and money out, two figures in their own section above recent activity - no chart, no comparison ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).

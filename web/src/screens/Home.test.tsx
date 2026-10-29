@@ -26,14 +26,6 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** formatIDR's output for use as a getByText/findByText matcher: testing-library
- * normalizes the DOM text it searches (collapsing whitespace, including the
- * U+00A0 Intl.NumberFormat inserts after "Rp") but never a string matcher, so
- * a raw formatIDR() string with its NBSP intact never equals the DOM text. */
-function money(amount: number): string {
-  return formatIDR(amount).replace(/\u00a0/g, ' ')
-}
-
 // The purpose breakdown: 12 (pass_through) always qualifies, 13 (an open
 // incidental, per the default openIncidentals fixture) qualifies, and 14 (an
 // incidental with no matching open envelope, i.e. closed) does not.
@@ -162,7 +154,7 @@ describe('Home', () => {
       />,
     )
 
-    expect(await screen.findByText(money(1_450_000))).toBeInTheDocument()
+    expect(await screen.findByText(formatIDR(1_450_000))).toBeInTheDocument()
   })
 
   it('steps the hero down for a wide figure and stacks Arus kas, never wrapping a number (#540)', async () => {
@@ -179,9 +171,9 @@ describe('Home', () => {
       />,
     )
 
-    const hero = await screen.findByText(money(-ceiling))
+    const hero = await screen.findByText(formatIDR(-ceiling))
     expect(hero).toHaveClass('text-[28px]')
-    expect(screen.getByText(money(ceiling)).closest('dl')).toHaveClass('grid-cols-1')
+    expect(screen.getByText(formatIDR(ceiling)).closest('dl')).toHaveClass('grid-cols-1')
   })
 
   it('renders every account balances.accounts returns, in the order returned', async () => {
@@ -198,9 +190,9 @@ describe('Home', () => {
     )
 
     await screen.findByText('Tunai')
-    expect(screen.getByText(money(950_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(950_000))).toBeInTheDocument()
     expect(screen.getByText('Bank lama (nonaktif)')).toBeInTheDocument()
-    expect(screen.getByText(money(500_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(500_000))).toBeInTheDocument()
   })
 
   it('shows "last checked" from a reconciliation that has already been taken', async () => {
@@ -323,7 +315,7 @@ describe('Home', () => {
         onViewOwed={vi.fn()}
       />,
     )
-    await screen.findByText(money(1_450_000))
+    await screen.findByText(formatIDR(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
     document.dispatchEvent(new Event('visibilitychange'))
@@ -332,7 +324,7 @@ describe('Home', () => {
     // to loading on every app switch (a warm resume shows stale numbers unless
     // something re-reads them).
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
-    expect(screen.getByText(money(1_450_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(1_450_000))).toBeInTheDocument()
     expect(screen.queryByText(copy.common.loading)).not.toBeInTheDocument()
   })
 
@@ -370,7 +362,7 @@ describe('Home', () => {
         onViewOwed={vi.fn()}
       />,
     )
-    await screen.findByText(money(1_450_000))
+    await screen.findByText(formatIDR(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
     rerender(
@@ -404,7 +396,7 @@ describe('Home', () => {
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
       expect(screen.getByText('Kas Bidang')).toBeInTheDocument()
-      expect(screen.getByText(money(150_000))).toBeInTheDocument()
+      expect(screen.getByText(formatIDR(150_000))).toBeInTheDocument()
     })
 
     it('renders an open incidental purpose row with its balance', async () => {
@@ -422,7 +414,7 @@ describe('Home', () => {
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
       expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument()
-      expect(screen.getByText(money(300_000))).toBeInTheDocument()
+      expect(screen.getByText(formatIDR(300_000))).toBeInTheDocument()
     })
 
     // Purpose 14 ('17 Agustus') has no matching row in the open-incidentals
@@ -464,7 +456,7 @@ describe('Home', () => {
       const heading = await screen.findByText(copy.home.purposeBreakdownHeading)
       const rows = within(heading.closest('section') as HTMLElement).getAllByRole('listitem')
       expect(rows[0]).toHaveTextContent('Kas Utama')
-      expect(rows[0]).toHaveTextContent(money(1_000_000))
+      expect(rows[0]).toHaveTextContent(formatIDR(1_000_000))
       // A button too, though there is no envelope to open: it opens its own
       // history (see the Titipan test below).
       expect(within(rows[0]).getByRole('button')).toBeInTheDocument()
@@ -513,7 +505,7 @@ describe('Home', () => {
         />,
       )
 
-      const amount = await screen.findByText(money(-75_000))
+      const amount = await screen.findByText(formatIDR(-75_000))
       expect(amount.className).toContain('text-attention-text')
     })
 
@@ -576,7 +568,7 @@ describe('Home', () => {
       />,
     )
 
-    await screen.findByText(money(1_450_000))
+    await screen.findByText(formatIDR(1_450_000))
     expect(screen.queryByText('Lihat kegiatan insidental')).not.toBeInTheDocument()
   })
 
@@ -596,7 +588,7 @@ describe('Home', () => {
         />,
       )
 
-      await screen.findByText(money(1_450_000))
+      await screen.findByText(formatIDR(1_450_000))
       expect(screen.queryByText(copy.home.owedToMembers)).not.toBeInTheDocument()
     })
 
@@ -615,7 +607,7 @@ describe('Home', () => {
       )
 
       const row = await screen.findByRole('button', { name: new RegExp(copy.home.owedToMembers) })
-      expect(row).toHaveTextContent(money(75_000))
+      expect(row).toHaveTextContent(formatIDR(75_000))
       await userEvent.click(row)
       expect(onViewOwed).toHaveBeenCalledTimes(1)
     })
@@ -639,9 +631,9 @@ describe('Home', () => {
       await screen.findByText(copy.home.monthIn)
       const inFigure = screen.getByText(copy.home.monthIn).nextElementSibling
       const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
-      expect(inFigure).toHaveTextContent(money(-20_000))
+      expect(inFigure).toHaveTextContent(formatIDR(-20_000))
       expect(inFigure?.textContent).toMatch(/^-\u2060Rp/)
-      expect(outFigure).toHaveTextContent(money(85_000))
+      expect(outFigure).toHaveTextContent(formatIDR(85_000))
     })
 
     it('shows a negative keluar as served: a counted spend reversed in a later month (ADR-042)', async () => {
@@ -659,7 +651,7 @@ describe('Home', () => {
 
       await screen.findByText(copy.home.monthOut)
       const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
-      expect(outFigure).toHaveTextContent(money(-12_000))
+      expect(outFigure).toHaveTextContent(formatIDR(-12_000))
       expect(outFigure?.textContent).toMatch(/^-\u2060Rp/)
     })
 

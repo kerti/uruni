@@ -34,7 +34,7 @@ describe('AmountInput', () => {
     expect(onChange).toHaveBeenLastCalledWith(150_000)
   })
 
-  it('accepts twelve digits, the ceiling Rp 999.999.999.999', async () => {
+  it('accepts twelve digits, the ceiling Rp999.999.999.999', async () => {
     const onChange = vi.fn()
     render(<ControlledAmountInput onChange={onChange} />)
 

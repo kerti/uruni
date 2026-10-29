@@ -27,7 +27,7 @@ import type { OpenReconciliationLine } from '@/lib/reconciliations'
  * schema's CHECK is `difference_amount = actual_amount - recorded_amount`, so
  * a location holding less cash than the ledger says carries a negative one.
  * Summing the raw values would let a short location and an over location
- * cancel out and render "selisih Rp 0" while two gaps sit open, and a single
+ * cancel out and render "selisih Rp0" while two gaps sit open, and a single
  * short location would put a minus sign in the middle of the sentence.
  * Neither is what "how much is unaccounted for" means to a treasurer; the
  * per-line direction is the reconcile screen's job.

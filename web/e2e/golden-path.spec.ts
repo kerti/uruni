@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test'
 import { expect, logIn, seedEmail, seedPassword, test } from './fixtures'
 import { expectAccessible } from './a11y'
 
-// The fixture's money (cmd/uruni/seed_e2e.go): Tunai opens at Rp 1.000.000 and
+// The fixture's money (cmd/uruni/seed_e2e.go): Tunai opens at Rp1.000.000 and
 // Bank Uji Coba at zero. This file's instance is its own, so every figure below
 // follows from that and from what the earlier tests posted.
 const opening = 1_000_000
@@ -203,7 +203,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await page.getByRole('button', { name: copy.reconciliation.submit }).click()
     await page.getByRole('button', { name: copy.reconciliation.backToHome }).click()
 
-    // Home now reads "selisih Rp X", X being the open gap's size.
+    // Home now reads "selisih RpX", X being the open gap's size.
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.reconciliation.discrepancy(formatIDR(afterRecords - 1)))).toBeVisible()
     await expect(page.getByText(copy.reconciliation.matched)).toBeHidden()

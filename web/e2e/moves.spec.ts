@@ -11,7 +11,7 @@ import { chooseOption } from './popper'
 // figures it names - the whole promise these three make to the treasurer - so
 // each test reads the total and the figures on Beranda before and after.
 //
-// The fixture (cmd/uruni/seed_e2e.go): Tunai opens at Rp 1.000.000, Bank Uji
+// The fixture (cmd/uruni/seed_e2e.go): Tunai opens at Rp1.000.000, Bank Uji
 // Coba at zero, everything in Kas Utama, and one empty open envelope. Serial,
 // one story: each test starts from the figures the one before left.
 

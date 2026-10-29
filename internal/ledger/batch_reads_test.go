@@ -481,10 +481,10 @@ func TestBalancesEqualTheOneAtATimeBalances(t *testing.T) {
 		}
 	}
 	if savings == nil || savings.Balance != 0 {
-		t.Errorf("the untouched account = %+v, want present at Rp 0", savings)
+		t.Errorf("the untouched account = %+v, want present at Rp0", savings)
 	}
 	if balanceOf(r.emptyID) != 0 || balanceOf(r.closedEnv) != 0 {
-		t.Errorf("untouched %d and closed %d purposes, want Rp 0 each", balanceOf(r.emptyID), balanceOf(r.closedEnv))
+		t.Errorf("untouched %d and closed %d purposes, want Rp0 each", balanceOf(r.emptyID), balanceOf(r.closedEnv))
 	}
 	if balanceOf(r.f.passID) != 60_000 || balanceOf(r.envelope) == 0 || got.OwedToMembers != 25_000 {
 		t.Errorf("pass-through %d, envelope %d, owed %d, want 60000, non-zero, 25000", balanceOf(r.f.passID), balanceOf(r.envelope), got.OwedToMembers)

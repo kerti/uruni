@@ -31,7 +31,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 
 ## Non-negotiable engineering rules
 
-1. **Money is `int64` integer rupiah. Never floats.** Do all arithmetic in integers; format only at the display edge with `Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', minimumFractionDigits:0})`. Use tabular figures for amounts.
+1. **Money is `int64` integer rupiah. Never floats.** Do all arithmetic in integers; format only at the display edge, through `formatIDR` (`web/src/lib/money.ts`) and its server twin `money.FormatIDR`: the EYD form `Rp1.450.000`, no space, never Intl's `currency` style, whose spacing differs per browser (#724). Use tabular figures for amounts.
 2. **Balances are derived by summing the ledger.** Reconciliation compares integers exactly. This logic is the trust core — it must be covered by tests.
 3. **Transactions are immutable.** Corrections are new adjusting entries, never edits/deletes of posted rows.
 4. **Offline = unavailable.** No local data store, no write queue, no offline sync. When disconnected the app shows a clear "butuh koneksi" state. (Deliberate — do not add offline-first.)

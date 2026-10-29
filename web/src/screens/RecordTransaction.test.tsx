@@ -18,12 +18,6 @@ import type { Transfer } from '@/lib/transfers'
 
 const text = copy.record
 
-/** The same normalization Incidentals.test.tsx uses: formatIDR emits a
- * non-breaking space that a text matcher will not find otherwise. */
-function money(amount: number): string {
-  return formatIDR(amount).replace(/\u00a0/g, ' ')
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
   window.localStorage.clear()
@@ -501,8 +495,8 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
     void user
 
-    expect(screen.getByText(text.locationBalance(money(135_000)))).toBeInTheDocument()
-    expect(screen.getByText(text.locationBalance(money(250_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.locationBalance(formatIDR(135_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.locationBalance(formatIDR(250_000)))).toBeInTheDocument()
   })
 
   it('warns when the move would take the SOURCE below zero, without blocking it', async () => {
@@ -514,7 +508,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.fromLocationLabel, 'Tunai')
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
 
-    expect(await screen.findByText(text.locationGoesNegative(money(20_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.locationGoesNegative(formatIDR(20_000)))).toBeInTheDocument()
     // Never blocked: every other posting path allows an out larger than the
     // balance, and a real deposit from a wallet the app believes is empty has
     // to be recordable.
@@ -532,8 +526,8 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.fromLocationLabel, 'Tunai')
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
 
-    expect(screen.getByText(text.locationBalance(money(-80_000)))).toBeInTheDocument()
-    expect(screen.queryByText(text.locationGoesNegative(money(30_000)))).not.toBeInTheDocument()
+    expect(screen.getByText(text.locationBalance(formatIDR(-80_000)))).toBeInTheDocument()
+    expect(screen.queryByText(text.locationGoesNegative(formatIDR(30_000)))).not.toBeInTheDocument()
   })
 
   it('swaps the two locations in one tap - the deposit/withdraw pair reversed', async () => {
@@ -820,8 +814,8 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     stubPurposeMove(750_000, 120_000)
     const { user } = await choosePurposeMove()
 
-    expect(await screen.findByText(text.purposeBalance(money(750_000)))).toBeInTheDocument()
-    expect(screen.getByText(text.purposeBalance(money(120_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.purposeBalance(formatIDR(750_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.purposeBalance(formatIDR(120_000)))).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: text.swapPurposes }))
     expect(selectedOptionName(text.fromPurposeLabel)).toBe('Halal bihalal RT')
@@ -843,7 +837,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     stubPurposeMove(750_000)
     await choosePurposeMove()
 
-    expect(await screen.findByText(text.purposeBalance(money(750_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.purposeBalance(formatIDR(750_000)))).toBeInTheDocument()
   })
 
   it('refuses the same pos on both sides, saying why, and keeps submit disabled', async () => {
@@ -864,7 +858,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     await chooseOption(text.toPurposeLabel, 'Kas utama')
 
     await user.type(screen.getByLabelText(text.amountLabel), '200001')
-    expect(await screen.findByText(text.purposeInsufficientHint(money(200_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.purposeInsufficientHint(formatIDR(200_000)))).toBeInTheDocument()
     expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
 
     // Exactly the balance is allowed: the ledger's boundary, integer-exact.

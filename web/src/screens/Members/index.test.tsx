@@ -94,8 +94,8 @@ describe('Members screen', () => {
     renderMembers()
 
     const card = await screen.findByRole('button', { name: cardName(copy.members.roster.editVerb, 'Warga Satu') })
-    const renamedLine = copy.members.roster.tierRateLine('Pelaksana Muda', 'Rp 50.000')
-    const staleLine = copy.members.roster.tierRateLine('Pelaksana', 'Rp 50.000')
+    const renamedLine = copy.members.roster.tierRateLine('Pelaksana Muda', 'Rp50.000')
+    const staleLine = copy.members.roster.tierRateLine('Pelaksana', 'Rp50.000')
     await waitFor(() => expect(within(card).getByText(renamedLine)).toBeInTheDocument())
     expect(within(card).queryByText(staleLine)).not.toBeInTheDocument()
 

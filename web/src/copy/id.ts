@@ -291,10 +291,10 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
-      // Every amount has a ceiling of Rp 999.999.999.999 (12 digits). The
+      // Every amount has a ceiling of Rp999.999.999.999 (12 digits). The
       // amount input stops at 12 digits, so this is the fallback for a request
       // that got past it (a stale client, a direct API call).
-      amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp 999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
+      amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
       // A date outside the plausible window (before 2000, or past the field's
       // ceiling). The pickers keep inside it; this covers a stale form or a mistyped year.
       date_out_of_range: 'Tanggalnya di luar batas yang wajar — cek lagi, mungkin salah ketik tahunnya.',
@@ -1461,7 +1461,7 @@ export const copy = {
       collectedLabel: 'Terkumpul',
       disbursedLabel: 'Terpakai',
       // What the envelope holds now - PRD-ID's "sisa" for an envelope's
-      // leftover (section 7.5). Rp 0 once closed: the leftover rolled out.
+      // leftover (section 7.5). Rp0 once closed: the leftover rolled out.
       remainingLabel: 'Sisa',
       // An envelope's card list lives in Pengaturan, so this leads there.
       backToSettings: 'Kembali ke pengaturan',

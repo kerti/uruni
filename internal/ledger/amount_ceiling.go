@@ -7,7 +7,7 @@ import (
 )
 
 // ErrAmountTooLarge is returned by every write taking an amount above
-// money.MaxAmount, Rp 999.999.999.999 (#499).
+// money.MaxAmount, Rp999.999.999.999 (#499).
 //
 // It does not wrap ErrInvalidArgument: a too-large figure is well-formed, and
 // the treasurer needs the one thing to change (type a smaller number), not the

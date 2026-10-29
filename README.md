@@ -22,7 +22,7 @@ It does one job extremely well: **keep a small group's shared fund honest, with 
 - **Two money locations** (cash and bank), because that split is where the discrepancies come from.
 - **One pooled balance with purpose tags** — kas utama, incidental collections, pass-through to kas bidang — so funds stay separated *in meaning* without juggling separate pots.
 - **Per-member dues that vary by tier**, and a simple "who's paid" view.
-- **Reimbursements in seconds, receipts optional** — nobody wants a receipt for Rp 2.000 of parking.
+- **Reimbursements in seconds, receipts optional** — nobody wants a receipt for Rp2.000 of parking.
 - **A shareable public report** so anyone can see where the money went.
 
 That's the whole product. On purpose.
@@ -82,7 +82,7 @@ Uruni speaks like a helpful friend, not software.
 
 - *"Pengeluaran berhasil dicatat."*
 - *"Kas dan catatan sudah cocok. 🎉"*
-- *"Ada selisih Rp 15.000 — mau dicek bersama?"*
+- *"Ada selisih Rp15.000 — mau dicek bersama?"*
 
 Contributions to copy and UI should keep this tone: warm, human, never corporate. All user-facing copy is Bahasa Indonesia, sentence case.
 

@@ -14,7 +14,7 @@ Uruni adalah aplikasi mobile, ditopang oleh **server milik komunitas sendiri yan
 
 ## 2. Masalah (tervalidasi)
 
-Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp 1–2 juta/bulan):
+Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp1–2 juta/bulan):
 
 - Tugas yang paling sulit dan paling tidak disukainya adalah **rekonsiliasi** — mencocokkan saldo yang tercatat dengan uang yang sebenarnya. Uang berada di dua tempat (dompet tunai + rekening bank *pribadi* yang tercampur dengan gaji), kas rutin dan kas insidentil sering tergabung, dan ada saja yang mengambil uang tunai untuk belanja lalu lupa mencatatnya. Akibatnya angkanya melenceng dan ia harus mencari-cari selisihnya.
 - **Menagih yang telat bukanlah beban** (kelompok kecil, semua bayar habis gajian, ditagih langsung sudah cukup).
@@ -68,7 +68,7 @@ Entitas utama:
 - **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
 - **Anggota** — nama + peran/golongan, dengan golongan yang dicatat bulan demi bulan: perubahan berlaku mulai suatu bulan dan tidak pernah menghitung ulang bulan-bulan sebelumnya. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
 - **Tarif iuran** — nominal per golongan (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan), berlaku mulai suatu bulan sampai tarif berikutnya. Tarif yang salah diperbaiki dengan menyatakan bulannya lagi: semua bulan yang dicakupnya dihitung ulang, baris sebelumnya tetap tersimpan, dan yang sudah dibayar tidak bergerak.
-- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); kaitan opsional ke transaksi yang dibatalkannya; catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya. Nominal paling besar Rp 999.999.999.999 dan tanggal jatuh dari tahun 2000 sampai hari ini menurut zona waktu dana, sehingga jempol yang terpeleset ditolak, bukan diposting. Menyimpan entri yang sama lagi tepat setelah jawabannya hilang tidak mencatatnya dua kali: tiap pengiriman membawa kunci, dan server mengingatnya selama sehari (di luar cadangan).
+- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); kaitan opsional ke transaksi yang dibatalkannya; catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya. Nominal paling besar Rp999.999.999.999 dan tanggal jatuh dari tahun 2000 sampai hari ini menurut zona waktu dana, sehingga jempol yang terpeleset ditolak, bukan diposting. Menyimpan entri yang sama lagi tepat setelah jawabannya hilang tidak mencatatnya dua kali: tiap pengiriman membawa kunci, dan server mengingatnya selama sehari (di luar cadangan).
 - **Amplop** — pengumpulan ringan untuk satu peristiwa: keperluan/peristiwa, sumbangan masuk, penyaluran keluar, dan **sisa** yang dialihkan ke Kas Utama saat amplop ditutup.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
 
@@ -96,7 +96,7 @@ Entitas utama:
 
 ### 7.4 Talangan (reimbursement)
 - Mencatat bahwa seorang anggota menalangi lebih dulu → menjadi utang kepadanya.
-- Menyelesaikan talangan saat dibayar kembali. Nota opsional dan tidak pernah wajib (parkir Rp 2.000 tak perlu nota). Baris buku besar pembayarannya terdeskripsi otomatis — anggota yang diganti dan catatan klaimnya sendiri — sehingga aktivitas terbaru dan laporan terbaca sebagai talangan, bukan nominal telanjang. (Ditambahkan 2026-09-08.)
+- Menyelesaikan talangan saat dibayar kembali. Nota opsional dan tidak pernah wajib (parkir Rp2.000 tak perlu nota). Baris buku besar pembayarannya terdeskripsi otomatis — anggota yang diganti dan catatan klaimnya sendiri — sehingga aktivitas terbaru dan laporan terbaca sebagai talangan, bukan nominal telanjang. (Ditambahkan 2026-09-08.)
 - **Putihkan** saat anggota memaafkan utangnya — label di antarmuka adalah "Putihkan". Klaim tetap tercatat dalam riwayat; ia hanya berhenti menjadi utang. Dapat dibatalkan, karena pemutihan juga bisa salah dicatat.
 - **Perbaiki atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
 
@@ -114,7 +114,7 @@ Entitas utama:
 - **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam kantong yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Saldo & layar utama
-- Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".
+- Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih RpX — cek?".
 - Rincian opsional menurut pos.
 - **Yang masih harus dibayar ke anggota** yang menalangi (talangan yang belum dibayar atau diputihkan), sebagai satu total, hanya jika lebih dari nol. Uang itu masih termasuk dalam saldo; menampilkannya di samping saldo membuat saldo tidak terbaca lebih leluasa dipakai daripada kenyataannya. Ketukannya membuka daftar talangan yang belum dibayar.
 - **Arus kas:** uang masuk dan uang keluar bulan berjalan, dua angka di bagian tersendiri di atas aktivitas terbaru - tanpa grafik, tanpa perbandingan ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).

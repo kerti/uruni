@@ -11,7 +11,7 @@ import { cardButton } from './card'
 // ahead, paying part of a month, the belum-bayar filter, a backdated join date
 // that carries arrears onto the roster, and golongan and tarif in Pengaturan.
 //
-// Three members join this month on the fixture's Reguler tier (Rp 50.000),
+// Three members join this month on the fixture's Reguler tier (Rp50.000),
 // added over the API so each owes exactly the current month and nothing before
 // it: what this file shows about them is then down to what it does. Serial,
 // one story on the seeded fixture.

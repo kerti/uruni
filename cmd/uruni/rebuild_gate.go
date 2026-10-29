@@ -257,8 +257,8 @@ func backupTotal(doc backup.Document) (int64, error) {
 	return total.Int64(), nil
 }
 
-// formatRupiah renders whole rupiah for the operator's terminal: "Rp 1.250.000",
-// "-Rp 40.000". Integer only; it works on the decimal digits, so the most
+// formatRupiah renders whole rupiah for the operator's terminal: "Rp1.250.000",
+// "-Rp40.000". Integer only; it works on the decimal digits, so the most
 // negative int64 needs no negation.
 func formatRupiah(v int64) string {
 	digits := strconv.FormatInt(v, 10)
@@ -272,7 +272,7 @@ func formatRupiah(v int64) string {
 		b.WriteRune(c)
 	}
 	if neg {
-		return "-Rp " + b.String()
+		return "-Rp" + b.String()
 	}
-	return "Rp " + b.String()
+	return "Rp" + b.String()
 }

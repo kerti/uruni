@@ -79,9 +79,9 @@ test.describe('dues status', () => {
     const amounts = page.getByLabel(new RegExp(`^${amountPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
 
     // Emptied before it is filled, never filled straight over the pre-filled
-    // rate: this field renders "Rp 50.000" when blurred and the bare digits when
+    // rate: this field renders "Rp50.000" when blurred and the bare digits when
     // focused (AmountInput), and one fill() over that lands as the two runs of
-    // digits concatenated - 50000 then 12345 posted as Rp 5.000.012.345.
+    // digits concatenated - 50000 then 12345 posted as Rp5.000.012.345.
     // Clearing first matches the empty state golden-path.spec.ts fills.
     // nth below: each amount field is addressed by its period's position.
     for (const [index, value] of [

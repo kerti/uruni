@@ -17,10 +17,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function money(amount: number): string {
-  return formatIDR(amount).replace(/\u00a0/g, ' ')
-}
-
 const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
 
 const openEnvelope = {
@@ -173,10 +169,10 @@ describe('Incidentals', () => {
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i - 1].compareDocumentPosition(rows[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
-    expect(rows[0]).toHaveTextContent(money(500_000))
-    expect(rows[1]).toHaveTextContent(money(300_000))
-    expect(rows[2]).toHaveTextContent(money(120_000))
-    expect(rows[3]).toHaveTextContent(money(30_000))
+    expect(rows[0]).toHaveTextContent(formatIDR(500_000))
+    expect(rows[1]).toHaveTextContent(formatIDR(300_000))
+    expect(rows[2]).toHaveTextContent(formatIDR(120_000))
+    expect(rows[3]).toHaveTextContent(formatIDR(30_000))
   })
 
   it('leaves the target row out when the envelope has none', async () => {
@@ -270,7 +266,7 @@ describe('Incidentals', () => {
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
-    expect(screen.getAllByText(money(120_000))).toHaveLength(2)
+    expect(screen.getAllByText(formatIDR(120_000))).toHaveLength(2)
 
     // Open the close form and submit it
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -280,8 +276,8 @@ describe('Incidentals', () => {
 
     // The zero rollover is rendered, not hidden.
     await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
-    // Anchored to the rollover row: the card's Sisa also reads Rp 0 here.
-    expect(screen.getByText(text.close.rolledLabel(0)).parentElement).toHaveTextContent(money(0))
+    // Anchored to the rollover row: the card's Sisa also reads Rp0 here.
+    expect(screen.getByText(text.close.rolledLabel(0)).parentElement).toHaveTextContent(formatIDR(0))
   })
 
   it('sends the close note to the server, and null when the field was left alone', async () => {
@@ -618,7 +614,7 @@ describe('Incidentals', () => {
     // 10.000 collected, nothing spent, an envelope holding nothing - with the
     // sentence that explains it.
     expect(screen.getByText(text.close.rolledLabel(10_000))).toBeInTheDocument()
-    expect(screen.getAllByText(money(10_000))).toHaveLength(2)
+    expect(screen.getAllByText(formatIDR(10_000))).toHaveLength(2)
   })
 
   it('states a shortfall covered from Kas Utama, in its own direction', async () => {
@@ -646,7 +642,7 @@ describe('Incidentals', () => {
     // Signed, so the sentence changes rather than the amount's sign showing
     // (ADR-031); the figure itself stays absolute.
     expect(screen.getByText(text.close.rolledLabel(-30_000))).toBeInTheDocument()
-    expect(screen.getByText(money(30_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(30_000))).toBeInTheDocument()
   })
 
   it('states a square envelope as square, rather than saying nothing', async () => {
@@ -671,8 +667,8 @@ describe('Incidentals', () => {
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
-    // Anchored to the rollover row: the card's Sisa also reads Rp 0 here.
-    expect(screen.getByText(text.close.rolledLabel(0)).parentElement).toHaveTextContent(money(0))
+    // Anchored to the rollover row: the card's Sisa also reads Rp0 here.
+    expect(screen.getByText(text.close.rolledLabel(0)).parentElement).toHaveTextContent(formatIDR(0))
   })
 
   it('says nothing about a rollover on an envelope that is still open', async () => {
@@ -1027,14 +1023,14 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
 
     expect(await screen.findByText('Budi')).toBeInTheDocument()
     expect(screen.getByText(participationText.states.given)).toBeInTheDocument()
-    expect(screen.getByText(money(100_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(100_000))).toBeInTheDocument()
 
     expect(screen.getByText('Sri')).toBeInTheDocument()
     expect(screen.getByText(participationText.states.notGiven)).toBeInTheDocument()
 
     expect(screen.getByText('Ani')).toBeInTheDocument()
     expect(screen.getByText(participationText.states.underMinimum)).toBeInTheDocument()
-    expect(screen.getByText(money(20_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(20_000))).toBeInTheDocument()
   })
 
   it('renders "Kurang dari minimal" in neutral ink, never terracotta (Design-System.md)', async () => {
@@ -1068,7 +1064,7 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
 
     expect(await screen.findByText(participationText.otherHeading)).toBeInTheDocument()
     expect(screen.getByText('Tante Wati')).toBeInTheDocument()
-    expect(screen.getByText(money(30_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(30_000))).toBeInTheDocument()
   })
 
   it('shows the recipients as "Untuk: ..."', async () => {

@@ -2,23 +2,27 @@ import { describe, expect, it } from 'vitest'
 
 import { exceedsAmountCeiling, formatIDR, formatRupiahDigits, MAX_AMOUNT, MAX_AMOUNT_DIGITS, parseRupiah } from '@/lib/money'
 
-// Intl's id-ID currency output uses a non-breaking space after "Rp" - asserted
-// against a normalized string so these tests describe the digits and grouping,
-// which is what the rule is about, rather than one ICU version's spacing.
-function normalize(value: string): string {
-  return value.replace(/\u00a0/g, ' ')
-}
-
+// Exact strings, no normalizing: the format is the contract (#724). Intl's
+// currency style printed "Rp\u00a01.000" in Chrome and "Rp1.000" in Safari, so
+// these pin every character, including the absence of a space after "Rp".
 describe('formatIDR', () => {
-  it('renders integer rupiah with Indonesian grouping and no decimals', () => {
-    expect(normalize(formatIDR(1_000_000))).toBe('Rp 1.000.000')
-    expect(normalize(formatIDR(50_000))).toBe('Rp 50.000')
-    expect(normalize(formatIDR(0))).toBe('Rp 0')
+  it('renders integer rupiah in the EYD form: "Rp" against the digits, dot grouping, no decimals', () => {
+    expect(formatIDR(1_000_000)).toBe('Rp1.000.000')
+    expect(formatIDR(1_625_500)).toBe('Rp1.625.500')
+    expect(formatIDR(50_000)).toBe('Rp50.000')
+    expect(formatIDR(999)).toBe('Rp999')
+    expect(formatIDR(0)).toBe('Rp0')
+    expect(formatIDR(MAX_AMOUNT)).toBe('Rp999.999.999.999')
   })
 
   it('joins a negative figure\'s minus to "Rp" so a line can never break between them', () => {
-    expect(normalize(formatIDR(-15_000))).toBe('-\u2060Rp 15.000')
+    expect(formatIDR(-15_000)).toBe('-\u2060Rp15.000')
+    expect(formatIDR(-MAX_AMOUNT)).toBe('-\u2060Rp999.999.999.999')
     expect(parseRupiah(formatIDR(-15_000))).toBe(15_000)
+  })
+
+  it('never writes a negative zero', () => {
+    expect(formatIDR(-0)).toBe('Rp0')
   })
 })
 
@@ -70,7 +74,7 @@ describe('the amount ceiling', () => {
   })
 
   it('counts digits however they were written, and ignores leading zeros', () => {
-    expect(exceedsAmountCeiling('Rp 999.999.999.999')).toBe(false)
+    expect(exceedsAmountCeiling('Rp999.999.999.999')).toBe(false)
     expect(exceedsAmountCeiling('1.000.000.000.000')).toBe(true)
     expect(exceedsAmountCeiling('0000000000001')).toBe(false)
     expect(exceedsAmountCeiling('')).toBe(false)

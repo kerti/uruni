@@ -55,7 +55,7 @@ test.describe('receipt photos', () => {
     expect(readdirSync(instance.paths.uploadsDir, { recursive: true }).length).toBeGreaterThan(0)
 
     // The row now carries a photo - Riwayat's Transaksi tab is where an
-    // after-the-fact viewer lives, and this is the row just posted (Rp 12.000,
+    // after-the-fact viewer lives, and this is the row just posted (Rp12.000,
     // the newest in the list).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await expect(page.getByRole('button', { name: copy.receipts.viewReceipt }).first()).toBeVisible()

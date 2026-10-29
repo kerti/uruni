@@ -393,9 +393,9 @@ func TestRebuildReplacesAnOldSchemaDatabaseFromABackup(t *testing.T) {
 	out := f.out.String()
 	for _, want := range []string{
 		"funds: Kas Uji Rebuild",
-		"backup says   Rp 1.150.000",
-		"rebuilt says  Rp 1.150.000",
-		"old database  Rp 1.150.000",
+		"backup says   Rp1.150.000",
+		"rebuilt says  Rp1.150.000",
+		"old database  Rp1.150.000",
 		"not compared:",
 		"login carried over: " + rebuildTestEmail,
 	} {
@@ -641,7 +641,7 @@ func TestRebuildRefusesABackupWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	assertNothingWritten(t, f, before)
 }
 
-// A backup holding a figure above the Rp 999.999.999.999 ceiling (#622) is
+// A backup holding a figure above the Rp999.999.999.999 ceiling (#622) is
 // refused by the schema's CHECK while the scratch database is filled, with the
 // totals block made true for it so the totals proof cannot be what refuses.
 func TestRebuildRefusesABackupWithAnAmountAboveTheCeiling(t *testing.T) {
@@ -794,9 +794,9 @@ func TestRebuildUsage(t *testing.T) {
 func TestFormatRupiah(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[int64]string{
-		0: "Rp 0", 7: "Rp 7", 999: "Rp 999", 1000: "Rp 1.000", 1_150_000: "Rp 1.150.000",
-		-40_000: "-Rp 40.000", 9_223_372_036_854_775_807: "Rp 9.223.372.036.854.775.807",
-		-9_223_372_036_854_775_808: "-Rp 9.223.372.036.854.775.808",
+		0: "Rp0", 7: "Rp7", 999: "Rp999", 1000: "Rp1.000", 1_150_000: "Rp1.150.000",
+		-40_000: "-Rp40.000", 9_223_372_036_854_775_807: "Rp9.223.372.036.854.775.807",
+		-9_223_372_036_854_775_808: "-Rp9.223.372.036.854.775.808",
 	} {
 		if got := formatRupiah(in); got != want {
 			t.Errorf("formatRupiah(%d) = %q, want %q", in, got, want)

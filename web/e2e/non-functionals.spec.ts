@@ -18,7 +18,7 @@ import { expect, logIn, test } from './fixtures'
 //     centred, with the header and the footer's buttons inside it.
 //   - Beranda's Arus kas totals, and a negative pos shown plainly.
 //
-// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama, the
+// Serial, one story on the seeded fixture (Tunai Rp1.000.000, Kas Utama, the
 // open envelope "Amplop Uji Laporan"). Money is seeded over the API.
 
 const envelope = 'Amplop Uji Laporan'

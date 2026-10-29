@@ -58,7 +58,7 @@ test.describe('reimbursements', () => {
     // Then Riwayat's Talangan tab, where the claim lives.
     await openTalangan(page)
     // The claim should now be in the outstanding list
-    await expect(page.getByText('Rp 10.000')).toBeVisible()
+    await expect(page.getByText('Rp10.000')).toBeVisible()
   })
 
   test('settle the claim and verify it disappears from outstanding', async ({ page }) => {
@@ -88,7 +88,7 @@ test.describe('reimbursements', () => {
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
 
     // The settled claim is no longer owed, so it leaves the outstanding list
-    await expect(page.getByText('Rp 10.000')).not.toBeVisible()
+    await expect(page.getByText('Rp10.000')).not.toBeVisible()
 
     // The payout row carries a label built from the claim it settled (a display
     // label, never stored text) - the member's name, with the HandHelping icon
@@ -102,15 +102,15 @@ test.describe('reimbursements', () => {
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // The earlier claim was settled - record a fresh one to correct (Rp 30.000).
+    // The earlier claim was settled - record a fresh one to correct (Rp30.000).
     await recordClaim(page, '30000')
     await openTalangan(page)
-    await expect(page.getByText('Rp 30.000')).toBeVisible()
+    await expect(page.getByText('Rp30.000')).toBeVisible()
 
     // Perbaiki sits in the row's "more" menu and opens the claim's screen.
     await chooseMenuItem(
       page,
-      page.locator('li', { hasText: 'Rp 30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
+      page.locator('li', { hasText: 'Rp30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
       copy.reimbursements.actions.correct,
       { exact: true },
     )
@@ -128,8 +128,8 @@ test.describe('reimbursements', () => {
     // Back on the tab with the confirmation and the corrected amount.
     await expect(page).toHaveURL(/\/history\/reimbursements$/)
     await expect(page.getByText(copy.reimbursements.correct.success)).toBeVisible()
-    await expect(page.getByText('Rp 35.000')).toBeVisible()
-    await expect(page.getByText('Rp 30.000')).not.toBeVisible()
+    await expect(page.getByText('Rp35.000')).toBeVisible()
+    await expect(page.getByText('Rp30.000')).not.toBeVisible()
 
     // Settle it so the next test starts from an empty outstanding list.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
@@ -144,27 +144,27 @@ test.describe('reimbursements', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // The earlier claim was settled, leaving the outstanding list empty -
-    // record a fresh claim to waive. First member again, Rp 20.000.
+    // record a fresh claim to waive. First member again, Rp20.000.
     await recordClaim(page, '20000')
     await openTalangan(page)
-    await expect(page.getByText('Rp 20.000')).toBeVisible()
+    await expect(page.getByText('Rp20.000')).toBeVisible()
 
     // Waive it: the row leaves the outstanding list and feedback confirms.
     // Putihkan sits in the row's "more" menu, behind the one plain Bayar.
     await chooseMenuItem(
       page,
-      page.locator('li', { hasText: 'Rp 20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
+      page.locator('li', { hasText: 'Rp20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
       copy.reimbursements.actions.waive,
       { exact: true },
     )
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
-    await expect(page.getByText('Rp 20.000')).not.toBeVisible()
+    await expect(page.getByText('Rp20.000')).not.toBeVisible()
 
     // The all tab carries the waived row, with "Batalkan pemutihan" where the
     // outstanding tab (which filters waived rows out) can never reach. The
     // row-scoped badge locators avoid the tab button's identical label.
     await page.getByRole('button', { name: copy.reimbursements.allTab }).click()
-    const row = page.locator('li', { hasText: 'Rp 20.000' })
+    const row = page.locator('li', { hasText: 'Rp20.000' })
     await expect(row.getByText(copy.reimbursements.status.waived)).toBeVisible()
     await expect(page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true })).toBeVisible()
 

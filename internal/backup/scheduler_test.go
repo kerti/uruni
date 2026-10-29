@@ -157,7 +157,7 @@ func TestSafeTickLogsTheTypeNotTheValue(t *testing.T) {
 	}{
 		{
 			name:      "a string built from data",
-			panicWith: func() { panic("member Siti Aminah owes Rp 50000") },
+			panicWith: func() { panic("member Siti Aminah owes Rp50000") },
 			wantIn:    `"panic":"string"`,
 			wantNotIn: "Siti",
 		},

@@ -112,7 +112,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     })
 
     // Dues: one payment a month for Warga Satu from 2024-01, and one for
-    // Warga Dua, at the fixture's Rp 50.000 rate.
+    // Warga Dua, at the fixture's Rp50.000 rate.
     for (let i = 0; i <= PAGE; i++) {
       const period = `${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`
       await api(request, 'POST', '/api/dues-payments', {

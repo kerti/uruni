@@ -20,10 +20,6 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function money(amount: number): string {
-  return formatIDR(amount).replace(/\u00a0/g, ' ')
-}
-
 function payment(id: number, memberName: string, overrides: Partial<DuesPaymentHistoryRow> = {}): DuesPaymentHistoryRow {
   return {
     id,
@@ -87,7 +83,7 @@ describe('PaymentHistory', () => {
 
     expect(await screen.findByRole('heading', { name: text.heading })).toBeInTheDocument()
     expect(screen.getByText('Warga Satu')).toBeInTheDocument()
-    expect(screen.getByText(money(25_000))).toBeInTheDocument()
+    expect(screen.getByText(formatIDR(25_000))).toBeInTheDocument()
   })
 
   it('says nothing recorded yet when the fund has no dues payments', async () => {

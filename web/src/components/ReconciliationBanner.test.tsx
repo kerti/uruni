@@ -44,10 +44,8 @@ describe('ReconciliationBanner', () => {
     ]
     render(<ReconciliationBanner openLines={openLines} everReconciled />)
 
-    // 15_000 + 5_000 = 20_000, plain integer addition. The U+00A0 formatIDR
-    // puts after "Rp" is collapsed to a space because getByText normalizes the
-    // DOM text but never the string matcher.
-    const expected = copy.reconciliation.discrepancy(formatIDR(20_000)).replace(/\u00a0/g, ' ')
+    // 15_000 + 5_000 = 20_000, plain integer addition.
+    const expected = copy.reconciliation.discrepancy(formatIDR(20_000))
     expect(screen.getByText(expected)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.matched)).not.toBeInTheDocument()
   })
@@ -58,15 +56,15 @@ describe('ReconciliationBanner', () => {
     const partial = line({ difference_amount: 30_000, remainder_amount: 10_000, resolution: 'entry_added', adjustment_transaction_id: 7 })
     render(<ReconciliationBanner openLines={[partial]} everReconciled />)
 
-    const expected = copy.reconciliation.discrepancy(formatIDR(10_000)).replace(/\u00a0/g, ' ')
+    const expected = copy.reconciliation.discrepancy(formatIDR(10_000))
     expect(screen.getByText(expected)).toBeInTheDocument()
-    expect(screen.queryByText(copy.reconciliation.discrepancy(formatIDR(30_000)).replace(/\u00a0/g, ' '))).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.reconciliation.discrepancy(formatIDR(30_000)))).not.toBeInTheDocument()
   })
 
   it('sums by magnitude, so a short location and an over one never cancel out', () => {
     // difference_amount is signed (actual - recorded): -20_000 is a location
     // holding less than the ledger says, +20_000 one holding more. Summing the
-    // raw values would render "selisih Rp 0" with two gaps still open, and
+    // raw values would render "selisih Rp0" with two gaps still open, and
     // never "cocok"'s green - the worst of both.
     const openLines = [
       line({ id: 1, difference_amount: -20_000, remainder_amount: -20_000 }),
@@ -74,14 +72,14 @@ describe('ReconciliationBanner', () => {
     ]
     render(<ReconciliationBanner openLines={openLines} everReconciled />)
 
-    const expected = copy.reconciliation.discrepancy(formatIDR(40_000)).replace(/\u00a0/g, ' ')
+    const expected = copy.reconciliation.discrepancy(formatIDR(40_000))
     expect(screen.getByText(expected)).toBeInTheDocument()
   })
 
   it('renders a single short location without a minus sign in the sentence', () => {
     render(<ReconciliationBanner openLines={[line({ difference_amount: -15_000, remainder_amount: -15_000 })]} everReconciled />)
 
-    const expected = copy.reconciliation.discrepancy(formatIDR(15_000)).replace(/\u00a0/g, ' ')
+    const expected = copy.reconciliation.discrepancy(formatIDR(15_000))
     expect(screen.getByText(expected)).toBeInTheDocument()
   })
 
@@ -104,7 +102,7 @@ describe('ReconciliationBanner', () => {
     it('paints selisih in the attention (terracotta) tokens, never destructive', () => {
       render(<ReconciliationBanner openLines={[line({ difference_amount: -15_000, remainder_amount: -15_000 })]} everReconciled />)
 
-      const el = panel(copy.reconciliation.discrepancy(formatIDR(15_000)).replace(/\u00a0/g, ' '))
+      const el = panel(copy.reconciliation.discrepancy(formatIDR(15_000)))
       expect(el).toHaveClass('bg-attention-soft', 'text-attention-text')
       expect(el?.className).not.toMatch(/success|destructive/)
     })

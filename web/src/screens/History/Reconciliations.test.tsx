@@ -105,7 +105,7 @@ describe('Reconciliations tab (Cek kas)', () => {
     const rows = await screen.findAllByRole('button')
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent(text.resolutionOptions.matched)
-    expect(rows[1]).toHaveTextContent(text.selisihBadge('Rp 15.000'))
+    expect(rows[1]).toHaveTextContent(text.selisihBadge('Rp15.000'))
   })
 
   it('loads the next page from the cursor and drops the button on the last page', async () => {
@@ -143,7 +143,7 @@ describe('Reconciliations tab (Cek kas)', () => {
     await user.click(await screen.findByRole('button', { name: /Selisih/ }))
 
     expect(await screen.findByText('Tunai')).toBeInTheDocument()
-    expect(screen.getByText(`${text.differenceLabel}: -\u2060Rp 15.000`, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(`${text.differenceLabel}: -\u2060Rp15.000`, { exact: false })).toBeInTheDocument()
     expect(screen.getByText('Hitungan bulan ini')).toBeInTheDocument()
   })
 

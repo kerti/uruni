@@ -2,22 +2,13 @@ package money
 
 import "strconv"
 
-// currencySymbolSpace separates "Rp" from the digits: U+00A0, the no-break
-// space (UTF-8 C2 A0), as Intl.NumberFormat('id-ID', {style: 'currency',
-// currency: 'IDR'}) writes it. A plain space would let a line break strand
-// "Rp" from its figure and print amounts differently from the app. Written as
-// escaped bytes so the source stays ASCII.
-const currencySymbolSpace = "\xc2\xa0"
-
-// FormatIDR renders an Amount as the SPA does:
-//
-//	new Intl.NumberFormat('id-ID', {style: 'currency', currency: 'IDR',
-//	    minimumFractionDigits: 0}).format(n)
-//
-// That is "Rp", U+00A0, the digits grouped in threes with a dot, and a negative
-// amount's minus in front of "Rp" ("-Rp 120.000"). The report (ADR-035)
-// renders server-side with no JavaScript, so this is the second copy of that
-// format; the golden test beside it pins the two together.
+// FormatIDR renders an Amount as the SPA's formatIDR (web/src/lib/money.ts)
+// does: "Rp" against the digits with no space, the digits grouped in threes
+// with a dot, and a negative amount's minus in front of "Rp" ("-Rp120.000").
+// That is the EYD form (#724); the SPA builds it by hand rather than through
+// Intl's currency style, whose spacing differs between browser engines. The
+// report (ADR-035) renders server-side with no JavaScript, so this is the
+// second copy of that format; the golden test beside it pins the two together.
 //
 // It formats the decimal text and splits the sign off it, rather than negating
 // the amount, so math.MinInt64, which cannot be negated as an int64, formats
@@ -38,5 +29,5 @@ func FormatIDR(a Amount) string {
 		out = append(out, digits[i])
 	}
 
-	return sign + "Rp" + currencySymbolSpace + string(out)
+	return sign + "Rp" + string(out)
 }

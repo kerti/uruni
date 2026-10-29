@@ -10,27 +10,27 @@
 // goes through parseFloat, so a typed "1.000.000" cannot become 1 or
 // 1000000.0000001 on the way to the server.
 
-const idrFormatter = new Intl.NumberFormat('id-ID', {
-  style: 'currency',
-  currency: 'IDR',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-})
+// No currency style on purpose (#724): Intl's id-ID currency output depends
+// on the engine's ICU data - Chrome and Node write "Rp\u00a01.000", Safari
+// "Rp1.000" - so one app would print one figure two ways. Uruni writes the
+// EYD form, "Rp" against the digits with no space, built from the grouping
+// alone so no engine decides. internal/money.FormatIDR is the server's copy.
+const groupFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 })
 
-/** Renders integer rupiah as "Rp 1.000.000" for display only. */
+/** Renders integer rupiah as "Rp1.000.000" for display only. */
 export function formatIDR(amount: number): string {
   // A word joiner after the minus: "-" before a letter is a line-break
-  // opportunity, so a narrow row could split "-Rp 999.999.999.999" into "-"
-  // and "Rp ...", and a clipped number is a wrong number. U+2060 is invisible
-  // and forbids that break; the non-breaking space Intl puts after "Rp"
-  // already holds the rest together.
-  return idrFormatter.format(amount).replace(/^-/, '-\u2060')
+  // opportunity, so a narrow row could split "-Rp999.999.999.999" into "-"
+  // and "Rp...", and a clipped number is a wrong number. U+2060 is invisible
+  // and forbids that break; "Rp" against a digit is no break opportunity, so
+  // the rest holds together on its own.
+  const figure = 'Rp' + groupFormatter.format(Math.abs(amount))
+  return amount < 0 ? '-\u2060' + figure : figure
 }
 
 // The grouped form a treasurer sees while typing: no "Rp", just the digits
 // with Indonesian thousands separators, so an <input> can echo what she typed
 // without the currency symbol fighting the caret.
-const groupFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 })
 
 /** Renders integer rupiah as "1.000.000" - the grouped form for an input's value. */
 export function formatRupiahDigits(amount: number): string {
@@ -38,7 +38,7 @@ export function formatRupiahDigits(amount: number): string {
 }
 
 /**
- * The largest amount Uruni accepts anywhere: Rp 999.999.999.999, twelve
+ * The largest amount Uruni accepts anywhere: Rp999.999.999.999, twelve
  * digits (the server's money.MaxAmount). Twelve digits is well under 2^53, so
  * the JS number an input parses to is always the exact figure typed - past
  * that, Number() silently rounds, a rule 1 breach at the edge.

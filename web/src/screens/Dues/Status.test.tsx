@@ -102,9 +102,6 @@ describe('DuesStatus', () => {
     expect(screen.getByText(text.statuses.paid)).toBeInTheDocument()
     expect(screen.getByText(text.statuses.paid_in_advance)).toBeInTheDocument()
 
-    // formatIDR puts a non-breaking space after "Rp". This matcher reads
-    // el.textContent, the raw DOM text, so the NBSP is compared as-is - unlike
-    // testing-library's string matchers, which normalize it away.
     expect(screen.getAllByText((_content, el) => el?.textContent === `${text.owedLabel}: ${formatIDR(50_000)}`).length).toBeGreaterThan(0)
   })
 

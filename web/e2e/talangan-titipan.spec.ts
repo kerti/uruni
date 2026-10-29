@@ -16,7 +16,7 @@ import { cardButton } from './card'
 // Paging and search on Belum dibayar live in browsing.spec.ts; this file adds
 // the Semua tab's search, where a settled claim is still found.
 //
-// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama, Warga
+// Serial, one story on the seeded fixture (Tunai Rp1.000.000, Kas Utama, Warga
 // Satu and Warga Dua). Claims are seeded over the API: the record form has its
 // own journey in reimbursements.spec.ts.
 
@@ -276,7 +276,7 @@ test.describe('talangan and titipan', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     const fundTotal = async () => (await api<{ fund_total: number }>(page.context().request, 'GET', '/api/balances')).fund_total
 
-    // The kas stands at Rp 1.000.000 less the settled Rp 9.000 claim.
+    // The kas stands at Rp1.000.000 less the settled Rp9.000 claim.
     // Masuk: held for someone else, but it counts in the kas while it sits there.
     await recordForPos(page, 'in', titipan, 250_000)
     await expect(berandaRow(page, titipan)).toContainText(formatIDR(250_000))

@@ -58,7 +58,7 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 | `--destructive` | `#B4453C` | destructive actions only (delete) |
 | `--destructive-foreground` | `#FFFFFF` | text on destructive |
 
-The reconciliation states are the emotional heart: **reconciled = success green + a small, satisfying confirmation; discrepancy = warm terracotta, calm and non-punishing** ("Ada selisih Rp 15.000 — cek bareng?").
+The reconciliation states are the emotional heart: **reconciled = success green + a small, satisfying confirmation; discrepancy = warm terracotta, calm and non-punishing** ("Ada selisih Rp15.000 — cek bareng?").
 
 ## Typography
 
@@ -111,7 +111,7 @@ Never hand a bare `'YYYY-MM-DD'` to the `Date` constructor — it parses as UTC 
 
 ## Numbers & currency
 
-- Format with `Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 })` → `Rp 1.450.000` (dot thousands separators, no decimals).
+- Format as `Rp1.450.000`: the EYD form, `Rp` against the digits with no space, dot thousands separators, no decimals; a negative is `-Rp15.000`. One form on every device: `formatIDR` builds it from the grouping alone, not from `Intl`'s `currency` style, which Chrome renders with a space and Safari without (#724).
 - Store as `int64` rupiah (see Tech-Design ADR-006); format only at the display edge.
 
 ## Motion
@@ -123,7 +123,7 @@ Calm and quick: 150–250ms ease-out. The reconciled confirmation may use a gent
 Warm, human, Bahasa Indonesia first (see Positioning). Examples:
 
 - Success: *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan sudah cocok. 🎉"*
-- Attention: *"Ada selisih Rp 15.000 — mau dicek bareng?"*
+- Attention: *"Ada selisih Rp15.000 — mau dicek bareng?"*
 - Dues: *"Masih ada 3 teman yang belum sempat membayar."*
 
 Emoji used *sparingly*, only for warmth on positive states.
