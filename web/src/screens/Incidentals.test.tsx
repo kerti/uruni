@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Incidentals from '@/screens/Incidentals'
-import { chooseOption } from '@/test/select'
+import { chooseOption, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, Participant } from '@/lib/incidentals'
@@ -15,6 +15,7 @@ const text = copy.incidentals
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.localStorage.clear()
 })
 
 const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
@@ -369,6 +370,51 @@ describe('Incidentals', () => {
 
     await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
     expect(posted).toMatchObject({ note: null })
+  })
+
+  it('opens the close form on the last-used location, and remembers the one it closed with (#737)', async () => {
+    window.localStorage.setItem('uruni:record:last-account-id', '3')
+    const twoAccounts = [accounts[0], { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 }]
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 120_000,
+      disbursed_amount: 0,
+      balance_amount: 120000,
+      target_amount: null,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' } satisfies Incidental
+    let posted: unknown = null
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        const method = (init?.method ?? 'GET').toUpperCase()
+        if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
+        if (method === 'GET' && url.includes('/api/transactions'))
+          return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+        if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+        if (method === 'POST' && url.includes('/api/incidentals/1/close')) {
+          posted = JSON.parse(String(init?.body))
+          return Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 120_000 }))
+        }
+        if (method === 'GET' && url.includes('/api/incidentals/1')) return Promise.resolve(jsonResponse(detail))
+        if (method === 'GET' && url.includes('/api/accounts')) return Promise.resolve(jsonResponse(twoAccounts))
+        return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      }),
+    )
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
+    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    expect(selectedOptionName(text.close.accountLabel)).toBe('Bank Uji Coba')
+    await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
+
+    await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
+    expect(posted).toMatchObject({ account_id: 3 })
+    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('3')
   })
 
   it('a second close attempt surfaces the named 409 refusal', async () => {

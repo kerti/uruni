@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Correct from '@/screens/Reimbursements/Correct'
 import Settle from '@/screens/Reimbursements/Settle'
-import { chooseOption } from '@/test/select'
+import { chooseOption, selectedOptionName, selectOptionNames } from '@/test/select'
 import { copy } from '@/copy/id'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement } from '@/lib/reimbursements'
@@ -15,6 +15,7 @@ const text = copy.reimbursements
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.localStorage.clear()
 })
 
 const members = [
@@ -141,6 +142,48 @@ describe('Settle', () => {
       ),
   }
 
+  const twoAccounts = [...accounts, { id: 2, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 }] satisfies Account[]
+  const withAccounts = (list: Account[]): Handler[] => [
+    ...lookups.filter((h) => !h.match('GET', '/api/accounts')),
+    { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(list)) },
+  ]
+
+  it('opens Bayar dari on the last-used location, else the first active one, and remembers the one it paid from (#737)', async () => {
+    window.localStorage.setItem('uruni:record:last-account-id', '2')
+    const fetchMock = routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)])
+    vi.stubGlobal('fetch', fetchMock)
+    const onDone = vi.fn()
+    const { unmount } = renderScreen(<Settle claimId={1} onDone={onDone} onCancel={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.settle.heading })
+    expect(selectedOptionName(text.settle.accountLabel)).toBe('Bank Uji Coba')
+    await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 2 })
+    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('2')
+    unmount()
+
+    window.localStorage.setItem('uruni:record:last-account-id', '99')
+    vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)]))
+    renderScreen(<Settle claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByRole('heading', { name: text.settle.heading })
+    expect(selectedOptionName(text.settle.accountLabel)).toBe('Tunai')
+  })
+
+  it('says whose claim it is and what for before she pays it', async () => {
+    vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...lookups]))
+    renderScreen(<Settle claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.settle.heading })
+    const summary = screen.getAllByRole('definition')[0].closest('dl')!
+    expect(summary).toHaveTextContent(`${text.record.memberLabel}Jane`)
+    expect(summary).toHaveTextContent(`${text.record.purposeLabel}Kas Utama`)
+    expect(summary).toHaveTextContent(`${text.record.dateLabel}1 September 2026`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.noteLabel}Parkir`)
+    expect(summary).toHaveTextContent(`${text.record.amountLabel}Rp15.000`)
+  })
+
   it('settles the claim and calls onDone', async () => {
     vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...lookups]))
     const onDone = vi.fn()
@@ -212,6 +255,55 @@ describe('Correct', () => {
     const patchCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')
     body = JSON.parse(String(patchCall?.[1]?.body))
     expect(body).toMatchObject({ member_id: 1, purpose_id: 11, amount: 15_000, incurred_on: '2026-09-01', note: 'Parkir' })
+  })
+
+  const envelopes = [
+    ...purposes,
+    { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
+    { id: 13, kind: 'incidental', name: 'Tutup buku', created_at: 1 },
+  ] satisfies Purpose[]
+  // The server drops a closed envelope (13) from ?selectable=true and from
+  // nothing else.
+  const purposeLists: Handler = {
+    match: (m, u) => m === 'GET' && u.includes('/api/purposes'),
+    handle: () => Promise.resolve(jsonResponse(envelopes)),
+  }
+  const selectablePurposeList: Handler = {
+    match: (m, u) => m === 'GET' && u.includes('/api/purposes?selectable=true'),
+    handle: () => Promise.resolve(jsonResponse(envelopes.filter((p) => p.id !== 13))),
+  }
+  const others = lookups.filter((h) => !h.match('GET', '/api/purposes'))
+
+  it('lists no closed envelope as a pos', async () => {
+    vi.stubGlobal('fetch', routedFetch([getClaim(claim()), selectablePurposeList, purposeLists, ...others]))
+    renderScreen(<Correct claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.correct.heading })
+    expect(await selectOptionNames(text.record.purposeLabel)).toEqual(['Seragam', 'Kas Utama', 'Halal bihalal RT'])
+  })
+
+  it("keeps the claim's own pos listed when its envelope has since closed, so the value still renders", async () => {
+    vi.stubGlobal('fetch', routedFetch([getClaim(claim({ purpose_id: 13 })), selectablePurposeList, purposeLists, ...others]))
+    renderScreen(<Correct claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.correct.heading })
+    expect(selectedOptionName(text.record.purposeLabel)).toBe('Tutup buku')
+    expect(await selectOptionNames(text.record.purposeLabel)).toEqual(['Seragam', 'Kas Utama', 'Halal bihalal RT', 'Tutup buku'])
+  })
+
+  it("asks Jumlah, Anggota, Pos, Tanggal in Catat's talangan order", async () => {
+    vi.stubGlobal('fetch', routedFetch([getClaim(claim()), ...lookups]))
+    renderScreen(<Correct claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.correct.heading })
+    const form = document.querySelector('form') as HTMLFormElement
+    const order = [text.record.amountLabel, text.record.memberLabel, text.record.purposeLabel, text.record.dateLabel].map((label) =>
+      Array.from(form.querySelectorAll('label, button[role="combobox"]')).findIndex(
+        (el) => el.textContent?.trim() === label || el.getAttribute('aria-label') === label,
+      ),
+    )
+    expect(order.every((i) => i >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it.each([

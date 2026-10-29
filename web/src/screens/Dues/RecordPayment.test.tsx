@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import { copy } from '@/copy/id'
-import { chooseOption } from '@/test/select'
+import { chooseOption, selectedOptionName } from '@/test/select'
 import { formatIDR } from '@/lib/money'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Purpose } from '@/lib/purposes'
@@ -14,6 +14,7 @@ const text = copy.dues.payment
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.localStorage.clear()
 })
 
 function jsonResponse(body: unknown, status = 200) {
@@ -46,6 +47,7 @@ const members = [
 ] satisfies Member[]
 
 const accounts = [{ id: 7, kind: 'cash', name: 'Kas tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
+const twoAccounts = [...accounts, { id: 8, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 }] satisfies Account[]
 const purposes = [{ id: 3, kind: 'main', name: 'Kas umum', created_at: 1 }] satisfies Purpose[]
 
 // One unpaid period and one part-paid one: the pre-fill is the whole rate
@@ -55,12 +57,12 @@ const outstanding = [
   { period: '2026-02', owed_amount: 50_000, paid_amount: 20_000, status: 'partial' },
 ] satisfies OutstandingDuesPeriod[]
 
-function stubApi(periods: OutstandingDuesPeriod[] = outstanding) {
+function stubApi(periods: OutstandingDuesPeriod[] = outstanding, accountList: Account[] = accounts) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/outstanding-dues')) return Promise.resolve(jsonResponse(periods))
     if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members, next_cursor: null }))
-    if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
+    if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accountList))
     if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposes))
     if (url.includes('/api/dues-payments') && init?.method === 'POST') return Promise.resolve(jsonResponse([], 201))
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
@@ -109,6 +111,32 @@ describe('RecordDuesPayment', () => {
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const url = fetchMock.mock.calls.map(([input]) => input.toString()).find((u) => u.includes('/outstanding-dues')) ?? ''
     expect(url).toContain(`/api/members/1/outstanding-dues?through=${encodeURIComponent(month)}`)
+  })
+
+  it('opens on the last-used location, falling back to the first active one (#737)', async () => {
+    window.localStorage.setItem('uruni:record:last-account-id', '8')
+    vi.stubGlobal('fetch', stubApi(outstanding, twoAccounts))
+    const { unmount } = render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Bank Uji Coba'))
+    unmount()
+
+    window.localStorage.setItem('uruni:record:last-account-id', '99')
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Kas tunai'))
+  })
+
+  it('remembers the location a payment was posted from', async () => {
+    const fetchMock = stubApi(outstanding, twoAccounts)
+    vi.stubGlobal('fetch', fetchMock)
+    const onRecorded = vi.fn()
+    render(<RecordDuesPayment onRecorded={onRecorded} onCancel={vi.fn()} />)
+    await pickFirstMember()
+    await chooseOption(text.locationLabel, 'Bank Uji Coba')
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Januari 2026' }))
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
+    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('8')
   })
 
   it('posts every selected period in one request', async () => {

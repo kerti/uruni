@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
@@ -11,9 +11,12 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { ApiError, errorCode, settleUncertainWrite } from '@/lib/api'
-import { dateBounds, todayISODate } from '@/lib/dates'
+import { dateBounds, formatIsoDate, todayISODate } from '@/lib/dates'
+import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
 import { formatIDR } from '@/lib/money'
+import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
+import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Reimbursement } from '@/lib/reimbursements'
@@ -25,6 +28,8 @@ const text = copy.reimbursements
 interface SettleData {
   claim: Reimbursement | null
   accounts: Account[]
+  memberName: string
+  purposeName: string
 }
 
 /**
@@ -45,14 +50,20 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
     (silent = false) =>
       dataRun(
         async () => {
-          const [claim, accounts] = await Promise.all([
+          const [claim, accounts, members, purposes] = await Promise.all([
             getReimbursement(claimId).catch((err: unknown) => {
               if (errorCode(err) === 'not_found') return null
               throw err
             }),
             listAccounts(),
+            listAllMembers(),
+            listPurposes(),
           ])
-          return { claim, accounts }
+          // Names, not ids: she opens this screen to pay someone back for
+          // something, and should read who and what before she picks a source.
+          const memberName = members.find((m) => m.id === claim?.member_id)?.name ?? ''
+          const purposeName = purposes.find((p) => p.id === claim?.purpose_id)?.name ?? ''
+          return { claim, accounts, memberName, purposeName }
         },
         { silent },
       ),
@@ -70,6 +81,7 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
       setError(null)
       try {
         await settleReimbursement(claimId, { account_id: accountId, occurred_on: occurredOn })
+        rememberAccountId(accountId)
         onDone()
       } catch (err) {
         // A lost response may still have saved; re-read the claim before she can retry.
@@ -86,32 +98,47 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
     return dataState.error ? <ErrorState error={dataState.error} onRetry={() => void load()} /> : null
   }
 
-  const { claim, accounts } = dataState.data
+  const { claim, accounts, memberName, purposeName } = dataState.data
   if (claim === null || claim.settled || claim.waived_on) return <Navigate to={TALANGAN_PATH} replace />
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">{text.settle.heading}</h1>
       <FormAlert message={error} />
-      <SettleForm accounts={accounts} claimAmount={claim.amount} onSubmit={handleSettle} onCancel={onCancel} submitting={submitting} />
+      <SettleForm
+        accounts={accounts}
+        claim={claim}
+        memberName={memberName}
+        purposeName={purposeName}
+        onSubmit={handleSettle}
+        onCancel={onCancel}
+        submitting={submitting}
+      />
     </div>
   )
 }
 
 function SettleForm({
   accounts,
-  claimAmount,
+  claim,
+  memberName,
+  purposeName,
   onSubmit,
   onCancel,
   submitting,
 }: {
   accounts: Account[]
-  claimAmount: number
+  claim: Reimbursement
+  memberName: string
+  purposeName: string
   onSubmit: (accountId: number, occurredOn: string) => void
   onCancel: () => void
   submitting: boolean
 }) {
-  const [accountId, setAccountId] = useState<number | null>(null)
+  // Blank until she picks: until then, the same default every source picker
+  // has (#737).
+  const [pickedAccountId, setAccountId] = useState<number | null>(null)
+  const accountId = pickedAccountId ?? defaultSourceAccountId(accounts)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
 
   const canSubmit = accountId !== null && occurredOn !== '' && !submitting
@@ -124,10 +151,13 @@ function SettleForm({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{text.record.amountLabel}</span>
-        <span className="tabular font-medium">{formatIDR(claimAmount)}</span>
-      </div>
+      <dl className="flex flex-col gap-2 text-sm">
+        <SummaryRow label={text.record.memberLabel} value={memberName} />
+        <SummaryRow label={text.record.purposeLabel} value={purposeName} />
+        <SummaryRow label={text.record.dateLabel} value={formatIsoDate(claim.incurred_on)} />
+        {claim.note && <SummaryRow label={copy.transactionDetail.noteLabel} value={claim.note} />}
+        <SummaryRow label={text.record.amountLabel} value={<span className="tabular font-medium">{formatIDR(claim.amount)}</span>} />
+      </dl>
 
       <AccountPicker
         id="settle-account"
@@ -153,5 +183,14 @@ function SettleForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className="text-muted-foreground shrink-0">{label}</dt>
+      <dd className="text-right break-words">{value}</dd>
+    </div>
   )
 }

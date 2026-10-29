@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { ApiError, errorCode, settleUncertainWrite } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
-import { listPurposes } from '@/lib/purposes'
+import { listPurposes, selectablePurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -51,7 +51,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
     (silent = false) =>
       dataRun(
         async () => {
-          const [claim, accounts, members, purposes] = await Promise.all([
+          const [claim, accounts, members, allPurposes, openPurposes] = await Promise.all([
             getReimbursement(claimId).catch((err: unknown) => {
               if (errorCode(err) === 'not_found') return null
               throw err
@@ -59,7 +59,11 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
             listAccounts(),
             listAllMembers(),
             listPurposes(),
+            listPurposes(true),
           ])
+          // Closed envelopes are not offered (as in Catat), but the claim's own
+          // pos stays so the current value still renders.
+          const purposes = selectablePurposes(allPurposes, openPurposes, claim?.purpose_id ?? null)
           return { claim, accounts, members, purposes }
         },
         { silent },
@@ -153,6 +157,8 @@ function CorrectForm({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+      <AmountInput id="correct-amount" label={text.record.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
+
       <MemberPicker
         id="correct-member"
         label={text.record.memberLabel}
@@ -171,8 +177,6 @@ function CorrectForm({
         onChange={setPurposeId}
         disabled={submitting}
       />
-
-      <AmountInput id="correct-amount" label={text.record.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="correct-date">{text.record.dateLabel}</Label>

@@ -22,6 +22,7 @@ import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
 import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
+import { defaultSourceAccountId, rememberAccountId, soleCandidateId } from '@/lib/lastAccount'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { createReimbursement } from '@/lib/reimbursements'
@@ -33,33 +34,6 @@ import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 
 const text = copy.record
-
-/** localStorage key for the last location chosen - a per-viewer convenience
- * (PRD section 7.2's "location remembers last used"), never server state. */
-const LAST_ACCOUNT_KEY = 'uruni:record:last-account-id'
-
-/** Reads the remembered account id, or null if there is none, it doesn't
- * parse, or storage isn't reachable (a private window can throw on the
- * property access itself, not just the call). */
-function readLastAccountId(): number | null {
-  try {
-    const raw = window.localStorage.getItem(LAST_ACCOUNT_KEY)
-    if (raw === null) return null
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function rememberAccountId(accountId: number) {
-  try {
-    window.localStorage.setItem(LAST_ACCOUNT_KEY, String(accountId))
-  } catch {
-    // Private window, storage disabled, quota - the remembered default is a
-    // convenience; losing it costs one extra tap.
-  }
-}
 
 /**
  * What the form is recording. 'in' and 'out' post a transaction; 'transfer'
@@ -104,7 +78,7 @@ interface FormData {
  * success line.
  *
  * Smart defaults per PRD section 7.2: location remembers the last choice
- * (localStorage, guarded - see readLastAccountId), purpose defaults to the
+ * (localStorage, guarded - see lib/lastAccount.ts), purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent
  * everyday entry - a call made here, not settled elsewhere.
@@ -175,7 +149,7 @@ export default function RecordTransaction({
   // Only used by 'transfer': where the money lands. The single accountId above
   // is where it leaves from, as for an ordinary out - so the field she has
   // been using keeps its meaning and only the second is new.
-  const [toAccountId, setToAccountId] = useState<number | null>(null)
+  const [pickedToAccountId, setToAccountId] = useState<number | null>(null)
   const [purposeId, setPurposeId] = useState<number | null>(null)
   // Only used by 'purpose' (ADR-036): where the money is for now, and where it
   // should be for. purposeId above is the ordinary entry's one tag.
@@ -218,11 +192,9 @@ export default function RecordTransaction({
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
 
-    const activeAccounts = loadState.data.accounts.filter((a) => a.inactive_on === null)
-    if (accountId === null && activeAccounts.length > 0) {
-      const lastId = readLastAccountId()
-      const remembered = activeAccounts.find((a) => a.id === lastId)
-      setAccountId((remembered ?? activeAccounts[0]).id)
+    if (accountId === null) {
+      const defaultId = defaultSourceAccountId(loadState.data.accounts)
+      if (defaultId !== null) setAccountId(defaultId)
     }
 
     if (purposeId === null) {
@@ -238,17 +210,17 @@ export default function RecordTransaction({
       }
     }
 
-    // Pindah pos opens on the common case - giving from Kas Utama to an
-    // envelope (ADR-036) - with the first open envelope chosen, so the usual
-    // move is an amount and a tap. Never a Titipan: it is not offered at all
-    // (movablePurposes below).
+    // Pindah pos opens with the source on Kas Utama (ADR-036), the usual
+    // giver. The destination is never preselected (#737): it starts blank
+    // and is filled only when there is exactly one pos it could be. Never a
+    // Titipan: it is not offered at all (movablePurposes below).
     if (fromPurposeId === null && toPurposeId === null) {
       const movable = loadState.data.purposes.filter((p) => p.kind !== 'pass_through')
       const main = movable.find((p) => p.kind === 'main')
       if (main) {
         setFromPurposeId(main.id)
-        const firstOther = movable.find((p) => p.id !== main.id)
-        if (firstOther) setToPurposeId(firstOther.id)
+        const onlyOther = soleCandidateId(movable.filter((p) => p.id !== main.id))
+        if (onlyOther !== null) setToPurposeId(onlyOther)
       }
     }
 
@@ -271,6 +243,12 @@ export default function RecordTransaction({
   const isPurposeMove = direction === 'purpose'
   // A claim moves no fund money: no location, no balance to watch.
   const isClaim = fronted && direction === 'out' && !duesChosen
+
+  // The destination starts blank (#737) and fills itself only when exactly one
+  // active location other than the source could be it; once she picks, her
+  // choice stands.
+  const toAccountId =
+    pickedToAccountId ?? soleCandidateId((loadState.data?.accounts ?? []).filter((a) => a.inactive_on === null && a.id !== accountId))
 
   // The same location on both sides moves nothing, and the ledger refuses it
   // anyway (ErrInvalidArgument). Caught here so she reads why in her language,

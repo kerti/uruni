@@ -122,7 +122,7 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.incidentals.actions.close, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.heading)).toBeVisible()
 
-    // Pick where the leftover rolls to, submit (date defaults to today)
+    // Pick the location (it opens on a default; picking is explicit), submit (date defaults to today)
     await chooseOption(page, copy.incidentals.close.accountLabel)
     // The roll is a transfer nobody asked for directly - the note stops it
     // reading as two unexplained rows in the ledger.

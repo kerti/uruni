@@ -18,6 +18,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
+import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import {
@@ -182,6 +183,7 @@ export default function Incidentals({
       () => closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note }),
       text.close.success,
       () => {
+        rememberAccountId(accountId)
         setShowCloseForm(false)
         void detailRun(() => getIncidental(purposeId))
       },
@@ -451,7 +453,9 @@ function CloseForm({
   onCancel: () => void
   submitting: boolean
 }) {
-  const [accountId, setAccountId] = useState<number | null>(null)
+  // Until she picks, the same default every source picker has (#737).
+  const [pickedAccountId, setAccountId] = useState<number | null>(null)
+  const accountId = pickedAccountId ?? defaultSourceAccountId(accounts)
   const [closedOn, setClosedOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
