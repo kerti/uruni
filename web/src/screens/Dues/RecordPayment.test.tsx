@@ -144,6 +144,27 @@ describe('RecordDuesPayment', () => {
     expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
   })
 
+  it('keeps a part-paid month on one line: "sebagian" after the month, the paid part read but not drawn', async () => {
+    vi.stubGlobal('fetch', stubApi())
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await pickFirstMember()
+
+    const february = await screen.findByRole('checkbox', { name: 'Februari 2026' })
+    const row = screen.getAllByRole('listitem')[1]
+    expect(row).toHaveTextContent(new RegExp(`Februari 2026.*${text.partialSuffix}.*${formatIDR(30_000).replace('.', '\\.')}`))
+    expect(row).not.toHaveTextContent(copy.dues.paidLabel)
+    expect(february).toHaveAccessibleDescription(text.paidSoFar(formatIDR(20_000)))
+    expect(screen.getAllByRole('listitem')[0]).not.toHaveTextContent(text.partialSuffix)
+
+    // Paying less than the sisa: only the figure changes; the month's word holds still.
+    await userEvent.click(february)
+    const amount = (await openEditor('Februari 2026')) as HTMLInputElement
+    await waitFor(() => expect([amount.selectionStart, amount.selectionEnd]).toEqual([0, amount.value.length]))
+    await userEvent.keyboard('10000')
+    expect(screen.getByRole('button', { name: /^Ubah jumlah Februari 2026/ })).toHaveTextContent(formatIDR(10_000))
+    expect(row).toHaveTextContent(text.partialSuffix)
+  })
+
   it("sends the client's own local month as ?through", async () => {
     const fetchMock = stubApi()
     vi.stubGlobal('fetch', fetchMock)

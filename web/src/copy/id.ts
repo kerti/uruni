@@ -863,6 +863,11 @@ export const copy = {
       // Spoken name of the button on a ticked month's amount that opens that
       // field; the visible amount follows it in the button's name.
       editAmount: (period: string) => `Ubah jumlah ${period}`,
+      // A part-paid month on one line: "Oktober 2026 · sebagian", after the
+      // month, from the status word "Bayar sebagian"; the paid-so-far is for
+      // screen readers.
+      partialSuffix: 'sebagian',
+      paidSoFar: (amount: string) => `Sudah dibayar ${amount}`,
       // Ticks every owed month before the current one (the tunggakan).
       selectAllArrears: 'Pilih semua tunggakan',
       // A nudge, never a block: a later month is ticked while an older owed one

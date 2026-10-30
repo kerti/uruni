@@ -334,6 +334,10 @@ export default function RecordDuesPayment({
                   const checked = selected.includes(period.period)
                   const name = formatPeriod(period.period)
                   const open = checked && editing.includes(period.period)
+                  // The right-hand figure always means one thing: what this
+                  // payment puts toward the month (for a part-paid one, the
+                  // sisa until she edits it).
+                  const amountText = formatIDR(amounts[period.period] ?? 0)
                   return (
                     <li key={period.period} className="flex flex-col px-4">
                       <div className="flex min-h-11 items-center gap-2">
@@ -344,23 +348,25 @@ export default function RecordDuesPayment({
                             checked={checked}
                             onChange={(event) => togglePeriod(period.period, event.target.checked)}
                             disabled={submitting}
-                            // Named by the month alone; a partial month's paid/sisa
-                            // line is its description, not part of its name.
+                            // Named by the month alone; a partial month's paid-so-far
+                            // is its description, read but not drawn.
                             aria-labelledby={`dues-period-${period.period}`}
                             aria-describedby={period.status === 'partial' ? `dues-period-${period.period}-partial` : undefined}
                           />
-                          <span className="flex flex-col">
-                            <span id={`dues-period-${period.period}`}>{name}</span>
-                            {period.status === 'partial' && (
-                              <span
-                                id={`dues-period-${period.period}-partial`}
-                                className="tabular text-sm font-normal text-muted-foreground"
-                              >
-                                {/* The amount on the right is already the sisa. */}
-                                {copy.dues.paidLabel}: {formatIDR(period.paid_amount)}
-                              </span>
-                            )}
-                          </span>
+                          <span id={`dues-period-${period.period}`}>{name}</span>
+                          {/* A fact about the month, so it holds still while the
+                              amount is edited; screen readers get the fuller
+                              description below instead. */}
+                          {period.status === 'partial' && (
+                            <span aria-hidden="true" className="text-sm font-normal text-muted-foreground">
+                              {'\u00b7'} {text.partialSuffix}
+                            </span>
+                          )}
+                          {period.status === 'partial' && (
+                            <span id={`dues-period-${period.period}-partial`} className="sr-only">
+                              {text.paidSoFar(formatIDR(period.paid_amount))}
+                            </span>
+                          )}
                         </label>
                         {checked ? (
                           <button
@@ -371,11 +377,11 @@ export default function RecordDuesPayment({
                             }
                             disabled={submitting}
                           >
-                            <span className="sr-only">{text.editAmount(name)}</span> {formatIDR(amounts[period.period] ?? 0)}
+                            <span className="sr-only">{text.editAmount(name)}</span> {amountText}
                             <PenLine aria-hidden="true" className="size-4" />
                           </button>
                         ) : (
-                          <span className="tabular text-muted-foreground">{formatIDR(amounts[period.period] ?? 0)}</span>
+                          <span className="tabular text-muted-foreground">{amountText}</span>
                         )}
                       </div>
                       {open && (
