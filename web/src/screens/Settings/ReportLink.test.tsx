@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import ReportLink from '@/screens/Settings/ReportLink'
 import { copy } from '@/copy/id'
 import { saveBlob } from '@/lib/api'
@@ -80,17 +81,19 @@ function AppFund({ initial }: { initial: Fund }) {
 function renderCard(entry = '/settings', initial: Fund = fund) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/settings"
-          element={
-            <>
-              <AppFund initial={initial} />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <>
+                <AppFund initial={initial} />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }
@@ -255,6 +258,7 @@ describe('ReportLink', () => {
     expect(await screen.findByText(NEW_URL)).toBeInTheDocument()
     expect(posts).toEqual(['/api/fund/report-slug'])
     expect(screen.queryByText(OLD_URL)).not.toBeInTheDocument()
+    expect(screen.getByText(text.renewed)).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText(text.renewConfirm)).not.toBeInTheDocument())
   })
 

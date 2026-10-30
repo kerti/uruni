@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/toast/useToast'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -54,6 +55,7 @@ export default function ReportLink({
   refresh: () => Promise<void>
 }) {
   const { value, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   // 'report' is this section's prefix (dialogTarget.ts); `new` is its only
   // value. Anything else carrying the prefix is cleared once, and a sibling's
@@ -83,6 +85,7 @@ export default function ReportLink({
           // Straight into the app's fund: no second fetch, and the old link
           // is never on screen once the new one exists.
           onChanged(updated)
+          toast.success(text.renewed)
           close()
         }}
         refresh={refresh}

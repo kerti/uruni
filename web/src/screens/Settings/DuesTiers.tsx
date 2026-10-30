@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -148,6 +149,7 @@ function AddTierDialog({
   refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<DuesTier>()
+  const toast = useToast()
   const [name, setName] = useState('')
 
   useResetWhen(open, () => {
@@ -163,6 +165,7 @@ function AddTierDialog({
     void run(
       async () => {
         const created = await createDuesTier(trimmed)
+        toast.success(text.saved)
         onAdded()
         return created
       },

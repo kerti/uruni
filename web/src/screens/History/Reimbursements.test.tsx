@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import Reimbursements from '@/screens/History/Reimbursements'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
@@ -138,20 +139,22 @@ function ScreenProbe() {
 function renderAt(entry: string | { pathname: string; state: unknown } = '/history/reimbursements') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/history/reimbursements"
-          element={
-            <>
-              <Reimbursements />
-              <LocationProbe />
-            </>
-          }
-        />
-        <Route path="/record" element={<ScreenProbe />} />
-        <Route path="/reimbursements/settle" element={<ScreenProbe />} />
-        <Route path="/reimbursements/correct" element={<ScreenProbe />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/history/reimbursements"
+            element={
+              <>
+                <Reimbursements />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/record" element={<ScreenProbe />} />
+          <Route path="/reimbursements/settle" element={<ScreenProbe />} />
+          <Route path="/reimbursements/correct" element={<ScreenProbe />} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }
@@ -201,13 +204,13 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(message)).toBeInTheDocument()
   })
 
-  it('a later action retires the confirmation a screen handed back', async () => {
+  it('a tap puts the confirmation a screen handed back away', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
     renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: 'settled' } })
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText(text.settle.success)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
+    await userEvent.click(screen.getByRole('button', { name: text.settle.success }))
     expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
   })
 

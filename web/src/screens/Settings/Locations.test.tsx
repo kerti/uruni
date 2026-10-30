@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import Locations from '@/screens/Settings/Locations'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
@@ -51,17 +52,19 @@ function LocationProbe() {
 function renderAt(entry = '/settings') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/settings"
-          element={
-            <>
-              <Locations />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <>
+                <Locations />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }
@@ -222,6 +225,7 @@ describe('Settings locations', () => {
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'PATCH', url: expect.stringContaining('/api/accounts/1'), body: { name: 'Tunai' } })
     expect(calls[0].body).not.toHaveProperty('kind')
+    expect(await screen.findByText(text.saved)).toBeInTheDocument()
   })
 
   it('deactivates only after the inline confirm, showing the consequence copy first', async () => {
@@ -245,6 +249,7 @@ describe('Settings locations', () => {
     // A local YYYY-MM-DD, never toISOString() - which is UTC and can read a
     // day early in WIB.
     expect((calls[0].body as { inactive_on: string }).inactive_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(await screen.findByText(text.deactivated)).toBeInTheDocument()
   })
 
   it('backs out of the inline confirm with Kembali, to the edit form, posting nothing', async () => {

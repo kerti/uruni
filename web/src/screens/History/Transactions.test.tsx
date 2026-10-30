@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { copy } from '@/copy/id'
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
 import type { Purpose } from '@/lib/purposes'
@@ -117,17 +118,19 @@ function LocationProbe() {
 function renderAt(entry: string) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/history/transactions"
-          element={
-            <>
-              <Transactions />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/history/transactions"
+            element={
+              <>
+                <Transactions />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }

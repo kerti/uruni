@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -70,6 +71,7 @@ export default function Roster() {
   const [draft, setDraft] = useState(q)
 
   const { value: dialogValue, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order - the shape History/Transactions.tsx
@@ -269,6 +271,7 @@ export default function Roster() {
         onClose={close}
         onAdded={() => {
           close()
+          toast.success(text.saved)
           reload()
         }}
         refresh={refresh}
@@ -278,8 +281,9 @@ export default function Roster() {
         tiers={tiers}
         open={target.kind === 'edit' && editingMember !== null}
         onClose={close}
-        onChanged={() => {
+        onChanged={(message) => {
           close()
+          toast.success(message)
           reload()
         }}
         refresh={refresh}
@@ -435,7 +439,7 @@ function EditMemberDialog({
   tiers: DuesTier[]
   open: boolean
   onClose: () => void
-  onChanged: () => void
+  onChanged: (message: string) => void
   refresh: () => Promise<void>
 }) {
   const lastMemberRef = useRef<Member | null>(null)
@@ -477,11 +481,11 @@ function EditMemberDialog({
   // onChanged closes the dialog, so it runs only once the request has
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
-  async function submit(fn: () => Promise<unknown>) {
+  async function submit(fn: () => Promise<unknown>, message: string) {
     await run(
       async () => {
         const result = await fn()
-        onChanged()
+        onChanged(message)
         return result
       },
       { settle: refresh },
@@ -504,13 +508,15 @@ function EditMemberDialog({
       onClose()
       return
     }
-    void submit(() =>
-      updateMember(shown.id, {
-        name: trimmed === shown.name ? undefined : trimmed,
-        tierId: tierChanged ? tierId : undefined,
-        tierEffectiveFrom: tierChanged ? tierFrom : undefined,
-        joinedOn: joinedOn === shown.joined_on ? undefined : joinedOn,
-      }),
+    void submit(
+      () =>
+        updateMember(shown.id, {
+          name: trimmed === shown.name ? undefined : trimmed,
+          tierId: tierChanged ? tierId : undefined,
+          tierEffectiveFrom: tierChanged ? tierFrom : undefined,
+          joinedOn: joinedOn === shown.joined_on ? undefined : joinedOn,
+        }),
+      text.saved,
     )
   }
 
@@ -579,7 +585,7 @@ function EditMemberDialog({
                   variant="outline"
                   size="lg"
                   disabled={busy}
-                  onClick={() => void submit(() => updateMember(shown.id, { inactiveOn: null }))}
+                  onClick={() => void submit(() => updateMember(shown.id, { inactiveOn: null }), text.reactivated)}
                 >
                   {busy ? text.reinstating : text.reinstate}
                 </Button>
@@ -631,8 +637,9 @@ function EditMemberDialog({
                   size="lg"
                   disabled={busy}
                   onClick={() =>
-                    void submit(() =>
-                      confirming === 'deactivate' ? updateMember(shown.id, { inactiveOn: todayISODate() }) : deleteMember(shown.id),
+                    void submit(
+                      () => (confirming === 'deactivate' ? updateMember(shown.id, { inactiveOn: todayISODate() }) : deleteMember(shown.id)),
+                      confirming === 'deactivate' ? text.deactivated : text.deleted,
                     )
                   }
                 >

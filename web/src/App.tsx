@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { CircleCheck } from 'lucide-react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import OfflineBanner from '@/components/states/OfflineBanner'
 import UpdateBanner from '@/components/states/UpdateBanner'
 import Shell from '@/components/Shell'
+import { ToastProvider } from '@/components/toast/ToastProvider'
+import { useArrivalToast } from '@/components/toast/useArrivalToast'
+import type { ArrivalToast } from '@/components/toast/useArrivalToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import Register from '@/screens/Register'
@@ -143,7 +145,9 @@ function AuthGate({
 
   return (
     <DemoMode.Provider value={demo !== null}>
-      <AuthedGate onLoggedOut={onLoggedOut} />
+      <ToastProvider>
+        <AuthedGate onLoggedOut={onLoggedOut} />
+      </ToastProvider>
     </DemoMode.Provider>
   )
 }
@@ -183,6 +187,40 @@ interface RecordFromDuesState {
   /** The matrix's own query string ("?view=grid&period=2026-08", or ""), so
    * the way back lands on the same view and month. */
   fromDues: { search: string }
+}
+
+/** The confirmation a navigation hands to the screen it lands on, if any: the
+ * record form's (to Beranda) or a dues payment's (back to the status matrix). A
+ * failed photo upload replaces the ordinary success line rather than joining it
+ * - the sentence already says the transaction is saved, so repeating
+ * successIn/successOut would say the same thing twice in two tones - and is the
+ * attention tone: the transaction is fine, but something did not go through. */
+function pickArrivalToast(state: unknown): ArrivalToast | null {
+  const s = state as Partial<HomeState & DuesState> | null
+  if (s?.duesRecorded === true) return { tone: 'success', text: copy.dues.payment.success }
+  const recorded = s?.recorded
+  if (recorded === undefined) return null
+  if (s?.photoFailed === true) {
+    return {
+      tone: 'attention',
+      text: recorded === 'reimbursement' ? copy.receipts.reimbursementPhotoFailed : copy.receipts.transactionPhotoFailed,
+    }
+  }
+  const text =
+    recorded === 'reimbursement'
+      ? copy.record.successFronted
+      : recorded === 'in'
+        ? copy.record.successIn
+        : recorded === 'out'
+          ? copy.record.successOut
+          : recorded === 'transfer'
+            ? copy.record.successTransfer
+            : recorded === 'purpose'
+              ? copy.record.successPurposeMove
+              : recorded === 'dues'
+                ? copy.dues.payment.success
+                : null
+  return text === null ? null : { tone: 'success', text }
 }
 
 /** "YYYY-MM" from a URL value, else null. */
@@ -248,6 +286,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
     void run(getFund)
   }, [run])
 
+  useArrivalToast(pickArrivalToast)
+
   // The record form's onRecorded contract (RecordTransaction.tsx): fired once
   // after a successful POST /api/transactions. Home reads refetchKey to
   // refetch on this navigation, so the new entry shows in recent activity; the
@@ -282,9 +322,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }
 
   const title = state.data?.name ?? copy.app.name
-  const recorded = (location.state as HomeState | null)?.recorded
-  const photoFailed = (location.state as HomeState | null)?.photoFailed === true
-  const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
   // Where the envelope detail was opened from: Beranda says so in the history
   // entry's state, Pengaturan says nothing, and a deep link or reload has no
   // state at all - both of those lead back to Pengaturan.
@@ -307,28 +344,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
       },
       { replace: true },
     )
-  // A failed photo upload replaces the ordinary success line rather than
-  // joining it - the sentence already says the transaction is saved, so
-  // repeating successIn/successOut would say the same thing twice in two
-  // tones.
-  const successMessage = photoFailed
-    ? recorded === 'reimbursement'
-      ? copy.receipts.reimbursementPhotoFailed
-      : copy.receipts.transactionPhotoFailed
-    : recorded === 'reimbursement'
-      ? copy.record.successFronted
-      : recorded === 'in'
-        ? copy.record.successIn
-        : recorded === 'out'
-          ? copy.record.successOut
-          : recorded === 'transfer'
-            ? copy.record.successTransfer
-            : recorded === 'purpose'
-              ? copy.record.successPurposeMove
-              : recorded === 'dues'
-                ? copy.dues.payment.success
-                : null
-
   return (
     <Routes>
       <Route
@@ -395,7 +410,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 })
               }
               refetchKey={refetchKey}
-              notice={duesRecorded ? copy.dues.payment.success : null}
             />
           </Shell>
         }
@@ -521,21 +535,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="*"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            {successMessage && photoFailed && (
-              // Terracotta --attention, not the success green above: the
-              // transaction is fine, but the sentence flags something that did
-              // not go through, the restraint RecordTransaction.tsx's
-              // passThroughNegativeHint uses.
-              <p role="status" className="mb-4 rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
-                {successMessage}
-              </p>
-            )}
-            {successMessage && !photoFailed && (
-              <p role="status" className="mb-4 flex items-center gap-2 text-success">
-                <CircleCheck aria-hidden="true" />
-                {successMessage}
-              </p>
-            )}
             <Home
               refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}

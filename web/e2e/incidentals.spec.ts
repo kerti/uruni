@@ -53,6 +53,9 @@ test.describe('incidentals', () => {
     // "Tutup" has the same trap in "Tanggal ditutup".
     await openDialog.getByRole('button', { name: copy.incidentals.open.submit, exact: true }).click()
     await expect(openDialog).not.toBeVisible()
+    // Opening it is confirmed (#743). The toast hides itself after ~4s, so this
+    // is asserted right after the action, before anything else.
+    await expect(page.getByText(copy.settings.incidentals.opened)).toBeVisible()
 
     // The new envelope is a card in this section, open status shown. Anchored to
     // the card: "Berjalan" is not unique once a second envelope opens.

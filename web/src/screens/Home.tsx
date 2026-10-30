@@ -214,8 +214,9 @@ export default function Home({
             same as every other screen in this app. */}
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && (
-          <p className="text-sm text-muted-foreground">
-            {copy.home.lastChecked(formatUnixSeconds(latest.performed_at), latest.has_new_entries)}
+          <p className="flex flex-col text-sm text-muted-foreground">
+            <span>{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</span>
+            {latest.has_new_entries && <span>{copy.home.newEntriesSince}</span>}
           </p>
         )}
       </section>

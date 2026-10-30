@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
+import { useToast } from '@/components/toast/useToast'
 import { dateBounds, todayISODate } from '@/lib/dates'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
@@ -42,10 +43,10 @@ import type { Transaction } from '@/lib/transactions'
 const text = copy.incidentals
 
 /**
- * One speaking-string feedback for a finished action - the shape of
- * Reimbursements.tsx's Feedback type.
+ * One speaking-string feedback for a failed action - the shape of
+ * Reimbursements.tsx's Feedback type. A success is a toast.
  */
-type Feedback = { kind: 'success' | 'error'; text: string }
+type Feedback = { kind: 'error'; text: string }
 
 /** Wire error code -> Indonesian copy, scoped first to this screen's codes
  * (incidental_already_closed) then to the shared map; never the English wire
@@ -109,6 +110,7 @@ export default function Incidentals({
   const [showCloseForm, setShowCloseForm] = useState(false)
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const toast = useToast()
 
   // The rename dialog, addressed by the URL rather than component state
   // (ADR-032) - `?edit=incidental:<id>`, the pattern PassThrough.tsx's
@@ -162,7 +164,7 @@ export default function Incidentals({
       setFeedback(null)
       try {
         const result = await api()
-        setFeedback({ kind: 'success', text: successText })
+        toast.success(successText)
         onSuccess?.(result)
       } catch (err) {
         // A lost response may still have saved; re-read before she can retry.
@@ -209,10 +211,10 @@ export default function Incidentals({
   // RenameIncidentalDialog) - this closes it, refetches the detail so the <h1>
   // and recipients line show what changed, refetches the participation table
   // too (a new minimum or recipient set moves rows between "belum"/"kurang"
-  // and the recipients exclusion), and reuses the screen's Feedback banner.
+  // and the recipients exclusion), and confirms with a toast.
   function handleRenamed() {
     closeDialog()
-    setFeedback({ kind: 'success', text: text.rename.success })
+    toast.success(text.rename.success)
     void detailRun(() => getIncidental(purposeId))
     void participationRun(() => getIncidentalParticipation(purposeId))
   }
@@ -346,14 +348,7 @@ function DetailView({
       </div>
 
       {feedback && (
-        <p
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-          className={
-            feedback.kind === 'error'
-              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text'
-              : 'rounded-lg bg-success-soft px-3 py-2 text-sm text-success'
-          }
-        >
+        <p role="alert" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
           {feedback.text}
         </p>
       )}

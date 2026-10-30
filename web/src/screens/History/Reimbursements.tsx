@@ -1,6 +1,6 @@
 import { MoreHorizontal, Search } from 'lucide-react'
 import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
+import { useArrivalToast } from '@/components/toast/useArrivalToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -22,7 +24,7 @@ import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
-import { doneText, errorText, type TalanganState } from '@/screens/Reimbursements/helpers'
+import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
@@ -33,11 +35,10 @@ const searchText = copy.history.reimbursements
 const SEARCH_DEBOUNCE_MS = 300
 
 /**
- * One speaking-string feedback for a finished action: a success, or a failure
- * with a reason. Stale either way is worse than none, so every action starts
- * by clearing it.
+ * One speaking-string feedback for a failed action, with its reason. Stale is
+ * worse than none, so every action starts by clearing it. A success is a toast.
  */
-type Feedback = { kind: 'success' | 'error'; text: string }
+type Feedback = { kind: 'error'; text: string }
 
 interface FormData {
   members: Member[]
@@ -68,7 +69,6 @@ interface FormData {
 export default function Reimbursements({ refetchKey }: { refetchKey?: unknown }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const location = useLocation()
   const q = (searchParams.get('q') ?? '').trim()
   const [draft, setDraft] = useState(q)
 
@@ -99,12 +99,11 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // here is a deep link, so component state is enough.
   const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
 
-  // The confirmation a record/settle/correct screen handed back: read once,
-  // from the history entry that navigation created, so it never outlives it.
-  const [feedback, setFeedback] = useState<Feedback | null>(() => {
-    const done = (location.state as TalanganState | null)?.reimbursementDone
-    return done ? { kind: 'success', text: doneText(done) } : null
-  })
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const toast = useToast()
+
+  // The confirmation a settle/correct screen handed back, toasted once.
+  useArrivalToast(pickTalanganArrival)
 
   const loadFirstPage = useCallback(
     (): Promise<ReimbursementsPage> => listReimbursements({ outstanding: tab === 'outstanding', q: q || undefined }),
@@ -120,6 +119,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   }, [listRun, loadFirstPage])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- a refetch on navigation resets the paging state it replaces
     refetchFirstPage()
   }, [refetchFirstPage, refetchKey])
 
@@ -127,6 +127,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // draft that already trims to the same search is left alone, so a trailing
   // space she is still typing is not snatched away.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the URL is the source of truth for the field; follow it when it moves
     setDraft((current) => (current.trim() === q ? current : q))
   }, [q])
 
@@ -199,15 +200,6 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     void fetchFormData()
   }, [fetchFormData])
 
-  // Close the delete confirmation when a successful action's list refresh
-  // lands; an error keeps it open so she can read why before deciding again.
-  useEffect(() => {
-    if (listState.status === 'success' && feedback?.kind === 'success') {
-      setDeleteId(null)
-    }
-    // oxlint-disable-next-line react/exhaustive-deps -- fire when the list refresh lands, not when feedback changes; feedback is only read to tell a success from an error
-  }, [listState.status])
-
   const submitting = submitState.status === 'loading'
 
   /**
@@ -224,7 +216,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
       setFeedback(null)
       try {
         await api()
-        setFeedback({ kind: 'success', text: successText })
+        // Closes the delete confirmation; an error keeps it open so she can
+        // read why before deciding again.
+        setDeleteId(null)
+        toast.success(successText)
       } catch (err) {
         // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, () => listRun(loadFirstPage, { silent: true }))
@@ -409,14 +404,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   return (
     <div className="flex flex-col gap-4">
       {feedback && (
-        <p
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-          className={
-            feedback.kind === 'error'
-              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text'
-              : 'rounded-lg bg-success-soft px-3 py-2 text-sm text-success'
-          }
-        >
+        <p role="alert" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
           {feedback.text}
         </p>
       )}

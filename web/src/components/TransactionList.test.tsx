@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import TransactionList from '@/components/TransactionList'
 import { copy } from '@/copy/id'
 import { formatPeriod } from '@/lib/dates'
@@ -611,7 +612,9 @@ describe('TransactionList receipt photos (#154)', () => {
 
   function renderWithReceipts(rows: Transaction[], onReceiptsChanged = vi.fn()) {
     const result = render(
-      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onRefresh={onReceiptsChanged} />,
+      <ToastProvider>
+        <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onRefresh={onReceiptsChanged} />
+      </ToastProvider>,
     )
     return { ...result, onReceiptsChanged }
   }
@@ -723,6 +726,8 @@ describe('TransactionList receipt photos (#154)', () => {
 
     await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
     expect(fetchMock).toHaveBeenCalledWith('/api/receipts/42', expect.objectContaining({ method: 'DELETE' }))
+    // Every photo write confirms with the toast (#743).
+    expect(await screen.findByRole('button', { name: text.deleted })).toBeInTheDocument()
   })
 
   it('replaces a photo through the menu: delete-then-upload, both through the receipt routes', async () => {

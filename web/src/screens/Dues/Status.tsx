@@ -93,14 +93,12 @@ export default function DuesStatus({
   onBack,
   onRecordPayment,
   refetchKey,
-  notice,
 }: {
   onBack: () => void
   /** Opens the payment form. A card's "Catat iuran" names the member and the
    * card's month; the bottom button names neither. */
   onRecordPayment: (target?: { memberId: number; period: string }) => void
   refetchKey?: unknown
-  notice?: string | null
 }) {
   // The view lives in the URL (?view=grid), a pushed entry like Reimbursements'
   // ?show=all: back returns to the view she came from. The list is the default.
@@ -149,13 +147,6 @@ export default function DuesStatus({
 
   return (
     <div className="flex w-full flex-col gap-6">
-      {notice && (
-        <p role="status" className="flex items-center gap-2 text-success">
-          <CircleCheck aria-hidden="true" />
-          {notice}
-        </p>
-      )}
-
       <div role="group" aria-label={gridText.heading} className={segmentedTrackClass(2)}>
         <Button
           type="button"

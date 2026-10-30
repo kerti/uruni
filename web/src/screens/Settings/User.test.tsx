@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import User from '@/screens/Settings/User'
 import { copy } from '@/copy/id'
 import { DemoMode } from '@/lib/demoMode'
@@ -48,17 +49,19 @@ function renderAt(entry = '/settings', demo = false) {
   return render(
     <DemoMode.Provider value={demo}>
       <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route
-            path="/settings"
-            element={
-              <>
-                <User />
-                <LocationProbe />
-              </>
-            }
-          />
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route
+              path="/settings"
+              element={
+                <>
+                  <User />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </ToastProvider>
       </MemoryRouter>
     </DemoMode.Provider>,
   )
@@ -164,7 +167,7 @@ describe('Settings user', () => {
     expect(posts[0]).toEqual({ path: '/api/user/email', body: { email: 'baru@example.org', current_password: 'kata-sandi-lama' } })
     await waitFor(() => expect(currentSearch()).toBe(''))
     expect(await screen.findByText(text.body('baru@example.org'))).toBeInTheDocument()
-    expect(screen.getByText(text.email.success)).toHaveAttribute('role', 'status')
+    expect(screen.getByText(text.email.success).closest('[role="status"]')).not.toBeNull()
   })
 
   it('shows the wrong-current-password sentence and keeps the dialog open', async () => {
@@ -221,7 +224,7 @@ describe('Settings user', () => {
       body: { new_password: 'kata-sandi-baru', current_password: 'kata-sandi-lama' },
     })
     await waitFor(() => expect(currentSearch()).toBe(''))
-    expect(screen.getByText(text.password.success)).toHaveAttribute('role', 'status')
+    expect(screen.getByText(text.password.success).closest('[role="status"]')).not.toBeNull()
   })
 
   // Checked in the browser: a typo in the new password must not cost an attempt

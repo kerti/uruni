@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import AmountInput from '@/components/money/AmountInput'
 import Loading from '@/components/states/Loading'
@@ -43,6 +44,7 @@ const text = copy.settings.locations
 export default function Locations() {
   const [listState, listRun] = useApi<Account[]>()
   const { value, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   useEffect(() => {
     // listRun is a stable useCallback (useApi.ts), so this fires once.
@@ -117,6 +119,7 @@ export default function Locations() {
         onClose={close}
         onAdded={() => {
           close()
+          toast.success(text.saved)
           reload()
         }}
         refresh={refresh}
@@ -125,8 +128,9 @@ export default function Locations() {
         account={editingAccount}
         open={target.kind === 'edit' && editingAccount !== null}
         onClose={close}
-        onChanged={() => {
+        onChanged={(message) => {
           close()
+          toast.success(message)
           reload()
         }}
         refresh={refresh}
@@ -280,7 +284,7 @@ function EditLocationDialog({
   account: Account | null
   open: boolean
   onClose: () => void
-  onChanged: () => void
+  onChanged: (message: string) => void
   refresh: () => Promise<void>
 }) {
   const lastAccountRef = useRef<Account | null>(null)
@@ -310,11 +314,11 @@ function EditLocationDialog({
   // onChanged closes the dialog, so it runs only once the request has
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
-  async function submit(fn: () => Promise<unknown>) {
+  async function submit(fn: () => Promise<unknown>, message: string) {
     await run(
       async () => {
         const result = await fn()
-        onChanged()
+        onChanged(message)
         return result
       },
       { settle: refresh },
@@ -331,11 +335,13 @@ function EditLocationDialog({
       onClose()
       return
     }
-    void submit(() =>
-      updateAccount(shown.id, {
-        name: trimmed === shown.name ? undefined : trimmed,
-        kind: kind === shown.kind ? undefined : kind,
-      }),
+    void submit(
+      () =>
+        updateAccount(shown.id, {
+          name: trimmed === shown.name ? undefined : trimmed,
+          kind: kind === shown.kind ? undefined : kind,
+        }),
+      text.saved,
     )
   }
 
@@ -385,7 +391,7 @@ function EditLocationDialog({
                   variant="outline"
                   size="lg"
                   disabled={busy}
-                  onClick={() => void submit(() => setAccountInactiveOn(shown.id, null))}
+                  onClick={() => void submit(() => setAccountInactiveOn(shown.id, null), text.reactivated)}
                 >
                   {busy ? text.reinstating : text.reinstate}
                 </Button>
@@ -442,8 +448,9 @@ function EditLocationDialog({
                   size="lg"
                   disabled={busy}
                   onClick={() =>
-                    void submit(() =>
-                      confirming === 'deactivate' ? setAccountInactiveOn(shown.id, todayISODate()) : deleteAccount(shown.id),
+                    void submit(
+                      () => (confirming === 'deactivate' ? setAccountInactiveOn(shown.id, todayISODate()) : deleteAccount(shown.id)),
+                      confirming === 'deactivate' ? text.deactivated : text.deleted,
                     )
                   }
                 >

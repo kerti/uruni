@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { CircleAlert, CircleCheck } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 
 import ErrorState from '@/components/states/ErrorState'
 import Loading from '@/components/states/Loading'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import { copy } from '@/copy/id'
 import { changeEmail, changePassword, getUser } from '@/lib/auth'
 import { useDemoMode } from '@/lib/demoMode'
@@ -35,12 +36,11 @@ const MIN_PASSWORD_LENGTH = 8
  *
  * Pengaturan's other saves close their dialog and let the card show the new
  * value. The email does that here too; a password has nothing to show, so a
- * saved edit also leaves a success line under the card, in the green
- * App.tsx's recorded-a-transaction line uses.
+ * saved edit is confirmed by the toast like every other save.
  */
 export default function User() {
   const [loadState, loadRun] = useApi<AuthUser>()
-  const [notice, setNotice] = useState<string | null>(null)
+  const toast = useToast()
   const { value, open, close, clear } = useDialogParam()
 
   useEffect(() => {
@@ -63,11 +63,6 @@ export default function User() {
     clear()
   }, [value, isOwn, editingEmail, editingPassword, clear])
 
-  function openDialog(next: 'user:email' | 'user:password') {
-    setNotice(null)
-    open(next)
-  }
-
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
@@ -81,20 +76,13 @@ export default function User() {
         loadState.error && <ErrorState error={loadState.error} onRetry={() => void loadRun(getUser)} />
       ) : (
         <div className="flex gap-3">
-          <Button type="button" variant="outline" size="lg" className="flex-1 justify-center" onClick={() => openDialog('user:email')}>
+          <Button type="button" variant="outline" size="lg" className="flex-1 justify-center" onClick={() => open('user:email')}>
             {text.changeEmail}
           </Button>
-          <Button type="button" variant="outline" size="lg" className="flex-1 justify-center" onClick={() => openDialog('user:password')}>
+          <Button type="button" variant="outline" size="lg" className="flex-1 justify-center" onClick={() => open('user:password')}>
             {text.changePassword}
           </Button>
         </div>
-      )}
-
-      {notice && (
-        <p role="status" className="flex items-center gap-2 text-success">
-          <CircleCheck aria-hidden="true" />
-          {notice}
-        </p>
       )}
 
       <Dialog
@@ -110,7 +98,7 @@ export default function User() {
           <EmailForm
             onChanged={(updated) => {
               void loadRun(() => Promise.resolve(updated), { silent: true })
-              setNotice(text.email.success)
+              toast.success(text.email.success)
               close()
             }}
           />
@@ -129,7 +117,7 @@ export default function User() {
           </DialogHeader>
           <PasswordForm
             onChanged={() => {
-              setNotice(text.password.success)
+              toast.success(text.password.success)
               close()
             }}
           />
