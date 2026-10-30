@@ -1,11 +1,11 @@
 import { Camera, Eraser, HandCoins, Pencil, Trash2, Undo2 } from 'lucide-react'
 import { useRef } from 'react'
 
+import DetailActions from '@/components/DetailActions'
 import DetailField from '@/components/DetailField'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
 import { useToast } from '@/components/toast/useToast'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
@@ -145,64 +145,65 @@ function Detail({
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
-        {open && (
-          <>
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => onSettle(claim)}>
-              <HandCoins aria-hidden="true" />
-              {text.actions.settle}
-            </Button>
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => onCorrect(claim)}>
-              <Pencil aria-hidden="true" />
-              {text.actions.correct}
-            </Button>
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => onWaive(claim)}>
-              <Eraser aria-hidden="true" />
-              {text.actions.waive}
-            </Button>
-          </>
-        )}
-        {waived && (
-          <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => onUnwaive(claim)}>
-            <Undo2 aria-hidden="true" />
-            {text.actions.unwaive}
-          </Button>
-        )}
-        {receiptIds.length > 0 ? (
-          <Button type="button" variant="outline" size="lg" onClick={() => onViewReceipts(claim)}>
-            <Camera aria-hidden="true" />
-            {copy.receipts.viewReceipt}
-          </Button>
-        ) : (
-          <>
-            <Button type="button" variant="outline" size="lg" disabled={uploading} onClick={() => fileInput.current?.click()}>
-              <Camera aria-hidden="true" />
-              {uploading ? copy.receipts.uploading : copy.receipts.addFromRow}
-            </Button>
-            {/* Hidden from the accessibility tree: the button above is the one
-                control, and an exposed file input reads as a second
-                "Tambah foto nota" button. */}
-            <input
-              ref={fileInput}
-              type="file"
-              accept={ACCEPTED_TYPES}
-              aria-label={copy.receipts.addFromRow}
-              aria-hidden="true"
-              tabIndex={-1}
-              className="sr-only"
-              disabled={uploading}
-              onChange={handlePick}
-            />
-          </>
-        )}
-        {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
-        {open && (
-          <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => onDelete(claim)}>
-            <Trash2 aria-hidden="true" />
-            {text.actions.delete}
-          </Button>
-        )}
-      </div>
+      <DetailActions
+        actions={[
+          ...(open
+            ? [
+                {
+                  key: 'settle',
+                  label: text.actions.settle,
+                  icon: HandCoins,
+                  tone: 'primary' as const,
+                  disabled: busy,
+                  onClick: () => onSettle(claim),
+                },
+                { key: 'correct', label: text.actions.correct, icon: Pencil, disabled: busy, onClick: () => onCorrect(claim) },
+                { key: 'waive', label: text.actions.waive, icon: Eraser, disabled: busy, onClick: () => onWaive(claim) },
+              ]
+            : []),
+          ...(waived
+            ? [{ key: 'unwaive', label: text.actions.unwaive, icon: Undo2, disabled: busy, onClick: () => onUnwaive(claim) }]
+            : []),
+          receiptIds.length > 0
+            ? { key: 'receipts', label: copy.receipts.viewReceipt, icon: Camera, onClick: () => onViewReceipts(claim) }
+            : {
+                key: 'receipts',
+                label: uploading ? copy.receipts.uploading : copy.receipts.addFromRow,
+                shortLabel: uploading ? copy.receipts.uploading : copy.receipts.addShort,
+                icon: Camera,
+                disabled: uploading,
+                onClick: () => fileInput.current?.click(),
+              },
+          ...(open
+            ? [
+                {
+                  key: 'delete',
+                  label: text.actions.delete,
+                  icon: Trash2,
+                  tone: 'destructive' as const,
+                  disabled: busy,
+                  onClick: () => onDelete(claim),
+                },
+              ]
+            : []),
+        ]}
+      />
+      {/* Hidden from the accessibility tree: the nota button above is the one
+          control, and an exposed file input reads as a second button. */}
+      {receiptIds.length === 0 && (
+        <input
+          ref={fileInput}
+          type="file"
+          accept={ACCEPTED_TYPES}
+          aria-label={copy.receipts.addFromRow}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="sr-only"
+          disabled={uploading}
+          onChange={handlePick}
+        />
+      )}
+      {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
     </div>
   )
 }

@@ -152,6 +152,10 @@ export const copy = {
     // inside the viewer the "attach another" action, since adding a first photo
     // and a second are the same action.
     addFromRow: 'Tambah foto nota',
+    // The same action as a half-width button in a record's detail
+    // (DetailActions, #768), where the full phrase does not fit beside a
+    // neighbour; the camera icon carries "tambah".
+    addShort: 'Foto nota',
     // The dialog's blank state, per parent kind - a claim is a talangan, not a
     // transaksi.
     emptyTransaction: 'Transaksi ini belum punya foto nota. Tambahkan dengan tombol di bawah.',

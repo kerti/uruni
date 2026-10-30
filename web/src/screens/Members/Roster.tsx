@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import DetailActions from '@/components/DetailActions'
 import DateField from '@/components/DateField'
 import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
@@ -578,25 +579,22 @@ function EditMemberDialog({
           </div>
 
           {confirming === null ? (
-            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              {inactive ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  disabled={busy}
-                  onClick={() => void submit(() => updateMember(shown.id, { inactiveOn: null }), text.reactivated)}
-                >
-                  {busy ? text.reinstating : text.reinstate}
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" size="lg" onClick={() => setConfirming('deactivate')}>
-                  {text.deactivate}
-                </Button>
-              )}
-              <Button type="button" variant="ghost" size="lg" className="text-destructive" onClick={() => setConfirming('delete')}>
-                {text.delete}
-              </Button>
+            // The record's own actions, laid out as every detail lays them
+            // out (DetailActions, #768): two columns, destructive last.
+            <div className="border-t border-border pt-3">
+              <DetailActions
+                actions={[
+                  inactive
+                    ? {
+                        key: 'reinstate',
+                        label: busy ? text.reinstating : text.reinstate,
+                        disabled: busy,
+                        onClick: () => void submit(() => updateMember(shown.id, { inactiveOn: null }), text.reactivated),
+                      }
+                    : { key: 'deactivate', label: text.deactivate, onClick: () => setConfirming('deactivate') },
+                  { key: 'delete', label: text.delete, tone: 'destructive', onClick: () => setConfirming('delete') },
+                ]}
+              />
             </div>
           ) : (
             <p className="border-t border-border pt-3 text-sm text-attention-text">
