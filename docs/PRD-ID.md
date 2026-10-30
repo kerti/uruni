@@ -98,7 +98,7 @@ Entitas utama:
 - Mencatat bahwa seorang anggota menalangi lebih dulu → menjadi utang kepadanya.
 - Menyelesaikan talangan saat dibayar kembali. Nota opsional dan tidak pernah wajib (parkir Rp2.000 tak perlu nota). Baris buku besar pembayarannya terdeskripsi otomatis — anggota yang diganti dan catatan klaimnya sendiri — sehingga aktivitas terbaru dan laporan terbaca sebagai talangan, bukan nominal telanjang. (Ditambahkan 2026-09-08.)
 - **Putihkan** saat anggota memaafkan utangnya — label di antarmuka adalah "Putihkan". Klaim tetap tercatat dalam riwayat; ia hanya berhenti menjadi utang. Dapat dibatalkan, karena pemutihan juga bisa salah dicatat.
-- **Perbaiki atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
+- **Ubah atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
 
 ### 7.5 Amplop
 - Membuka amplop untuk sebuah peristiwa (sakit, duka, kelahiran, pernikahan).
