@@ -100,11 +100,15 @@ test.describe('moves and corrections', () => {
     const afterSpend = { tunai: opening - moved - spent, bank: moved, main: opening - allocated - spent, envelope: allocated }
     await expectBeranda(page, afterSpend)
 
-    // Riwayat > Transaksi: the spend's own row, found by its amount, carries
-    // the correction control on its pos name.
+    // Riwayat > Transaksi: the spend's own row, found by its amount; its
+    // detail carries the Perbaiki pos button (#739).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     const row = page.getByRole('listitem').filter({ hasText: formatIDR(spent) })
-    await row.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }).click()
+    await row.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    await page
+      .getByRole('dialog', { name: copy.transactionDetail.heading })
+      .getByRole('button', { name: copy.purposeCorrection.heading })
+      .click()
 
     const dialog = page.getByRole('dialog', { name: copy.purposeCorrection.heading })
     await expect(dialog.getByText(copy.purposeCorrection.explainer)).toBeVisible()

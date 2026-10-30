@@ -321,7 +321,7 @@ export default function Home({
           transactions={recentTransactions}
           purposeNames={purposeNames}
           emptyMessage={copy.home.recentActivityEmpty}
-          onReceiptsChanged={() => void run(loadHomeData, { silent: true })}
+          onRefresh={() => run(loadHomeData, { silent: true })}
         />
       </section>
     </div>

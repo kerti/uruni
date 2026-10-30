@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
@@ -228,6 +228,7 @@ export default function Incidentals({
         showCloseForm={showCloseForm}
         onRecord={(memberId) => onRecordFor(purposeId, memberId)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
+        onActivityChanged={refreshDetail}
         onShowClose={() => {
           setShowCloseForm(true)
           setFeedback(null)
@@ -271,6 +272,7 @@ function DetailView({
   showCloseForm,
   onRecord,
   onViewTransactions,
+  onActivityChanged,
   onShowClose,
   onCancelClose,
   onClose,
@@ -288,6 +290,7 @@ function DetailView({
   showCloseForm: boolean
   onRecord: (memberId?: number) => void
   onViewTransactions: () => void
+  onActivityChanged: () => Promise<void>
   onShowClose: () => void
   onCancelClose: () => void
   onClose: (accountId: number, closedOn: string, note: string) => void
@@ -437,7 +440,7 @@ function DetailView({
       {/* The envelope and what can be done with it above; what has moved
           through it below - two sections, one hairline (#319). */}
       <SectionDivider />
-      <EnvelopeActivity envelope={envelope} onViewAll={onViewTransactions} />
+      <EnvelopeActivity envelope={envelope} onViewAll={onViewTransactions} onChanged={onActivityChanged} />
     </div>
   )
 }
@@ -802,11 +805,31 @@ const ENVELOPE_ACTIVITY_COUNT = 5
  * Refetches whenever the envelope object is replaced - a close, a reopen or a
  * rename reloads the detail, and a close posts the rollover row.
  */
-function EnvelopeActivity({ envelope, onViewAll }: { envelope: Incidental; onViewAll: () => void }) {
+function EnvelopeActivity({
+  envelope,
+  onViewAll,
+  onChanged,
+}: {
+  envelope: Incidental
+  onViewAll: () => void
+  /** Re-reads the envelope after a row here was corrected, reversed or given a
+   * nota: a correction or a reversal moves its collected and spent figures,
+   * and the new `envelope` object refetches this list (below). */
+  onChanged: () => Promise<void>
+}) {
   const [state, run] = useApi<Transaction[]>()
+  // Once the list is on screen, a refetch is silent: dropping to Loading would
+  // unmount the rows, taking the "done" line and any open dialog with them.
+  const loaded = useRef(false)
 
   useEffect(() => {
-    void run(() => listTransactions({ purposeId: envelope.purpose_id }).then((page) => page.transactions.slice(0, ENVELOPE_ACTIVITY_COUNT)))
+    void run(
+      () => listTransactions({ purposeId: envelope.purpose_id }).then((page) => page.transactions.slice(0, ENVELOPE_ACTIVITY_COUNT)),
+      {
+        silent: loaded.current,
+      },
+    )
+    loaded.current = true
   }, [run, envelope])
 
   // Every row here carries this envelope's purpose, so its name is the one
@@ -838,7 +861,12 @@ function EnvelopeActivity({ envelope, onViewAll }: { envelope: Incidental; onVie
           }
         />
       ) : state.data ? (
-        <TransactionList transactions={state.data} purposeNames={purposeNames} emptyMessage={copy.home.recentActivityEmpty} />
+        <TransactionList
+          transactions={state.data}
+          purposeNames={purposeNames}
+          emptyMessage={copy.home.recentActivityEmpty}
+          onRefresh={onChanged}
+        />
       ) : (
         <Loading />
       )}

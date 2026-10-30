@@ -55,11 +55,31 @@ function renderRows(rows: Transaction[]) {
 
 /** The same list Riwayat renders: with a correction handler, so an eligible
  * row's pos is a control. Home passes none, which renderRows covers. */
-function renderCorrectableRows(rows: Transaction[], onCorrectPurpose = vi.fn()) {
-  const result = render(
-    <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onCorrectPurpose={onCorrectPurpose} />,
-  )
-  return { ...result, onCorrectPurpose }
+function renderCorrectableRows(rows: Transaction[], onRefresh = vi.fn()) {
+  const result = render(<TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onRefresh={onRefresh} />)
+  return { ...result, onRefresh }
+}
+
+/** Wraps a fetch stub so the detail's purposes lookup (the correction picker's
+ * choices, loaded when a detail opens) is answered and never mistaken for the
+ * write a test is about. */
+function routePurposes(impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  return (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).startsWith('/api/purposes')
+      ? Promise.resolve(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      : impl(input, init)
+}
+
+/** The calls a test's stub saw that were not that lookup. */
+function writesOf(mock: { mock: { calls: unknown[][] } }) {
+  return mock.mock.calls.filter(([input]) => !String(input).startsWith('/api/purposes'))
+}
+
+/** Taps a row's card and returns its detail dialog (#739: the card is the
+ * row's only control, and every action lives in the detail). */
+async function openDetail(index = 0) {
+  await userEvent.click(screen.getAllByRole('button', { name: /^Lihat rincian:/ })[index])
+  return screen.findByRole('dialog', { name: copy.transactionDetail.heading })
 }
 
 describe('TransactionList row labels (#257)', () => {
@@ -266,27 +286,34 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
   })
 
-  it("makes an eligible row's pos the control, and hands the row back on tap", async () => {
-    const { onCorrectPurpose } = renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
+  it('offers Perbaiki pos in the detail of an eligible row, and hands the row to the correction dialog once the detail is gone', async () => {
+    renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
 
-    const control = screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })
-    await userEvent.click(control)
+    const detail = await openDetail()
+    await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))
 
-    expect(onCorrectPurpose).toHaveBeenCalledTimes(1)
-    expect(onCorrectPurpose.mock.calls[0][0].id).toBe(12)
+    expect(await screen.findByRole('dialog', { name: copy.purposeCorrection.heading })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: copy.transactionDetail.heading })).not.toBeInTheDocument()
   })
 
-  it("leaves an ineligible row's pos as plain text - a dead tap is worse than none", () => {
-    // Eligibility varies row by row (ADR-033), which is why the whole row is
-    // not tappable: a dues row and the expense beneath it would look identical
-    // and behave differently.
-    renderCorrectableRows([transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' })])
+  it("renders an eligible row's pos as plain text: the card is its only button", () => {
+    renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
 
-    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
     expect(screen.getByText('Kas Utama')).toBeInTheDocument()
   })
 
-  it('leaves a dues reversal ineligible, though it is an adjustment', () => {
+  it("offers no Perbaiki pos in an ineligible row's detail - a dead tap is worse than none", async () => {
+    // Eligibility varies row by row (ADR-033): a dues row and the expense
+    // beneath it look identical, so the detail decides.
+    renderCorrectableRows([transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' })])
+
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+  })
+
+  it('offers no Perbaiki pos on a dues reversal, though it is an adjustment', async () => {
     renderCorrectableRows([
       transaction({
         id: 14,
@@ -299,7 +326,26 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
       }),
     ])
 
-    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+  })
+
+  it('offers no Perbaiki pos on a transfer', async () => {
+    renderCorrectableRows([
+      transaction({
+        id: 19,
+        kind: 'transfer',
+        transfer_id: 9,
+        transfer_kind: 'between_accounts',
+        transfer_from_name: 'Tunai',
+        transfer_to_name: 'Bank',
+      }),
+    ])
+
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
   })
 
   it('offers no control at all where no handler is passed - Beranda stays inert', () => {
@@ -330,11 +376,13 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
   })
 
-  it('leaves a named contribution ineligible (ADR-034): moving it would strand participation', () => {
+  it('leaves a named contribution ineligible (ADR-034): moving it would strand participation', async () => {
     renderCorrectableRows([transaction({ id: 18, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
 
-    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria("Jane's wedding") })).not.toBeInTheDocument()
-    expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+    expect(screen.getAllByText("Jane's wedding").length).toBeGreaterThan(0)
   })
 })
 
@@ -351,7 +399,7 @@ describe('TransactionList reversal (ADR-042)', () => {
 
   function renderReversible(rows: Transaction[], onReversed = vi.fn()) {
     const result = render(
-      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onReversed={onReversed} />,
+      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onRefresh={onReversed} />,
     )
     return { ...result, onReversed }
   }
@@ -365,7 +413,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   }
 
   it('offers Batalkan transaksi in the entry detail of a reversible row, and the button posts nothing', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn(routePurposes(() => Promise.reject(new Error('no write expected'))))
     vi.stubGlobal('fetch', fetchMock)
     renderReversible([transaction({ id: 30, reversible: true })])
 
@@ -373,7 +421,7 @@ describe('TransactionList reversal (ADR-042)', () => {
 
     await openForm()
 
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writesOf(fetchMock)).toEqual([])
     expect(screen.getByRole('button', { name: text.reverseConfirm })).toBeInTheDocument()
     expect(screen.getByText(text.reverseExplainer)).toBeInTheDocument()
   })
@@ -430,7 +478,9 @@ describe('TransactionList reversal (ADR-042)', () => {
   })
 
   it('posts only the reason on confirm, then hands the refetch to the caller', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(transaction({ id: 99, kind: 'adjustment', direction: 'out' }), 201)))
+    const fetchMock = vi.fn(
+      routePurposes(() => Promise.resolve(jsonResponse(transaction({ id: 99, kind: 'adjustment', direction: 'out' }), 201))),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     const { onReversed } = renderReversible([transaction({ id: 36, reversible: true })])
@@ -447,7 +497,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   })
 
   it('closes the form on Jangan jadi, posting nothing', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn(routePurposes(() => Promise.reject(new Error('no write expected'))))
     vi.stubGlobal('fetch', fetchMock)
     renderReversible([transaction({ id: 37, reversible: true })])
 
@@ -455,7 +505,7 @@ describe('TransactionList reversal (ADR-042)', () => {
     await userEvent.click(screen.getByRole('button', { name: text.reverseCancel }))
 
     expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(writesOf(fetchMock)).toEqual([])
   })
 
   it('shows the transaksi wording, not the iuran one, for a repeat reversal', async () => {
@@ -540,10 +590,11 @@ describe('TransactionList the pair read as linked (ADR-042)', () => {
     expect(screen.queryByText(/transaksi 12 Agustus 2026/)).not.toBeInTheDocument()
   })
 
-  it('hides the pos correction control on a reversed row, though the row would otherwise be eligible', () => {
+  it('hides Perbaiki pos on a reversed row, though the row would otherwise be eligible', async () => {
     renderCorrectableRows([transaction({ id: 46, purpose_id: 1, reversed: true }), transaction({ id: 47, purpose_id: 1 })])
 
-    expect(screen.getAllByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).toHaveLength(1)
+    const reversedDetail = await openDetail(0)
+    expect(within(reversedDetail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
   })
 })
 
@@ -560,28 +611,40 @@ describe('TransactionList receipt photos (#154)', () => {
 
   function renderWithReceipts(rows: Transaction[], onReceiptsChanged = vi.fn()) {
     const result = render(
-      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onReceiptsChanged={onReceiptsChanged} />,
+      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onRefresh={onReceiptsChanged} />,
     )
     return { ...result, onReceiptsChanged }
   }
 
-  it('offers "Tambah foto nota" on a row with no photo, and uploads through the transactions route', async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL) =>
-      Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 } satisfies ReceiptUploadResult, 201)),
+  /** The row's detail, then its Lihat nota: the viewer opens once the detail is gone. */
+  async function openViewer(index = 0) {
+    const detail = await openDetail(index)
+    await userEvent.click(within(detail).getByRole('button', { name: text.viewReceipt }))
+    return screen.findByRole('dialog', { name: text.dialogHeading })
+  }
+
+  it('offers "Tambah foto nota" in the detail of a row with no photo, opens the picker directly, and uploads through the transactions route', async () => {
+    const fetchMock = vi.fn(
+      routePurposes(() => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 } satisfies ReceiptUploadResult, 201))),
     )
     vi.stubGlobal('fetch', fetchMock)
+    const pickerOpened = vi.spyOn(HTMLInputElement.prototype, 'click')
 
     const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 20, receipt_ids: [] })])
 
-    await userEvent.click(screen.getByRole('button', { name: text.addFromRow }))
-    const dialog = await screen.findByRole('dialog')
-    // Blank state: no photo yet, so the dialog says so before the picker.
-    expect(within(dialog).getByText(text.emptyTransaction)).toBeInTheDocument()
+    const detail = await openDetail()
+    expect(within(detail).queryByRole('button', { name: text.viewReceipt })).not.toBeInTheDocument()
+    await userEvent.click(within(detail).getByRole('button', { name: text.addFromRow }))
+
+    // The picker, not an empty dialog: the detail is the only dialog there is.
+    expect(pickerOpened).toHaveBeenCalled()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    pickerOpened.mockRestore()
+
     await userEvent.upload(
-      within(dialog).getByLabelText(text.addFromRow, { selector: 'input[type="file"]' }),
+      within(detail).getByLabelText(text.addFromRow, { selector: 'input[type="file"]' }),
       new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
     )
-    await userEvent.click(within(dialog).getByRole('button', { name: text.addFromRow }))
 
     await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
     const uploadCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/receipts'))
@@ -589,13 +652,53 @@ describe('TransactionList receipt photos (#154)', () => {
     expect((uploadCall![0] as string).toString()).toContain('/api/transactions/20/receipts')
   })
 
+  it('shows the upload error in the detail when the photo is refused', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'receipt_too_large', message: 'x' } }, 413))),
+    )
+
+    renderWithReceipts([transaction({ id: 26, receipt_ids: [] })])
+
+    const detail = await openDetail()
+    await userEvent.upload(
+      within(detail).getByLabelText(text.addFromRow, { selector: 'input[type="file"]' }),
+      new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+    )
+
+    expect(await within(detail).findByRole('alert')).toBeInTheDocument()
+  })
+
+  it('offers "Lihat nota", not "Tambah foto nota", on a row with a photo, and shows its thumbnail', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderWithReceipts([transaction({ id: 27, receipt_ids: [42] })])
+
+    const detail = await openDetail()
+
+    expect(within(detail).getByRole('button', { name: text.viewReceipt })).toBeInTheDocument()
+    expect(within(detail).queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
+    expect(detail.querySelector('img[src="/api/receipts/42"]')).toBeInTheDocument()
+  })
+
+  it('shows a read-only camera and count on a row with notas, carries the count in the card name, and keeps one button', () => {
+    const { container } = renderWithReceipts([transaction({ id: 28, receipt_ids: [41, 42] }), transaction({ id: 29, receipt_ids: [] })])
+
+    expect(screen.getAllByRole('button')).toHaveLength(2)
+    expect(
+      screen.getByRole('button', {
+        name: `${copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026')}, ${copy.transactionDetail.receiptCountAria(2)}`,
+      }),
+    ).toBeInTheDocument()
+    expect(container.querySelectorAll('.lucide-camera')).toHaveLength(1)
+  })
+
   it('opens the per-photo menu with both Ganti foto and Hapus foto', async () => {
     vi.stubGlobal('fetch', vi.fn())
 
     renderWithReceipts([transaction({ id: 24, receipt_ids: [42] })])
 
-    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
-    const dialog = await screen.findByRole('dialog')
+    const dialog = await openViewer()
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
     const menu = await screen.findByRole('menu')
@@ -609,8 +712,7 @@ describe('TransactionList receipt photos (#154)', () => {
 
     const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 21, receipt_ids: [42] })])
 
-    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
-    const dialog = await screen.findByRole('dialog')
+    const dialog = await openViewer()
 
     // Hapus foto lives inside the "more" menu on the photo itself - opening
     // it surfaces the inline confirm bar, not the delete API call.
@@ -625,17 +727,18 @@ describe('TransactionList receipt photos (#154)', () => {
 
   it('replaces a photo through the menu: delete-then-upload, both through the receipt routes', async () => {
     const calls: string[] = []
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push(`${(init?.method ?? 'GET').toUpperCase()} ${input.toString()}`)
-      if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
-      return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 } satisfies ReceiptUploadResult, 201))
-    })
+    const fetchMock = vi.fn(
+      routePurposes((input, init) => {
+        calls.push(`${(init?.method ?? 'GET').toUpperCase()} ${input.toString()}`)
+        if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
+        return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 } satisfies ReceiptUploadResult, 201))
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 23, receipt_ids: [42] })])
 
-    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
-    const dialog = await screen.findByRole('dialog')
+    const dialog = await openViewer()
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
     await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: text.change }))
@@ -657,8 +760,7 @@ describe('TransactionList receipt photos (#154)', () => {
 
     renderWithReceipts([transaction({ id: 25, receipt_ids: [42] })])
 
-    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
-    const dialog = await screen.findByRole('dialog')
+    const dialog = await openViewer()
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.zoomAria }))
 
@@ -668,10 +770,13 @@ describe('TransactionList receipt photos (#154)', () => {
     await waitFor(() => expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(2))
   })
 
-  it('renders no receipt control at all where onReceiptsChanged is not passed', () => {
+  it('renders no Nota action at all where onRefresh is not passed', async () => {
     renderRows([transaction({ id: 22, receipt_ids: [] })])
 
-    expect(screen.queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
+    expect(within(detail).queryByRole('button', { name: text.viewReceipt })).not.toBeInTheDocument()
   })
 })
 
@@ -712,13 +817,11 @@ describe('TransactionList entry detail (#359)', () => {
     expect(within(dialog).getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
   })
 
-  it('leaves a row control to do its own job, without opening the detail', async () => {
-    const { onCorrectPurpose } = renderCorrectableRows([transaction({ direction: 'out' })])
+  it('keeps the card the only button, so a tap anywhere on a row opens the detail', async () => {
+    renderCorrectableRows([transaction({ direction: 'out' })])
 
-    await userEvent.click(screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }))
-
-    expect(onCorrectPurpose).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('dialog', { name: copy.transactionDetail.heading })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    await openDetail()
   })
 })
 
@@ -930,7 +1033,7 @@ describe('TransactionList transfer detail (#738)', () => {
         transactions={[transaction({ ...location, reversible: true })]}
         purposeNames={purposeNames}
         emptyMessage="Belum ada."
-        onReversed={onReversed}
+        onRefresh={onReversed}
       />,
     )
 

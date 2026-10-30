@@ -1341,6 +1341,9 @@ export const copy = {
     // row's facts, since a list of twenty-five identical "lihat rincian"
     // controls tells her nothing (as purposeCorrection.controlAria).
     openAria: (purposeName: string, amount: string, date: string) => `Lihat rincian: ${purposeName}, ${amount}, ${date}`,
+    // Appended to openAria after a comma on a row with notas: the row's
+    // camera + count glyph is hidden from screen readers, so this carries it.
+    receiptCountAria: (count: number) => `${count} foto nota`,
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
     purposeLabel: 'Pos',
@@ -1351,10 +1354,6 @@ export const copy = {
     receiptsLabel: 'Foto nota',
   },
   purposeCorrection: {
-    // The control the pos becomes on an eligible row. Names the row it would
-    // correct, because a screen reader otherwise meets it as one of
-    // twenty-five identical-sounding controls.
-    controlAria: (purposeName: string) => `Perbaiki pos: ${purposeName}`,
     // Read out beside the muted icon on a row a correction already points at.
     // Never rendered visibly - the glyph is the visible half (the icon/srWord
     // split).
