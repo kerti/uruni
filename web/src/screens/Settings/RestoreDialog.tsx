@@ -171,7 +171,7 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
 
               <DialogFooter className="mt-1">
                 <Button type="button" variant="outline" size="lg" disabled={confirming} onClick={handleClose}>
-                  {confirmText.cancel}
+                  {copy.common.close}
                 </Button>
                 <Button type="submit" size="lg" disabled={confirming || password === ''}>
                   {confirming ? confirmText.confirming : confirmText.confirm}

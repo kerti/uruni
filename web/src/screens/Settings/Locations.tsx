@@ -245,9 +245,6 @@ function AddLocationDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-              {text.cancel}
-            </Button>
             <Button type="submit" size="lg" disabled={busy || name.trim() === ''}>
               {busy ? text.adding : text.add}
             </Button>
@@ -269,8 +266,8 @@ type ConfirmKind = 'deactivate' | 'delete' | null
  * time the exit animation plays) - the last known account stays on screen for
  * that window rather than blanking the form mid-close.
  *
- * The footer always holds the buttons for the decision on screen: Batal and
- * Simpan while editing, Batal and the confirm action once Nonaktifkan or Hapus
+ * The footer always holds the buttons for the decision on screen: Simpan
+ * while editing, Tutup and the confirm action once Nonaktifkan or Hapus
  * has been tapped - with the consequence named just above it.
  */
 function EditLocationDialog({
@@ -429,9 +426,6 @@ function EditLocationDialog({
           <DialogFooter className="mt-1">
             {confirming === null ? (
               <>
-                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-                  {text.cancel}
-                </Button>
                 <Button type="submit" size="lg" disabled={busy}>
                   {busy ? text.saving : text.save}
                 </Button>
@@ -439,7 +433,8 @@ function EditLocationDialog({
             ) : (
               <>
                 <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setConfirming(null)}>
-                  {text.cancel}
+                  {/* Back to the edit form, not out of the dialog - so not "Tutup". */}
+                  {copy.common.back}
                 </Button>
                 <Button
                   type="button"

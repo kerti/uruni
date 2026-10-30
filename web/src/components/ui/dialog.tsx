@@ -119,7 +119,7 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
         // opt out of Radix's describedby warning explicitly.
         aria-describedby={undefined}
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid max-h-[90dvh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
+          'fixed top-1/2 left-1/2 z-50 flex max-h-[90dvh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           className,
         )}
         style={keyboardStyle ? { ...style, ...keyboardStyle } : style}
@@ -130,30 +130,53 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
         }}
         {...props}
       >
-        {children}
+        {/* The scroller is an inner box, not the Content itself: the close
+         * button is a sibling of it, so it stays put while the form scrolls,
+         * and the sticky DialogHeader pins the title beside it. The box
+         * carries the padding, so a focused field's ring is never clipped. */}
+        <div data-slot="dialog-body" className="grid min-h-0 gap-4 overflow-y-auto p-4">
+          {children}
+        </div>
         <DialogPrimitive.Close
           aria-label={closeLabel}
-          className="absolute top-1 right-1 flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          // top-2 centres the 44px target on the header's first line: the band
+          // is py-4 around a 28px title line, so that line's middle is 30px
+          // down, and 30 - 22 = 8. The visible circle sits inside the target.
+          className="group absolute top-2 right-2 z-20 flex size-11 items-center justify-center rounded-full outline-none"
         >
-          <X aria-hidden="true" className="size-4" />
+          <span className="flex size-9 items-center justify-center rounded-full bg-popover text-foreground ring-1 ring-border transition-colors group-hover:bg-muted group-focus-visible:ring-3 group-focus-visible:ring-ring/50">
+            <X aria-hidden="true" className="size-5" />
+          </span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   )
 }
 
-/** Title block. Right padding keeps a long title clear of the close button. */
+/** Title band, pinned to the top of the scrolling body so fields scroll under
+ * it. Its tint mirrors DialogFooter's (bg-muted/50 over the popover), mixed
+ * opaque here because fields pass underneath, so the dialog reads as a frame:
+ * title and the way out on top, the main action below. The negative margins
+ * and matching padding undo the body's p-4 so the band is edge to edge; -top-4
+ * because a sticky offset is measured inside that padding, so top-0 would pin
+ * it 16px low, over the first field. Right padding keeps a long title clear of
+ * the close button. */
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="dialog-header" className={cn('flex flex-col gap-2 pr-10', className)} {...props} />
+  return (
+    <div
+      data-slot="dialog-header"
+      className={cn(
+        'sticky -top-4 z-10 -mx-4 -mt-4 flex flex-col gap-2 rounded-t-xl border-b border-border bg-[color-mix(in_oklab,var(--muted)_50%,var(--popover))] px-4 py-4 pr-14',
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
-    <DialogPrimitive.Title
-      data-slot="dialog-title"
-      className={cn('font-heading text-base leading-none font-medium', className)}
-      {...props}
-    />
+    <DialogPrimitive.Title data-slot="dialog-title" className={cn('font-heading text-lg leading-7 font-semibold', className)} {...props} />
   )
 }
 

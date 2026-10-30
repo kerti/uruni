@@ -206,7 +206,7 @@ function PdfButton({ reportUrl }: { reportUrl: string }) {
 }
 
 /** The confirm. The consequence is named in terracotta, never alarm-red
- * (ADR-032), and the dialog's X is its only close besides Batal. */
+ * (ADR-032), and the dialog's X is its only close besides Tutup. */
 function RenewDialog({
   open,
   onClose,
@@ -247,7 +247,7 @@ function RenewDialog({
         {state.status === 'error' && state.error && <ErrorState error={state.error} />}
         <DialogFooter className="mt-1">
           <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-            {text.cancel}
+            {copy.common.close}
           </Button>
           <Button type="button" size="lg" disabled={busy} onClick={handleConfirm}>
             {busy ? text.renewing : text.renewConfirmAction}

@@ -287,7 +287,7 @@ test.describe('report and backup', () => {
     // Still the same page and session: no reload, no login screen, and the
     // password field is there for another try.
     await expect(dialog.getByLabel(confirmText.passwordLabel)).toBeVisible()
-    await dialog.getByRole('button', { name: confirmText.cancel }).click()
+    await dialog.getByRole('button', { name: copy.common.close }).first().click()
     await expect(dialog).not.toBeVisible()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
 

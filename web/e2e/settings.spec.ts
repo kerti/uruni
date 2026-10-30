@@ -64,6 +64,15 @@ test.describe('settings', () => {
     await row.click()
     await expect(editDialog).toBeVisible()
 
+    // The X is the one way out of an edit dialog: no footer cancel, and
+    // closing it leaves the page as it was.
+    await expect(editDialog.getByRole('button', { name: copy.common.close })).toHaveCount(1)
+    await editDialog.getByRole('button', { name: copy.common.close }).click()
+    await expect(editDialog).toBeHidden()
+    await expect(page).toHaveURL(/\/settings$/)
+    await row.click()
+    await expect(editDialog).toBeVisible()
+
     // Never used, so the server allows the delete (a location with history
     // answers 409 and the dialog shows "nonaktifkan, bukan hapus" - covered in
     // vitest). Delete asks for the inline confirm first, never window.confirm().

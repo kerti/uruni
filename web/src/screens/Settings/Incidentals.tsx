@@ -298,9 +298,6 @@ function OpenIncidentalDialog({
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
 
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-              {openText.cancel}
-            </Button>
             <Button type="submit" size="lg" disabled={!canSubmit}>
               {busy ? openText.submitting : openText.submit}
             </Button>

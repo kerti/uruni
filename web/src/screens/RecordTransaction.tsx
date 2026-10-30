@@ -810,7 +810,7 @@ export default function RecordTransaction({
           look like a list of things to do. */}
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-              {text.cancel}
+              {copy.common.back}
             </Button>
             <Button type="submit" size="lg" disabled={!canSubmit}>
               {submitting ? text.submitting : text.submit}

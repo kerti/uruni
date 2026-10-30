@@ -222,7 +222,7 @@ describe('A tier screen', () => {
     it('sends nothing when she backs out, and keeps the form to edit again', async () => {
       const { calls, row } = await startCorrection([rate(1, 1, 50_000, '2026-01')], 1, '55000')
 
-      await userEvent.click(within(row).getByRole('button', { name: text.cancel }))
+      await userEvent.click(within(row).getByRole('button', { name: copy.common.close }))
 
       expect(within(row).getByRole('button', { name: text.saveRate })).toBeInTheDocument()
       expect(within(row).queryByText(/seterusnya/)).not.toBeInTheDocument()
@@ -280,7 +280,7 @@ describe('A tier screen', () => {
     await screen.findByText(text.effectiveFrom('Januari 2026'))
 
     await userEvent.click(screen.getByRole('button', { name: text.editRate }))
-    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+    await userEvent.click(screen.getByRole('button', { name: copy.common.back }))
 
     expect(screen.getByRole('button', { name: text.editRate })).toBeInTheDocument()
     expect(calls).toHaveLength(0)

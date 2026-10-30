@@ -402,9 +402,6 @@ function AddMemberDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-              {text.cancel}
-            </Button>
             <Button type="submit" size="lg" disabled={busy || name.trim() === ''}>
               {busy ? text.adding : text.add}
             </Button>
@@ -618,9 +615,6 @@ function EditMemberDialog({
           <DialogFooter className="mt-1">
             {confirming === null ? (
               <>
-                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-                  {text.cancel}
-                </Button>
                 <Button type="submit" size="lg" disabled={busy}>
                   {busy ? text.saving : text.save}
                 </Button>
@@ -628,7 +622,8 @@ function EditMemberDialog({
             ) : (
               <>
                 <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setConfirming(null)}>
-                  {text.cancel}
+                  {/* Back to the edit form, not out of the dialog - so not "Tutup". */}
+                  {copy.common.back}
                 </Button>
                 <Button
                   type="button"
