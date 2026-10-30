@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 // duesStatusResponse is one row of GET /api/dues-status's roster: a member who
@@ -25,9 +26,11 @@ type duesStatusResponse struct {
 	PaidThrough *string `json:"paid_through"`
 }
 
-func toDuesStatusResponse(s ledger.MemberDuesStatus) duesStatusResponse {
+func toDuesStatusResponse(s ledger.MemberDuesStatus, arrearsMonths int) duesStatusResponse {
+	member := toMemberResponse(s.Member)
+	member.ArrearsMonths = arrearsMonths
 	resp := duesStatusResponse{
-		Member:     toMemberResponse(s.Member),
+		Member:     member,
 		OwedAmount: s.OwedAmount.Int64(),
 		PaidAmount: s.PaidAmount.Int64(),
 		Status:     string(s.Status),
@@ -43,8 +46,18 @@ func toDuesStatusResponse(s ledger.MemberDuesStatus) duesStatusResponse {
 // malformed value reaches validateDuesPeriod and returns as
 // ErrInvalidArgument through mapLedgerError, the single source of truth
 // (ADR-027).
+//
+// Each row's member.arrears_months is the Anggota roster's number, from the
+// same derivation (ArrearsMonthsForMembers) against the real current month,
+// whatever period was asked for: the Status card shows the same Tunggakan the
+// roster does (#740).
 func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	loc, ok := a.fundLocation(w, r, fund)
 	if !ok {
 		return
 	}
@@ -55,9 +68,19 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	members := make([]store.Member, len(statuses))
+	for i, s := range statuses {
+		members[i] = s.Member.Member
+	}
+	arrears, err := a.ledger.ArrearsMonthsForMembers(r.Context(), fund.ID, members, ledger.CurrentDuesPeriod(a.now(), loc))
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+
 	resp := make([]duesStatusResponse, 0, len(statuses))
 	for _, s := range statuses {
-		resp = append(resp, toDuesStatusResponse(s))
+		resp = append(resp, toDuesStatusResponse(s, arrears[s.Member.ID]))
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

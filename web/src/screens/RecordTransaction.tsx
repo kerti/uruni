@@ -102,6 +102,7 @@ export default function RecordTransaction({
   initialPurposeId,
   initialMemberId,
   initialDues = false,
+  initialDuesPeriod = null,
   fronted = false,
   onFrontedChange,
   onDuesRecorded,
@@ -125,6 +126,8 @@ export default function RecordTransaction({
    * lands after a dues payment depends on the door she came in by.
    * initialDues opens with it chosen. */
   initialDues?: boolean
+  /** The month a dues payment opened from a status card is for ("YYYY-MM"). */
+  initialDuesPeriod?: string | null
   /** "Pengeluaran ini ditalangi" is ticked: a member paid out of pocket, so
    * this Keluar is a Talangan claim. Form mode is a route (ADR-032), so it
    * arrives from `/record?fronted=1` and every change goes back out through
@@ -562,7 +565,13 @@ export default function RecordTransaction({
       </div>
 
       {duesChosen ? (
-        <RecordDuesPayment embedded onRecorded={onDuesRecorded} onCancel={onDuesCancel ?? onCancel} />
+        <RecordDuesPayment
+          embedded
+          initialMemberId={initialMemberId}
+          initialPeriod={initialDuesPeriod}
+          onRecorded={onDuesRecorded}
+          onCancel={onDuesCancel ?? onCancel}
+        />
       ) : (
         <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
           {/* Keluar only (#368): somebody paid out of pocket, so this is a

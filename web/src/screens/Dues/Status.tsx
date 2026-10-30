@@ -20,6 +20,15 @@ import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
 const text = copy.dues
 const gridText = copy.dues.grid
 const historyText = copy.dues.history
+const arrearsText = copy.members.roster
+
+/** A period read from the URL: "YYYY-MM" inside the selector's bounds, else
+ * null (the caller falls back to this month). */
+function periodFromUrl(value: string | null): string | null {
+  if (value === null || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return null
+  const { min, max } = periodBounds.status()
+  return value >= min && value <= max ? value : null
+}
 
 /** Rows the "belum bayar" filter isolates - unpaid and partial both still owe
  * something for the period (PRD section 7.3's "simple 'not yet paid' view").
@@ -52,7 +61,9 @@ const badgeIcon: Record<DuesStatusKind, typeof Circle> = {
 function StatusBadge({ status }: { status: DuesStatusKind }) {
   const Icon = badgeIcon[status]
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${badgeTone[status]}`}>
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium whitespace-nowrap ${badgeTone[status]}`}
+    >
       <Icon aria-hidden="true" className="size-4" />
       {text.statuses[status]}
     </span>
@@ -85,7 +96,9 @@ export default function DuesStatus({
   notice,
 }: {
   onBack: () => void
-  onRecordPayment: () => void
+  /** Opens the payment form. A card's "Catat iuran" names the member and the
+   * card's month; the bottom button names neither. */
+  onRecordPayment: (target?: { memberId: number; period: string }) => void
   refetchKey?: unknown
   notice?: string | null
 }) {
@@ -103,7 +116,21 @@ export default function DuesStatus({
     })
   }
 
-  const [period, setPeriod] = useState(currentPeriod)
+  // The month lives in the URL too (?period=YYYY-MM), so coming back from the
+  // payment form lands on the month she left. Replaced, not pushed: browsing
+  // months is not a trail she walks back through.
+  const period = periodFromUrl(searchParams.get('period')) ?? currentPeriod()
+  function setPeriod(next: string) {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current)
+        if (next === currentPeriod()) params.delete('period')
+        else params.set('period', next)
+        return params
+      },
+      { replace: true },
+    )
+  }
   const [unpaidOnly, setUnpaidOnly] = useState(false)
   // Which member's payment history is open - one at a time, and never open
   // across a period change, since the history is period-scoped.
@@ -195,7 +222,17 @@ export default function DuesStatus({
                       className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium">{row.member.name}</span>
+                        {/* The chip has its own line under the name: beside it,
+                        a phone truncated the name and wrapped the status
+                        badge. */}
+                        <span className="flex min-w-0 flex-col items-start gap-1">
+                          <span className="max-w-full truncate font-medium">{row.member.name}</span>
+                          {row.member.arrears_months > 0 && (
+                            <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
+                              {arrearsText.arrearsBadge(row.member.arrears_months)}
+                            </span>
+                          )}
+                        </span>
                         {/* Paid ahead with a known end (#357): the badge stays a
                         plain "Lunas" and the month moves to its own line
                         below, so neither the name nor the badge wraps. */}
@@ -211,6 +248,19 @@ export default function DuesStatus({
                       </div>
                       {row.status === 'paid_in_advance' && row.paid_through && (
                         <p className="text-right text-sm text-success">{text.paidThrough(formatPeriod(row.paid_through))}</p>
+                      )}
+
+                      {UNPAID_STATUSES.includes(row.status) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="lg"
+                          className="w-full"
+                          aria-label={text.recordForMemberAria(row.member.name)}
+                          onClick={() => onRecordPayment({ memberId: row.member.id, period })}
+                        >
+                          {text.recordForMember}
+                        </Button>
                       )}
 
                       {/* A disclosure, not a link: the panel opens in place
@@ -265,7 +315,7 @@ export default function DuesStatus({
         <Button type="button" variant="outline" size="lg" onClick={onBack}>
           {text.back}
         </Button>
-        <Button type="button" size="lg" onClick={onRecordPayment}>
+        <Button type="button" size="lg" onClick={() => onRecordPayment()}>
           {text.recordLink}
         </Button>
       </div>

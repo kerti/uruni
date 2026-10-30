@@ -83,6 +83,26 @@ function lastPostedBody(fetchMock: ReturnType<typeof stubApi>) {
 }
 
 describe('RecordDuesPayment', () => {
+  it('seeds the member and ticks arrears plus the month when opened from a status card (#740)', async () => {
+    vi.stubGlobal('fetch', stubApi())
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} initialMemberId={2} initialPeriod="2026-02" />)
+
+    // The boxes render with the periods; the ticks land one effect later.
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Januari 2026/ })).toBeChecked())
+    await waitFor(() => expect(screen.getByLabelText(text.amountLabel('Januari 2026'))).toHaveValue(formatIDR(50_000)))
+    expect(screen.getByRole('checkbox', { name: /Februari 2026/ })).toBeChecked()
+    await waitFor(() => expect(selectedOptionName(text.memberLabel)).toBe('Warga Dua'))
+  })
+
+  it('ticks nothing and picks nobody without the status card props (#740)', async () => {
+    vi.stubGlobal('fetch', stubApi())
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await pickFirstMember()
+
+    const boxes = await screen.findAllByRole('checkbox')
+    for (const box of boxes) expect(box).not.toBeChecked()
+  })
+
   it('asks for a member before offering any period', async () => {
     vi.stubGlobal('fetch', stubApi())
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
