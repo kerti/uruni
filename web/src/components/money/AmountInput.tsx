@@ -24,12 +24,22 @@ export default function AmountInput({
   value,
   onChange,
   disabled,
+  labelHidden = false,
+  autoFocus = false,
+  selectOnFocus = false,
 }: {
   id?: string
   label: string
   value: number
   onChange: (amount: number) => void
   disabled?: boolean
+  /** The label stays for assistive tech but is not drawn - for a field whose
+   * context already says what it is (an inline editor under a row). */
+  labelHidden?: boolean
+  autoFocus?: boolean
+  /** Focus selects the whole figure, so typing replaces it - for an editor
+   * opened to change an amount already filled in. */
+  selectOnFocus?: boolean
 }) {
   const autoId = useId()
   const inputId = id ?? autoId
@@ -60,6 +70,10 @@ export default function AmountInput({
     // replacing them.
     const input = event.target
     requestAnimationFrame(() => {
+      if (selectOnFocus) {
+        input.select()
+        return
+      }
       if (input.selectionStart !== input.selectionEnd) return
       input.setSelectionRange(input.value.length, input.value.length)
     })
@@ -71,7 +85,9 @@ export default function AmountInput({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={inputId}>{label}</Label>
+      <Label htmlFor={inputId} className={labelHidden ? 'sr-only' : undefined}>
+        {label}
+      </Label>
       <Input
         id={inputId}
         type="text"
@@ -83,6 +99,7 @@ export default function AmountInput({
         onFocus={handleFocus}
         onBlur={handleBlur}
         disabled={disabled}
+        autoFocus={autoFocus}
       />
     </div>
   )

@@ -74,6 +74,7 @@ async function pay(page: Page, member: string, periods: { period: string; amount
     await page.getByRole('checkbox', { name: formatPeriod(period) }).check()
     // Emptied first: the field shows the formatted rate when blurred, and a fill
     // straight over it concatenates (see dues.spec.ts).
+    await page.getByRole('button', { name: new RegExp(`^${copy.dues.payment.editAmount(formatPeriod(period))}`) }).click()
     const field = page.getByLabel(copy.dues.payment.amountLabel(formatPeriod(period)))
     await field.fill('')
     await field.fill(String(amount))
@@ -206,6 +207,12 @@ test.describe('dues in depth', () => {
       await expect(page.getByRole('checkbox', { name: formatPeriod(jakartaMonth(offset)) })).toBeChecked()
     }
     await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
+    // Passing over the oldest owed month gets a quiet note (#741), never a block.
+    const oldest = page.getByRole('checkbox', { name: formatPeriod(jakartaMonth(-3)) })
+    await oldest.uncheck()
+    await expect(page.getByText(copy.dues.payment.skippedArrears(1))).toBeVisible()
+    await oldest.check()
+    await expect(page.getByText(copy.dues.payment.skippedArrears(1))).toHaveCount(0)
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()
 
     // Back on the month she left, with the confirmation, and no arrears left.

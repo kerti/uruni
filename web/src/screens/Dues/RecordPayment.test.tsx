@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import { copy } from '@/copy/id'
-import { chooseOption, selectedOptionName } from '@/test/select'
+import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/select'
 import { formatIDR } from '@/lib/money'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Purpose } from '@/lib/purposes'
@@ -76,6 +76,12 @@ async function pickFirstMember() {
   await chooseOption(text.memberLabel, 'Warga Satu')
 }
 
+/** Taps the edit button on a ticked month and returns the amount field it opens. */
+async function openEditor(period: string) {
+  await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${text.editAmount(period)}`) }))
+  return screen.getByLabelText(text.amountLabel(period))
+}
+
 /** The parsed body of the last POST /api/dues-payments the stub saw. */
 function lastPostedBody(fetchMock: ReturnType<typeof stubApi>) {
   const call = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST').at(-1)
@@ -91,7 +97,9 @@ describe('RecordDuesPayment', () => {
     // the ticks land one effect later.
     const january = await screen.findByRole('checkbox', { name: /Januari 2026/ }, { timeout: 5000 })
     await waitFor(() => expect(january).toBeChecked())
-    await waitFor(() => expect(screen.getByLabelText(text.amountLabel('Januari 2026'))).toHaveValue(formatIDR(50_000)))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: new RegExp(`^${text.editAmount('Januari 2026')}`) })).toHaveTextContent(formatIDR(50_000)),
+    )
     expect(screen.getByRole('checkbox', { name: /Februari 2026/ })).toBeChecked()
     await waitFor(() => expect(selectedOptionName(text.memberLabel)).toBe('Warga Dua'))
   })
@@ -118,8 +126,43 @@ describe('RecordDuesPayment', () => {
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
     await pickFirstMember()
 
-    expect(await screen.findByLabelText(text.amountLabel('Januari 2026'))).toHaveValue(formatIDR(50_000))
-    expect(screen.getByLabelText(text.amountLabel('Februari 2026'))).toHaveValue(formatIDR(30_000))
+    await screen.findByRole('checkbox', { name: /Januari 2026/ })
+    const rows = screen.getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent(formatIDR(50_000))
+    expect(rows[1]).toHaveTextContent(formatIDR(30_000))
+    // Compact: no amount field until a ticked month's edit button is tapped,
+    // and only a ticked month offers one.
+    expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Ubah jumlah/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Januari 2026/ }))
+    expect(screen.getAllByRole('button', { name: /^Ubah jumlah/ })).toHaveLength(1)
+    expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
+    // Autofocused, so it shows the bare digits it holds.
+    expect(await openEditor('Januari 2026')).toHaveValue('50000')
+    // Unticking closes the editor.
+    await userEvent.click(screen.getByRole('checkbox', { name: /Januari 2026/ }))
+    expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
+  })
+
+  it('keeps a part-paid month on one line: "sebagian" after the month, the paid part read but not drawn', async () => {
+    vi.stubGlobal('fetch', stubApi())
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await pickFirstMember()
+
+    const february = await screen.findByRole('checkbox', { name: 'Februari 2026' })
+    const row = screen.getAllByRole('listitem')[1]
+    expect(row).toHaveTextContent(new RegExp(`Februari 2026.*${text.partialSuffix}.*${formatIDR(30_000).replace('.', '\\.')}`))
+    expect(row).not.toHaveTextContent(copy.dues.paidLabel)
+    expect(february).toHaveAccessibleDescription(text.paidSoFar(formatIDR(20_000)))
+    expect(screen.getAllByRole('listitem')[0]).not.toHaveTextContent(text.partialSuffix)
+
+    // Paying less than the sisa: only the figure changes; the month's word holds still.
+    await userEvent.click(february)
+    const amount = (await openEditor('Februari 2026')) as HTMLInputElement
+    await waitFor(() => expect([amount.selectionStart, amount.selectionEnd]).toEqual([0, amount.value.length]))
+    await userEvent.keyboard('10000')
+    expect(screen.getByRole('button', { name: /^Ubah jumlah Februari 2026/ })).toHaveTextContent(formatIDR(10_000))
+    expect(row).toHaveTextContent(text.partialSuffix)
   })
 
   it("sends the client's own local month as ?through", async () => {
@@ -128,7 +171,7 @@ describe('RecordDuesPayment', () => {
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
     await pickFirstMember()
 
-    await screen.findByLabelText(text.amountLabel('Januari 2026'))
+    await screen.findByRole('checkbox', { name: /Januari 2026/ })
     const now = new Date()
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const url = fetchMock.mock.calls.map(([input]) => input.toString()).find((u) => u.includes('/outstanding-dues')) ?? ''
@@ -197,13 +240,108 @@ describe('RecordDuesPayment', () => {
     await pickFirstMember()
 
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Januari 2026' }))
-    const amount = screen.getByLabelText(text.amountLabel('Januari 2026'))
-    await userEvent.clear(amount)
-    await userEvent.type(amount, '25000')
+    const amount = (await openEditor('Januari 2026')) as HTMLInputElement
+    // The editor opens focused with the whole figure selected, so typing
+    // replaces it rather than appending to it.
+    await waitFor(() => expect(amount).toHaveFocus())
+    await waitFor(() => expect([amount.selectionStart, amount.selectionEnd]).toEqual([0, amount.value.length]))
+    await userEvent.keyboard('25000')
+    expect(screen.getByText(text.totalLabel).parentElement).toHaveTextContent(formatIDR(25_000))
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(true))
     expect(lastPostedBody(fetchMock).periods).toEqual([{ dues_period: '2026-01', amount: 25_000 }])
+  })
+
+  it('shows the arrears beside a member in the picker, without changing the option name', async () => {
+    const withArrears = members.map((m) => (m.id === 2 ? { ...m, arrears_months: 3 } : m))
+    const base = stubApi()
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/members') && !url.includes('/outstanding-dues'))
+        return Promise.resolve(jsonResponse({ members: withArrears, next_cursor: null }))
+      return base(input, init)
+    })
+    render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await screen.findByLabelText(text.memberLabel)
+    const names = await selectOptionNames(text.memberLabel)
+    expect(names[0]).toBe('Warga Satu')
+    expect(names[1]).toContain(copy.members.roster.arrearsBadge(3))
+    expect(screen.getByRole('option', { name: 'Warga Dua' })).toBeInTheDocument()
+  })
+
+  describe('select all arrears', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-03-10T09:00:00+07:00'))
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('ticks exactly the months before the current one, keeping what was ticked', async () => {
+      const periods: OutstandingDuesPeriod[] = [
+        { period: '2026-01', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+        { period: '2026-02', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+        { period: '2026-03', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+      ]
+      const fetchMock = stubApi(periods)
+      vi.stubGlobal('fetch', fetchMock)
+      render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+      await pickFirstMember()
+
+      await userEvent.click(await screen.findByRole('checkbox', { name: 'Maret 2026' }))
+      await userEvent.click(screen.getByRole('button', { name: text.selectAllArrears }))
+      expect(screen.getByRole('checkbox', { name: 'Januari 2026' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: /^Februari 2026/ })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Maret 2026' })).toBeChecked()
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Maret 2026' }))
+      await userEvent.click(screen.getByRole('button', { name: text.selectAllArrears }))
+      expect(screen.getByRole('checkbox', { name: 'Maret 2026' })).not.toBeChecked()
+      await userEvent.click(screen.getByRole('button', { name: text.submit }))
+      await waitFor(() =>
+        expect(lastPostedBody(fetchMock).periods).toEqual([
+          { dues_period: '2026-01', amount: 50_000 },
+          { dues_period: '2026-02', amount: 50_000 },
+        ]),
+      )
+    })
+
+    it('notes older owed months passed over, without blocking Simpan', async () => {
+      const periods: OutstandingDuesPeriod[] = [
+        { period: '2026-01', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+        { period: '2026-02', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+        { period: '2026-03', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+      ]
+      vi.stubGlobal('fetch', stubApi(periods))
+      render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+      await pickFirstMember()
+
+      // Oldest first: nothing passed over, no note.
+      await userEvent.click(await screen.findByRole('checkbox', { name: 'Januari 2026' }))
+      expect(screen.queryByText(text.skippedArrears(1))).toBeNull()
+
+      // March ticked past an unticked February: one month passed over.
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Maret 2026' }))
+      expect(screen.getByRole('status')).toHaveTextContent(text.skippedArrears(1))
+      expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Januari 2026' }))
+      expect(screen.getByRole('status')).toHaveTextContent(text.skippedArrears(2))
+
+      await userEvent.click(screen.getByRole('button', { name: text.selectAllArrears }))
+      expect(screen.queryByText(/tunggakan yang lebih lama/)).toBeNull()
+    })
+
+    it('is absent when nothing is owed before the current month', async () => {
+      vi.stubGlobal('fetch', stubApi([{ period: '2026-03', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' }]))
+      render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
+      await pickFirstMember()
+
+      await screen.findByRole('checkbox', { name: 'Maret 2026' })
+      expect(screen.queryByRole('button', { name: text.selectAllArrears })).not.toBeInTheDocument()
+    })
   })
 
   it('says the member is square when nothing is outstanding, and refuses to submit', async () => {
@@ -260,7 +398,7 @@ describe('RecordDuesPayment', () => {
       await userEvent.click(await screen.findByRole('button', { name: text.addMonth('November 2026') }))
       await userEvent.click(await screen.findByRole('button', { name: text.addMonth('Desember 2026') }))
 
-      expect(await screen.findByLabelText(text.amountLabel('Desember 2026'))).toHaveValue(formatIDR(50_000))
+      await screen.findByRole('checkbox', { name: 'Desember 2026' })
       expect(throughs(fetchMock)).toEqual(['2026-10', '2026-11', '2026-12'])
 
       for (const name of ['Oktober 2026', 'November 2026', 'Desember 2026']) {
@@ -283,15 +421,16 @@ describe('RecordDuesPayment', () => {
       await pickFirstMember()
 
       await userEvent.click(await screen.findByRole('checkbox', { name: 'Oktober 2026' }))
-      const october = screen.getByLabelText(text.amountLabel('Oktober 2026'))
-      await userEvent.clear(october)
-      await userEvent.type(october, '40000')
+      const october = (await openEditor('Oktober 2026')) as HTMLInputElement
+      await waitFor(() => expect([october.selectionStart, october.selectionEnd]).toEqual([0, october.value.length]))
+      await userEvent.keyboard('40000')
 
       await userEvent.click(screen.getByRole('button', { name: text.addMonth('November 2026') }))
 
-      await screen.findByLabelText(text.amountLabel('November 2026'))
+      await screen.findByRole('checkbox', { name: 'November 2026' })
       expect(screen.getByRole('checkbox', { name: 'Oktober 2026' })).toBeChecked()
-      expect(screen.getByLabelText(text.amountLabel('Oktober 2026'))).toHaveValue(formatIDR(40_000))
+      expect(screen.getByLabelText(text.amountLabel('Oktober 2026'))).toHaveValue('40000')
+      expect(screen.getByRole('button', { name: /^Ubah jumlah Oktober 2026/ })).toHaveTextContent(formatIDR(40_000))
     })
 
     it('offers the next month to a member who owes nothing yet', async () => {
