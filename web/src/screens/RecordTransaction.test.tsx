@@ -229,7 +229,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={onCancel} onDuesRecorded={vi.fn()} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: text.cancel }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.common.back }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 

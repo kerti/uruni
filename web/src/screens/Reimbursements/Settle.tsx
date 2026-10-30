@@ -176,7 +176,7 @@ function SettleForm({
 
       <div className="grid grid-cols-2 gap-2">
         <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
-          {text.settle.cancel}
+          {copy.common.back}
         </Button>
         <Button type="submit" size="lg" disabled={!canSubmit}>
           {submitting ? text.settle.submitting : text.settle.submit}

@@ -247,6 +247,24 @@ describe('Settings locations', () => {
     expect((calls[0].body as { inactive_on: string }).inactive_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
+  it('backs out of the inline confirm with Kembali, to the edit form, posting nothing', async () => {
+    const { fetchMock, calls } = stubAccounts([account(1, 'Kotak kas')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
+
+    // Not "Tutup": it returns to the form, it does not close the dialog.
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.common.back }))
+    expect(screen.getByRole('dialog', { name: text.editTitle })).toBeInTheDocument()
+    expect(within(dialog).queryByText(text.deactivateConfirm)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: text.save })).toBeInTheDocument()
+    expect(calls).toHaveLength(0)
+  })
+
   it('reinstates a retired location immediately, no confirm needed', async () => {
     const { fetchMock, calls } = stubAccounts([account(1, 'Kotak kas', 'cash', '2026-08-01')])
     vi.stubGlobal('fetch', fetchMock)
@@ -370,7 +388,7 @@ describe('Settings locations', () => {
     expect(currentSearch()).toBe('?edit=location%3A1')
 
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
-    await userEvent.click(within(dialog).getByRole('button', { name: text.cancel }))
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.common.close }))
 
     await waitFor(() => expect(currentSearch()).toBe(''))
   })

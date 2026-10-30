@@ -199,7 +199,7 @@ function CorrectForm({
 
       <div className="grid grid-cols-2 gap-2">
         <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
-          {text.correct.cancel}
+          {copy.common.back}
         </Button>
         <Button type="submit" size="lg" disabled={!canSubmit}>
           {submitting ? text.correct.submitting : text.correct.submit}

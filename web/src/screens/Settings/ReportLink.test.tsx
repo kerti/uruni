@@ -237,7 +237,8 @@ describe('ReportLink', () => {
     expect(await screen.findByText(text.renewConfirm)).toBeInTheDocument()
     expect(screen.getByTestId('location-search')).toHaveTextContent('?edit=report%3Anew')
 
-    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+    // The footer's Tutup comes before the X in the DOM; both close.
+    await userEvent.click(screen.getAllByRole('button', { name: copy.common.close })[0])
     await waitFor(() => expect(screen.queryByText(text.renewConfirm)).not.toBeInTheDocument())
     expect(posts).toEqual([])
     expect(screen.getByText(OLD_URL)).toBeInTheDocument()

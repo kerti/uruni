@@ -178,9 +178,6 @@ function AddPassThroughDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-              {text.cancel}
-            </Button>
             <Button type="submit" size="lg" disabled={busy || trimmed === ''}>
               {busy ? text.adding : text.add}
             </Button>
@@ -251,9 +248,6 @@ function EditPassThroughDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
-              {text.cancel}
-            </Button>
             <Button type="submit" size="lg" disabled={busy || trimmed === '' || unchanged}>
               {busy ? text.saving : text.save}
             </Button>

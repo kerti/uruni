@@ -496,7 +496,7 @@ describe('TransactionList reversal (ADR-042)', () => {
     expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
   })
 
-  it('closes the form on Jangan jadi, posting nothing', async () => {
+  it('closes the form on Tidak jadi, posting nothing', async () => {
     const fetchMock = vi.fn(routePurposes(() => Promise.reject(new Error('no write expected'))))
     vi.stubGlobal('fetch', fetchMock)
     renderReversible([transaction({ id: 37, reversible: true })])

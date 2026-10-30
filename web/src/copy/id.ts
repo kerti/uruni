@@ -88,7 +88,7 @@ export const copy = {
       reverseDateToday: 'Dicatat hari ini, karena kas sudah dicek sejak transaksi ini.',
       reverseNoteLabel: 'Alasan (opsional)',
       reverseConfirm: 'Ya, batalkan',
-      reverseCancel: 'Jangan jadi',
+      reverseCancel: 'Tidak jadi',
       reverseSubmitting: 'Membatalkan…',
       reverseSuccess: 'Transaksi dibatalkan.',
       // Scoped ahead of copy.common.errors' transaction_already_reversed
@@ -161,10 +161,8 @@ export const copy = {
     deleteConfirm: 'Hapus foto nota ini?',
     uploading: 'Mengunggah…',
     deleting: 'Menghapus…',
-    cancel: 'Batal',
-    // aria-label for ReceiptPicker's clear-selection control, distinct from
-    // `cancel` (unapproved - see report): "Batal" reads as abandoning the
-    // whole form, not clearing one field.
+    // aria-label for ReceiptPicker's clear-selection control: it clears one
+    // field, not the whole form.
     clearSelected: 'Hapus foto yang dipilih',
     // aria-label for the row icon, built from its name (unapproved - see
     // report): a bare glyph needs an accessible name distinct from the sighted
@@ -196,6 +194,9 @@ export const copy = {
     // The dialog primitive's close button - every sheet in the app uses this
     // label, never a screen-specific synonym.
     close: 'Tutup',
+    // The way out of a full-screen form, which has no X and, installed to a
+    // home screen, no browser back button.
+    back: 'Kembali',
     // Wire error codes -> Indonesian copy. The server's message field stays
     // English by design (ADR-014: the API is a code surface) and never reaches
     // the treasurer; this map is what she sees instead.
@@ -553,9 +554,6 @@ export const copy = {
     noteLabel: 'Catatan (opsional)',
     submit: 'Simpan',
     submitting: 'Menyimpan…',
-    // Installed to a home screen there is no browser back button, so leaving
-    // the form without recording needs its own way out.
-    cancel: 'Batal',
     // Keluar's tick box: a member paid out of pocket. Ticked, the entry becomes
     // a Talangan claim instead of money leaving the kas.
     frontedLabel: 'Pengeluaran ini ditalangi',
@@ -751,9 +749,6 @@ export const copy = {
     fixNoteLabel: 'Catatan (opsional)',
     submit: 'Simpan hasil cek',
     submitting: 'Menyimpan…',
-    // Same reasoning as record.cancel: installed standalone, there is no
-    // browser back button.
-    cancel: 'Batal',
     // Shown when POST /api/reconciliations rejects a "matched" line because
     // its real difference is no longer zero - a transaction landed between
     // the count and the submit (reconciliation.go:185-188). Never phrased
@@ -878,9 +873,6 @@ export const copy = {
       dateLabel: 'Tanggal',
       submit: 'Simpan',
       submitting: 'Menyimpan…',
-      // As record.cancel: installed standalone, there is no browser back
-      // button.
-      cancel: 'Batal',
       success: 'Pembayaran iuran tercatat.',
     },
     // Undoing a dues payment recorded in error (PRD section 7.3). A payment is
@@ -898,10 +890,10 @@ export const copy = {
       reverse: 'Batalkan',
       noteLabel: 'Alasan (opsional)',
       // A yes to the question the open card is asking - short enough to share
-      // one action row with Batal at 375px.
+      // one action row with Tidak jadi at 375px.
       confirm: 'Ya, batalkan',
       submitting: 'Membatalkan…',
-      cancel: 'Jangan jadi',
+      cancel: 'Tidak jadi',
       success: 'Pembayaran dibatalkan.',
     },
   },
@@ -959,7 +951,6 @@ export const copy = {
       editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
       deactivate: 'Nonaktifkan',
       deactivating: 'Menonaktifkan…',
       // The consequence, named in terracotta and never alarm-red, right above
@@ -998,7 +989,6 @@ export const copy = {
       nameLabel: 'Nama kas',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
       // The whole card is the edit affordance, so the word for the action
       // lives on the dialog it opens. There is one kas, so the card never
       // needs to say which one.
@@ -1068,7 +1058,6 @@ export const copy = {
       // The consequence, in terracotta (ADR-032).
       renewConfirm: 'Tautan lama berhenti bekerja. Siapa pun yang memegangnya harus diberi tautan baru.',
       renewConfirmAction: 'Ya, buat tautan baru',
-      cancel: 'Batal',
     },
     locations: {
       heading: 'Lokasi penyimpanan',
@@ -1093,7 +1082,6 @@ export const copy = {
       editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
       deactivate: 'Nonaktifkan',
       deactivating: 'Menonaktifkan…',
       // The inline confirm swapped into the edit dialog's footer (ADR-032) -
@@ -1132,7 +1120,6 @@ export const copy = {
       editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
     },
     tiers: {
       heading: 'Kategori iuran',
@@ -1156,7 +1143,6 @@ export const copy = {
       nameHeading: 'Nama',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
       // On the tier's screen the name and a rate correction are both
       // saveable at once, so a bare "Simpan" twice would leave two identical
       // buttons - ambiguous read aloud and to a test query. Each names what it
@@ -1296,7 +1282,6 @@ export const copy = {
     passwordLabel: 'Kata sandi akun di server ini',
     confirm: 'Pulihkan',
     confirming: 'Memulihkan…',
-    cancel: 'Batal',
   },
   // Correcting a posted row's pos (ADR-033): the marker on a corrected row, and
   // the one-field dialog that does the correcting. The word is "pos"
@@ -1385,7 +1370,6 @@ export const copy = {
     explainer: 'Saldo kas tidak berubah - hanya posnya yang dipindahkan. Transaksi aslinya tetap tercatat apa adanya.',
     save: 'Perbaiki',
     saving: 'Memperbaiki…',
-    cancel: 'Batal',
     success: 'Pos sudah diperbaiki.',
   },
   // Riwayat's Talangan tab (PRD section 7.4; under Riwayat per ADR-032;
@@ -1423,7 +1407,6 @@ export const copy = {
       dateLabel: 'Tanggal pembayaran',
       submit: 'Bayar',
       submitting: 'Membayar…',
-      cancel: 'Batal',
       success: 'Talangan sudah dibayar.',
     },
     actions: {
@@ -1455,7 +1438,6 @@ export const copy = {
       heading: 'Perbaiki talangan',
       submit: 'Simpan',
       submitting: 'Menyimpan…',
-      cancel: 'Batal',
       success: 'Talangan berhasil diperbaiki.',
     },
     errors: {
@@ -1489,7 +1471,6 @@ export const copy = {
       recipientsEmpty: 'Belum ada anggota aktif.',
       submit: 'Buka',
       submitting: 'Membuka…',
-      cancel: 'Batal',
     },
     detail: {
       targetLabel: 'Target',
@@ -1514,9 +1495,8 @@ export const copy = {
       dateLabel: 'Tanggal ditutup',
       noteLabel: 'Catatan (opsional)',
       notePlaceholder: 'Mis. sisa dana halal bihalal',
-      submit: 'Tutup',
+      submit: 'Tutup amplop',
       submitting: 'Menutup…',
-      cancel: 'Batal',
       success: 'Amplop sudah ditutup.',
       // Shown after a close, honestly - the amount is rendered even at zero
       // (ADR-031's "shown honestly, including zero"), and this sentence says
@@ -1564,7 +1544,6 @@ export const copy = {
       nameLabel: 'Acara',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      cancel: 'Batal',
       success: 'Amplop sudah diperbarui.',
     },
     // The participation table (ADR-034): who has contributed and how much,

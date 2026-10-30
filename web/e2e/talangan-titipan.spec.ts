@@ -231,7 +231,7 @@ test.describe('talangan and titipan', () => {
 
     // Cancelled, the claim stays.
     await chooseHapus(card, page)
-    await card.getByRole('button', { name: copy.reimbursements.settle.cancel }).click()
+    await card.getByRole('button', { name: copy.common.close }).click()
     await expect(card).toBeVisible()
 
     await removeClaim(card, page)

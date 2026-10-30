@@ -271,7 +271,7 @@ describe('Incidentals', () => {
 
     // Open the close form and submit it
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
     await chooseOption(text.close.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
@@ -320,7 +320,7 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
     await chooseOption(text.close.accountLabel, 'Tunai')
     await userEvent.type(screen.getByLabelText(text.close.noteLabel), 'Sisa halal bihalal')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
@@ -364,7 +364,7 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
     await chooseOption(text.close.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
@@ -408,7 +408,7 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
     expect(selectedOptionName(text.close.accountLabel)).toBe('Bank Uji Coba')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
@@ -444,14 +444,14 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
     await chooseOption(text.close.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
     // The named 409's copy is shown, never the English wire message, and the
     // close form stays open so she can read why.
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.incidental_already_closed))
-    expect(screen.getByText(text.close.heading)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument()
   })
 
   it('a closed envelope shows the reopen affordance instead of record/close', async () => {

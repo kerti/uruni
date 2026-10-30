@@ -39,7 +39,7 @@ interface TierData {
  * "tabs when every panel is an unbounded list, sections when the panels are
  * short and read together" - so a growing history in a modal is on the wrong
  * side. And correcting a row inside a dialog gives her two different backs: a
- * Batal that returns to the list, and an Esc or backdrop tap that closes
+ * Kembali that returns to the list, and an Esc or backdrop tap that closes
  * everything and discards the correction, with nothing saying which is about
  * to happen - the ambiguity ADR-032's "no nested dialogs, ever" exists to
  * prevent. On a screen there is one way back, so a row's correction is an
@@ -290,7 +290,7 @@ function RateRow({
           {confirming ? (
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="lg" className="ml-auto" disabled={busy} onClick={() => setConfirming(false)}>
-                {text.cancel}
+                {copy.common.close}
               </Button>
               <Button type="button" size="lg" disabled={busy} onClick={applyCorrection}>
                 {busy ? text.rateCorrecting : text.rateCorrectConfirmAction}
@@ -328,7 +328,7 @@ function RateRow({
                   setEditing(false)
                 }}
               >
-                {text.cancel}
+                {copy.common.back}
               </Button>
               <Button type="submit" size="lg" disabled={busy}>
                 {busy ? text.saving : text.saveRate}
@@ -436,7 +436,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
       {confirming ? (
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="lg" className="ml-auto" disabled={busy} onClick={() => setConfirming(false)}>
-            {text.cancel}
+            {copy.common.close}
           </Button>
           <Button
             type="button"

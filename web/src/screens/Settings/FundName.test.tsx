@@ -286,7 +286,7 @@ describe('Settings fund (Kas ini)', () => {
 
     await screen.findByRole('dialog', { name: text.zone.editTitle })
     await chooseZoneOption('Asia/Makassar')
-    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+    await userEvent.click(screen.getByRole('button', { name: copy.common.close }))
 
     await waitFor(() => expect(currentSearch()).toBe(''))
     expect(calls).toHaveLength(0)
@@ -300,7 +300,7 @@ describe('Settings fund (Kas ini)', () => {
 
     await screen.findByRole('dialog', { name: text.zone.editTitle })
     await chooseZoneOption('Asia/Makassar')
-    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+    await userEvent.click(screen.getByRole('button', { name: copy.common.close }))
     await waitFor(() => expect(currentSearch()).toBe(''))
 
     await userEvent.click(

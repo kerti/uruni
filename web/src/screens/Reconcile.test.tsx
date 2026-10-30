@@ -891,7 +891,7 @@ describe('Reconcile', () => {
     vi.stubGlobal('fetch', routedFetch(stubLoad()))
     render(<Reconcile onDone={vi.fn()} onCancel={onCancel} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: text.cancel }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.common.back }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

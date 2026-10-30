@@ -120,7 +120,7 @@ test.describe('incidentals', () => {
 
     // Open the close form
     await page.getByRole('button', { name: copy.incidentals.actions.close, exact: true }).click()
-    await expect(page.getByText(copy.incidentals.close.heading)).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.incidentals.close.heading })).toBeVisible()
 
     // Pick the location (it opens on a default; picking is explicit), submit (date defaults to today)
     await chooseOption(page, copy.incidentals.close.accountLabel)

@@ -366,7 +366,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                     <p className="text-sm">{text.actions.delete}?</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Button type="button" size="lg" variant="outline" onClick={() => setDeleteId(null)} disabled={submitting}>
-                        {text.settle.cancel}
+                        {copy.common.close}
                       </Button>
                       <Button type="button" size="lg" variant="destructive" onClick={() => handleDelete(claim.id)} disabled={submitting}>
                         {submitting ? text.actions.deleting : text.actions.delete}

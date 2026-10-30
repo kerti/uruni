@@ -371,9 +371,9 @@ describe('App (record loop)', () => {
   })
 
   // The status matrix's Catat pembayaran opens Catat with Iuran already
-  // chosen - one dues form, one address - and Batal goes back through the door
+  // chosen - one dues form, one address - and Kembali goes back through the door
   // she came in by, not to Beranda.
-  it('opens Catat on Iuran from the dues matrix, and Batal returns there', async () => {
+  it('opens Catat on Iuran from the dues matrix, and Kembali returns there', async () => {
     window.history.pushState({}, '', '/dues')
     const base = authenticatedWithRecordRoutes()
     vi.stubGlobal(
@@ -391,13 +391,13 @@ describe('App (record loop)', () => {
     expect(await screen.findByRole('heading', { name: copy.dues.payment.heading })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: copy.record.directionDues })).toHaveAttribute('aria-pressed', 'true')
 
-    await userEvent.click(await screen.findByRole('button', { name: copy.dues.payment.cancel }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.common.back }))
     expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
   // #740: the way back is the matrix as she left it - view and month survive.
-  it.each(['?view=grid', '?period=2026-03'])('returns to the dues matrix with %s kept after Batal', async (search) => {
+  it.each(['?view=grid', '?period=2026-03'])('returns to the dues matrix with %s kept after Kembali', async (search) => {
     window.history.pushState({}, '', `/dues${search}`)
     const base = authenticatedWithRecordRoutes()
     vi.stubGlobal(
@@ -415,7 +415,7 @@ describe('App (record loop)', () => {
     await userEvent.click(await screen.findByRole('button', { name: copy.dues.recordLink }))
     expect(await screen.findByRole('heading', { name: copy.dues.payment.heading })).toBeInTheDocument()
 
-    await userEvent.click(await screen.findByRole('button', { name: copy.dues.payment.cancel }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.common.back }))
     await screen.findByRole('button', { name: copy.dues.recordLink })
     expect(window.location.pathname).toBe('/dues')
     expect(window.location.search).toBe(search)
@@ -534,7 +534,7 @@ describe('App (record loop)', () => {
 
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await screen.findByRole('heading', { name: copy.record.headingOut })
-    await userEvent.click(screen.getByRole('button', { name: copy.record.cancel }))
+    await userEvent.click(screen.getByRole('button', { name: copy.common.back }))
 
     expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
     expect(screen.queryByText(copy.record.successOut)).not.toBeInTheDocument()

@@ -52,7 +52,7 @@ export function useRefetchKey(): string {
  *
  * `open(value)` pushes a history entry carrying `?<param>=<value>` and marks
  * it with the tag above. `close()` reads the tag back: when the current entry
- * was pushed by `open`, closing is `navigate(-1)`, so Batal, a backdrop tap,
+ * was pushed by `open`, closing is `navigate(-1)`, so the X, a backdrop tap,
  * Esc and the back gesture all land in the same place - never a fresh entry
  * stacked behind the one that opened it. When it was NOT pushed by `open` (a
  * deep link straight to `?edit=...`), `close()` strips the param in place

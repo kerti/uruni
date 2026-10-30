@@ -125,7 +125,7 @@ describe('RestoreDialog', () => {
 
     await chooseFile(fetchMock)
     await screen.findByLabelText(confirmText.passwordLabel)
-    await user.click(screen.getByRole('button', { name: confirmText.cancel }))
+    await user.click(screen.getAllByRole('button', { name: copy.common.close })[0])
 
     await waitFor(() => expect(screen.queryByLabelText(confirmText.passwordLabel)).not.toBeInTheDocument())
     expect(fetchMock).not.toHaveBeenCalledWith('/api/restore/confirm', expect.anything())
@@ -177,7 +177,7 @@ describe('RestoreDialog', () => {
     await user.type(await screen.findByLabelText(confirmText.passwordLabel), 'wrong-password')
     await user.click(screen.getByRole('button', { name: confirmText.confirm }))
     await screen.findByText(common.errors.invalid_credentials)
-    await user.click(screen.getByRole('button', { name: confirmText.cancel }))
+    await user.click(screen.getAllByRole('button', { name: copy.common.close })[0])
     await waitFor(() => expect(screen.queryByLabelText(confirmText.passwordLabel)).not.toBeInTheDocument())
 
     act(() => ref.current?.openForStoredBackup('uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'))

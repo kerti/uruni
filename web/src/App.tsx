@@ -177,7 +177,7 @@ interface DuesState {
 }
 
 /** A dues payment opened from the status matrix rather than from Catat's
- * Iuran: saving and Batal both go back to the matrix, the door she came in
+ * Iuran: saving and Kembali both go back to the matrix, the door she came in
  * by. */
 interface RecordFromDuesState {
   /** The matrix's own query string ("?view=grid&period=2026-08", or ""), so

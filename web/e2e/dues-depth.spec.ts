@@ -227,7 +227,7 @@ test.describe('dues in depth', () => {
     await page.goto('/dues?view=grid')
     await page.getByRole('button', { name: copy.dues.recordLink }).click()
     await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
-    await page.getByRole('button', { name: copy.dues.payment.cancel }).click()
+    await page.getByRole('button', { name: copy.common.back }).click()
     await expect(page).toHaveURL(/\/dues\?view=grid$/)
     await expect(page.getByRole('button', { name: copy.dues.grid.viewTwelveMonths })).toHaveAttribute('aria-pressed', 'true')
   })

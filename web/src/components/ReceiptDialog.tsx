@@ -231,7 +231,7 @@ export default function ReceiptDialog({
                         setReplacementFile(null)
                       }}
                     >
-                      {text.cancel}
+                      {copy.common.close}
                     </Button>
                   </div>
                 </div>
@@ -243,7 +243,7 @@ export default function ReceiptDialog({
                       {busy ? text.deleting : text.delete}
                     </Button>
                     <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setConfirmingDeleteId(null)}>
-                      {text.cancel}
+                      {copy.common.close}
                     </Button>
                   </div>
                 </div>
