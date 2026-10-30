@@ -23,6 +23,37 @@ describe('DetailActions (#768)', () => {
     expect(buttons[2]).toHaveClass('col-span-2', 'text-destructive')
   })
 
+  it('gives a wide action its own row and lets a narrow one left unpaired take its row', () => {
+    render(
+      <DetailActions
+        actions={[
+          { key: 'unwaive', label: 'Batalkan pemutihan', wide: true, onClick: vi.fn() },
+          { key: 'nota', label: 'Lihat nota', onClick: vi.fn() },
+          { key: 'reverse', label: 'Batalkan transaksi', wide: true, tone: 'destructive', onClick: vi.fn() },
+        ]}
+      />,
+    )
+
+    for (const button of screen.getAllByRole('button')) expect(button).toHaveClass('col-span-2')
+  })
+
+  it('still pairs narrow actions around a wide one', () => {
+    render(
+      <DetailActions
+        actions={[
+          { key: 'a', label: 'Perbaiki pos', onClick: vi.fn() },
+          { key: 'b', label: 'Foto nota', onClick: vi.fn() },
+          { key: 'c', label: 'Batalkan transaksi', wide: true, onClick: vi.fn() },
+        ]}
+      />,
+    )
+
+    const [a, b, c] = screen.getAllByRole('button')
+    expect(a).not.toHaveClass('col-span-2')
+    expect(b).not.toHaveClass('col-span-2')
+    expect(c).toHaveClass('col-span-2')
+  })
+
   it('pairs an even count with no full-width button', () => {
     render(
       <DetailActions

@@ -10,6 +10,9 @@ export interface DetailAction {
   /** Used when the button shares its row (half width) and `label` would not
    * fit; a full-width button always shows `label`. */
   shortLabel?: string
+  /** Always takes a full row: for a label too long for half of one
+   * (Batalkan transaksi, Batalkan pemutihan) that has no short form. */
+  wide?: boolean
   icon?: LucideIcon
   onClick: () => void
   disabled?: boolean
@@ -39,11 +42,22 @@ export default function DetailActions({ actions }: { actions: DetailAction[] }) 
   return (
     <div className="grid grid-cols-2 gap-2">
       {actions.map((action, index) => (
-        // An odd one out is the last one, alone in its row: it takes the row.
-        <ActionButton key={action.key} action={action} full={actions.length % 2 === 1 && index === actions.length - 1} />
+        <ActionButton key={action.key} action={action} full={fullRow(actions, index)} />
       ))}
     </div>
   )
+}
+
+/** Whether the action at `index` takes a whole row, read in order: a wide one
+ * always does; a narrow one pairs with the next narrow one, and one left
+ * without a partner (the next is wide, or there is no next) takes the row. */
+function fullRow(actions: DetailAction[], index: number): boolean {
+  if (actions[index].wide) return true
+  let start = index
+  while (start > 0 && !actions[start - 1].wide) start--
+  const position = index - start
+  const next = actions[index + 1]
+  return position % 2 === 0 && (next === undefined || next.wide === true)
 }
 
 function ActionButton({ action, full }: { action: DetailAction; full: boolean }) {

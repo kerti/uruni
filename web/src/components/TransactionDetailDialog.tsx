@@ -224,6 +224,7 @@ function Detail({
                 {
                   key: 'reverse',
                   label: copy.history.transactions.reverse,
+                  wide: true,
                   icon: Undo2,
                   tone: 'destructive' as const,
                   onClick: () => onReverse?.(transaction),

@@ -155,7 +155,7 @@ function Detail({
               ]
             : []),
           ...(waived
-            ? [{ key: 'unwaive', label: text.actions.unwaive, icon: Undo2, disabled: busy, onClick: () => onUnwaive(claim) }]
+            ? [{ key: 'unwaive', label: text.actions.unwaive, wide: true, icon: Undo2, disabled: busy, onClick: () => onUnwaive(claim) }]
             : []),
           receiptIds.length > 0
             ? { key: 'receipts', label: copy.receipts.viewReceipt, icon: Camera, onClick: () => onViewReceipts(claim) }
