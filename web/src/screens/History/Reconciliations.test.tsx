@@ -143,7 +143,7 @@ describe('Reconciliations tab (Cek kas)', () => {
     await user.click(await screen.findByRole('button', { name: /Selisih/ }))
 
     expect(await screen.findByText('Tunai')).toBeInTheDocument()
-    expect(screen.getByText(`${text.differenceLabel}: -\u2060Rp15.000`, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('-\u2060Rp15.000').parentElement).toHaveTextContent(new RegExp(`^${text.differenceLabel}`))
     expect(screen.getByText('Hitungan bulan ini')).toBeInTheDocument()
   })
 

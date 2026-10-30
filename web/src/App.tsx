@@ -180,7 +180,14 @@ interface DuesState {
  * Iuran: saving and Batal both go back to the matrix, the door she came in
  * by. */
 interface RecordFromDuesState {
-  fromDues: true
+  /** The matrix's own query string ("?view=grid&period=2026-08", or ""), so
+   * the way back lands on the same view and month. */
+  fromDues: { search: string }
+}
+
+/** "YYYY-MM" from a URL value, else null. */
+function periodParam(value: string | null): string | null {
+  return value !== null && /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? value : null
 }
 
 /**
@@ -282,7 +289,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // entry's state, Pengaturan says nothing, and a deep link or reload has no
   // state at all - both of those lead back to Pengaturan.
   const envelopeFromHome = (location.state as EnvelopeOriginState | null)?.from === 'home'
-  const recordFromDues = (location.state as RecordFromDuesState | null)?.fromDues === true
+  const recordFromDuesState = (location.state as RecordFromDuesState | null)?.fromDues
+  const recordFromDues = recordFromDuesState !== undefined && recordFromDuesState !== null && typeof recordFromDuesState === 'object'
+  const duesReturn = '/dues' + (recordFromDues ? recordFromDuesState.search : '')
+  const recordDuesPeriod = periodParam(searchParams.get('period'))
   const recordDues = searchParams.get('type') === 'dues'
   // "Pengeluaran ini ditalangi": form mode is a route (ADR-032), like
   // ?type=dues. Written with replace so ticking it adds no history entry.
@@ -331,14 +341,15 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               initialPurposeId={initialPurposeId}
               initialMemberId={initialMemberId}
               initialDues={recordDues}
+              initialDuesPeriod={recordDuesPeriod}
               fronted={recordFronted}
               onFrontedChange={setRecordFronted}
               onDuesRecorded={() =>
                 recordFromDues
-                  ? navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })
+                  ? navigate(duesReturn, { state: { duesRecorded: true } satisfies DuesState })
                   : navigate('/', { state: { recorded: 'dues' } satisfies HomeState })
               }
-              onDuesCancel={recordFromDues ? () => navigate('/dues') : undefined}
+              onDuesCancel={recordFromDues ? () => navigate(duesReturn) : undefined}
             />
           </Shell>
         }
@@ -378,7 +389,11 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <DuesStatus
               onBack={() => navigate('/history/dues')}
-              onRecordPayment={() => navigate('/record?type=dues', { state: { fromDues: true } satisfies RecordFromDuesState })}
+              onRecordPayment={(target) =>
+                navigate(target ? `/record?type=dues&member=${target.memberId}&period=${target.period}` : '/record?type=dues', {
+                  state: { fromDues: { search: location.search } } satisfies RecordFromDuesState,
+                })
+              }
               refetchKey={refetchKey}
               notice={duesRecorded ? copy.dues.payment.success : null}
             />
@@ -424,7 +439,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           the door to return through. */}
       <Route
         path="/dues/payment"
-        element={<Navigate to="/record?type=dues" state={{ fromDues: true } satisfies RecordFromDuesState} replace />}
+        element={<Navigate to="/record?type=dues" state={{ fromDues: { search: '' } } satisfies RecordFromDuesState} replace />}
       />
       <Route
         path="/members"

@@ -171,6 +171,49 @@ describe('DuesStatus', () => {
     expect(onRecordPayment).toHaveBeenCalledTimes(1)
   })
 
+  it('shows Tunggakan only for a member in arrears (#740)', async () => {
+    const behind = [{ ...rows[0], member: { ...member(1, 'Warga Satu'), arrears_months: 3 } }, rows[1]] satisfies DuesStatusRow[]
+    vi.stubGlobal('fetch', stubDuesStatus(behind))
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+    await screen.findByText('Warga Satu')
+    expect(screen.getAllByText(copy.members.roster.arrearsBadge(3))).toHaveLength(1)
+    expect(screen.queryByText(copy.members.roster.arrearsBadge(0))).not.toBeInTheDocument()
+  })
+
+  it('offers Catat iuran on unpaid and partial cards only, naming the member and the month (#740)', async () => {
+    const onRecordPayment = vi.fn()
+    vi.stubGlobal('fetch', stubDuesStatus())
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={onRecordPayment} />, { wrapper: ListRouter })
+
+    await screen.findByText('Warga Satu')
+    expect(screen.getAllByRole('button', { name: /^Catat iuran dari / })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: text.recordForMemberAria('Warga Tiga') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.recordForMemberAria('Warga Empat') })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: text.recordForMemberAria('Warga Dua') }))
+    expect(onRecordPayment).toHaveBeenCalledWith({ memberId: 2, period: currentPeriod() })
+  })
+
+  it('reads the month from ?period= and falls back for a bad value (#740)', async () => {
+    const fetchMock = stubDuesStatus()
+    vi.stubGlobal('fetch', fetchMock)
+    const { unmount } = render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, {
+      wrapper: ({ children }: { children: ReactNode }) => <MemoryRouter initialEntries={['/dues?period=2026-03']}>{children}</MemoryRouter>,
+    })
+    await screen.findByText('Warga Satu')
+    expect(fetchMock.mock.calls.at(-1)?.[0]?.toString()).toContain('period=2026-03')
+    unmount()
+
+    const bad = stubDuesStatus()
+    vi.stubGlobal('fetch', bad)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, {
+      wrapper: ({ children }: { children: ReactNode }) => <MemoryRouter initialEntries={['/dues?period=2026-13']}>{children}</MemoryRouter>,
+    })
+    await screen.findByText('Warga Satu')
+    expect(bad.mock.calls.at(-1)?.[0]?.toString()).toContain(`period=${currentPeriod()}`)
+  })
+
   it('refetches after a payment was recorded - refetchKey changed', async () => {
     const fetchMock = stubDuesStatus()
     vi.stubGlobal('fetch', fetchMock)

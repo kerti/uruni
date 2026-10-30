@@ -838,6 +838,10 @@ export const copy = {
     // moving is recorded (ADR-032) - and this button on the status matrix,
     // since paying often starts from "who hasn't paid".
     recordLink: 'Catat pembayaran',
+    // The card action (#740): pay for this member, this month, from the status
+    // card, with the arrears months already ticked.
+    recordForMember: 'Catat iuran',
+    recordForMemberAria: (memberName: string) => `Catat iuran dari ${memberName}`,
     payment: {
       heading: 'Catat pembayaran iuran',
       memberLabel: 'Anggota',

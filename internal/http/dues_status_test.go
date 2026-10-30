@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -394,5 +395,68 @@ func TestGetOutstandingDuesRequiresAFund(t *testing.T) {
 	got := decodeError(t, rec)
 	if got.Code != "not_found" {
 		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}
+
+// TestGetDuesStatusCarriesArrearsMonths is #740: a status row reads the same
+// Tunggakan the Anggota roster does, relative to the real current month and
+// not to the period asked for.
+func TestGetDuesStatusCarriesArrearsMonths(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	tierRec := postDuesTier(t, r, "Full")
+	if tierRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-tiers = %d, want %d (body: %s)", tierRec.Code, http.StatusCreated, tierRec.Body.String())
+	}
+	var tier duesTierResponse
+	if err := json.NewDecoder(tierRec.Body).Decode(&tier); err != nil {
+		t.Fatalf("decoding dues tier response: %v", err)
+	}
+	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	twoBack, oneBack, current := arrearsMonthPeriods()
+	joinedOn := twoBack + "-01"
+	behindRec := postMember(t, r, memberRequest{Name: "Behind", TierID: &tier.ID, JoinedOn: &joinedOn})
+	var behind memberResponse
+	if err := json.NewDecoder(behindRec.Body).Decode(&behind); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+	squareRec := postMember(t, r, memberRequest{Name: "Square", TierID: &tier.ID, JoinedOn: &joinedOn})
+	var square memberResponse
+	if err := json.NewDecoder(squareRec.Body).Decode(&square); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+	today := time.Now().In(wib).Format("2006-01-02")
+	if rec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), MemberID: square.ID, OccurredOn: today,
+		Periods: []duesPaymentPeriod{{DuesPeriod: twoBack, Amount: 25_000}, {DuesPeriod: oneBack, Amount: 25_000}},
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	// Asked for the current month and for an earlier one: the arrears do not move.
+	for _, period := range []string{current, oneBack} {
+		rec := getDuesStatus(t, r, period)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /api/dues-status?period=%s = %d (body: %s)", period, rec.Code, rec.Body.String())
+		}
+		var got []duesStatusResponse
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		byID := map[int64]int{}
+		for _, row := range got {
+			byID[row.Member.ID] = row.Member.ArrearsMonths
+		}
+		if byID[behind.ID] != 2 {
+			t.Errorf("period %s: behind member arrears_months = %d, want 2", period, byID[behind.ID])
+		}
+		if byID[square.ID] != 0 {
+			t.Errorf("period %s: settled member arrears_months = %d, want 0", period, byID[square.ID])
+		}
 	}
 }

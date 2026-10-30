@@ -17,14 +17,11 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
       {lines.map((line) => (
         <li key={line.id} className="flex flex-col gap-1 rounded-lg bg-card p-4 shadow-card ring-1 ring-foreground/10">
           <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
-          <span className="tabular text-sm text-muted-foreground">
-            {text.recordedLabel} {formatIDR(line.recorded_amount)} {'\u00b7'} {text.countedLabel} {formatIDR(line.actual_amount)}
-          </span>
-          {line.difference_amount !== 0 && (
-            <span className="tabular text-sm text-muted-foreground">
-              {text.differenceLabel}: {formatIDR(line.difference_amount)}
-            </span>
-          )}
+          {/* The figures being compared each get a line of their own, label
+              left and amount right, so the amounts line up to compare. */}
+          <Figure label={text.recordedLabel} amount={line.recorded_amount} />
+          <Figure label={text.countedLabel} amount={line.actual_amount} />
+          {line.difference_amount !== 0 && <Figure label={text.differenceLabel} amount={line.difference_amount} />}
           {line.resolution !== 'left_open' && line.remainder_amount !== 0 && (
             <span className="tabular text-sm text-attention-text">{text.remainingGap(formatIDR(Math.abs(line.remainder_amount)))}</span>
           )}
@@ -34,5 +31,14 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
         </li>
       ))}
     </ul>
+  )
+}
+
+function Figure({ label, amount }: { label: string; amount: number }) {
+  return (
+    <span className="tabular flex justify-between gap-3 text-sm text-muted-foreground">
+      <span>{label}</span>
+      <span>{formatIDR(amount)}</span>
+    </span>
   )
 }

@@ -396,6 +396,32 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
+  // #740: the way back is the matrix as she left it - view and month survive.
+  it.each(['?view=grid', '?period=2026-03'])('returns to the dues matrix with %s kept after Batal', async (search) => {
+    window.history.pushState({}, '', `/dues${search}`)
+    const base = authenticatedWithRecordRoutes()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/dues-status/grid')) return Promise.resolve(jsonResponse({ periods: [], members: [] }))
+        if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse([]))
+        if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+        return base(input, init)
+      }),
+    )
+    render(<App />)
+
+    await userEvent.click(await screen.findByRole('button', { name: copy.dues.recordLink }))
+    expect(await screen.findByRole('heading', { name: copy.dues.payment.heading })).toBeInTheDocument()
+
+    await userEvent.click(await screen.findByRole('button', { name: copy.dues.payment.cancel }))
+    await screen.findByRole('button', { name: copy.dues.recordLink })
+    expect(window.location.pathname).toBe('/dues')
+    expect(window.location.search).toBe(search)
+    window.history.pushState({}, '', '/')
+  })
+
   it('falls back to the main purpose when ?purpose= is malformed', async () => {
     // Number('') is 0 and finite, so an empty param must not read as a
     // purpose id; the default is the fund's main row, as if absent.

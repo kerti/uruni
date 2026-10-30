@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
@@ -79,12 +79,20 @@ export default function RecordDuesPayment({
   onRecorded,
   onCancel,
   embedded = false,
+  initialMemberId = null,
+  initialPeriod = null,
 }: {
   onRecorded: () => void
   onCancel: () => void
   /** Rendered inside Catat, under its heading and Jenis toggle - so no heading
    * or page frame of its own. */
   embedded?: boolean
+  /** The member a status card opened this for (#740), chosen once the members
+   * have loaded - only if still active. */
+  initialMemberId?: number | null
+  /** The card's month, "YYYY-MM". With the member it also decides what comes
+   * pre-ticked: every offered period up to the later of it and this month. */
+  initialPeriod?: string | null
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [outstandingState, outstandingRun] = useApi<OutstandingDuesPeriod[]>()
@@ -101,6 +109,11 @@ export default function RecordDuesPayment({
   // is owed up to now", each tap of the add-month button one more.
   const [monthsAhead, setMonthsAhead] = useState(0)
   const through = addMonths(currentPeriod(), monthsAhead)
+  // The seed from the status card is applied once: the member first, then the
+  // ticks when that member's periods first arrive. A later pick of another
+  // member, or a later edit, must not be redone (null once spent).
+  const seeded = useRef(false)
+  const tickThrough = useRef<string | null>(null)
 
   async function loadFormData(): Promise<FormData> {
     const [members, accounts] = await Promise.all([listAllMembers(), listAccounts()])
@@ -124,6 +137,24 @@ export default function RecordDuesPayment({
     // it a no-op once the default has been set.
   }, [loadState.status, loadState.data, accountId])
 
+  // Seed the member (and, for a month past this one, the window) from the
+  // status card, once the members have loaded.
+  useEffect(() => {
+    if (seeded.current || loadState.status !== 'success' || !loadState.data) return
+    seeded.current = true
+    if (initialMemberId === null) return
+    const member = loadState.data.members.find((m) => m.id === initialMemberId && m.inactive_on === null)
+    if (!member) return
+    const now = currentPeriod()
+    const target = initialPeriod !== null && initialPeriod > now ? initialPeriod : now
+    const [ty, tm] = target.split('-').map(Number)
+    const [ny, nm] = now.split('-').map(Number)
+    tickThrough.current = target
+    // oxlint-disable-next-line react/set-state-in-effect -- one-time seed from the status card once the members have loaded
+    setMonthsAhead(Math.min(ty * 12 + tm - (ny * 12 + nm), MAX_MONTHS_AHEAD))
+    setMemberId(member.id)
+  }, [loadState.status, loadState.data, initialMemberId, initialPeriod])
+
   // Re-read what the member owes whenever the member or the window changes.
   // `through` is this client's local month, always sent: the server does not
   // share the treasurer's timezone. A month ahead is a later `through` - the
@@ -143,6 +174,13 @@ export default function RecordDuesPayment({
     const fresh = Object.fromEntries(outstandingState.data.map((p) => [p.period, remainingOf(p)]))
     // oxlint-disable-next-line react/set-state-in-effect -- pre-fill each newly offered period from the server's numbers once they have loaded
     setAmounts((current) => ({ ...fresh, ...current }))
+    // The seeded member's first load: arrears plus the card's month come
+    // pre-ticked, once.
+    const target = tickThrough.current
+    if (target !== null) {
+      tickThrough.current = null
+      setSelected(outstandingState.data.filter((p) => p.period <= target).map((p) => p.period))
+    }
   }, [outstandingState.status, outstandingState.data])
 
   const periods = outstandingState.data ?? []
@@ -224,6 +262,7 @@ export default function RecordDuesPayment({
             // nothing edited, the list back to what is owed up to now - reset
             // here, in one render with the new id, so the fetch never runs once
             // with the old member's window.
+            tickThrough.current = null
             setSelected([])
             setAmounts({})
             setMonthsAhead(0)

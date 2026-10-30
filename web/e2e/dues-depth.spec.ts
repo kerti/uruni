@@ -180,6 +180,51 @@ test.describe('dues in depth', () => {
     await expect(card).toContainText(text.arrearsBadge(3))
   })
 
+  // #740: the arrears show on the status card, and Catat iuran there opens the
+  // form for that member with the arrears and the card's month ticked. Warga Baru
+  // was backdated three months by the test above, so Tunggakan 3 bulan shows.
+  test('Catat iuran on a status card pays the arrears and returns to the same month', async ({ page }) => {
+    await logIn(page)
+    // This month: Warga Muka paid ahead and is square - no chip, no action.
+    await page.goto('/dues')
+    await expect(statusCard(page, 'Warga Muka')).toContainText(copy.dues.statuses.paid)
+    await expect(statusCard(page, 'Warga Muka')).not.toContainText(/Tunggakan/)
+    await expect(statusCard(page, 'Warga Muka').getByRole('button', { name: copy.dues.recordForMember })).toHaveCount(0)
+
+    // Last month (Warga Muka joined this one, so only Warga Baru is listed).
+    const month = jakartaMonth(-1)
+    await page.goto(`/dues?period=${month}`)
+    await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
+
+    const card = statusCard(page, 'Warga Baru')
+    await expect(card).toContainText(copy.members.roster.arrearsBadge(3))
+
+    await card.getByRole('button', { name: copy.dues.recordForMemberAria('Warga Baru') }).click()
+    await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
+    // The three months behind and this one, already ticked; nothing else.
+    for (const offset of [-3, -2, -1, 0]) {
+      await expect(page.getByRole('checkbox', { name: formatPeriod(jakartaMonth(offset)) })).toBeChecked()
+    }
+    await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
+    await page.getByRole('button', { name: copy.dues.payment.submit }).click()
+
+    // Back on the month she left, with the confirmation, and no arrears left.
+    await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/dues\\?period=${month}$`))
+    await expect(statusCard(page, 'Warga Baru')).toContainText(copy.dues.statuses.paid)
+    await expect(statusCard(page, 'Warga Baru')).not.toContainText(/Tunggakan/)
+  })
+
+  test('the bottom Catat pembayaran returns to the twelve-month view she left', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/dues?view=grid')
+    await page.getByRole('button', { name: copy.dues.recordLink }).click()
+    await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
+    await page.getByRole('button', { name: copy.dues.payment.cancel }).click()
+    await expect(page).toHaveURL(/\/dues\?view=grid$/)
+    await expect(page.getByRole('button', { name: copy.dues.grid.viewTwelveMonths })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   test('tiers and rates: add and rename a tier, add a past and a current rate, correct one, delete the rates and the tier', async ({
     page,
   }) => {
