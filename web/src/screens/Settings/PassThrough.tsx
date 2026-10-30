@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -36,6 +37,7 @@ const text = copy.settings.passThrough
 export default function PassThrough() {
   const [listState, listRun] = useApi<Purpose[]>()
   const { value, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   useEffect(() => {
     void listRun(listPurposes)
@@ -106,6 +108,7 @@ export default function PassThrough() {
         onClose={close}
         onAdded={() => {
           close()
+          toast.success(text.saved)
           reload()
         }}
         refresh={refresh}
@@ -116,6 +119,7 @@ export default function PassThrough() {
         onClose={close}
         onChanged={() => {
           close()
+          toast.success(text.saved)
           reload()
         }}
         refresh={refresh}

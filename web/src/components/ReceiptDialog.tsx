@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ReceiptPicker from '@/components/ReceiptPicker'
 import ReceiptViewer from '@/components/ReceiptViewer'
 import ErrorState from '@/components/states/ErrorState'
+import { useToast } from '@/components/toast/useToast'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -78,6 +79,7 @@ export default function ReceiptDialog({
     setViewingId(null)
   })
 
+  const toast = useToast()
   const busy = state.status === 'loading'
   // A lost response may still have changed the photos; re-read them before she can retry.
   const settleOnUnknown = { settle: onChanged }
@@ -88,6 +90,7 @@ export default function ReceiptDialog({
       const result = await uploadReceipt(kind, parentId, newFile)
       setNewFile(null)
       onChanged()
+      toast.success(text.added)
       return result
     }, settleOnUnknown)
   }
@@ -104,6 +107,7 @@ export default function ReceiptDialog({
       setReplacingId(null)
       setReplacementFile(null)
       onChanged()
+      toast.success(text.replaced)
       return result
     }, settleOnUnknown)
   }
@@ -113,6 +117,7 @@ export default function ReceiptDialog({
       await deleteReceipt(id)
       setConfirmingDeleteId(null)
       onChanged()
+      toast.success(text.deleted)
     }, settleOnUnknown)
   }
 

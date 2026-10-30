@@ -7,6 +7,7 @@ import SectionDivider from '@/components/SectionDivider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -118,6 +119,7 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 /** The name, on its own, with one action row. */
 function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesTier>()
+  const toast = useToast()
   const [name, setName] = useState(tier.name)
   // Follows a rename that lands from the server (the reload after saving) -
   // during render, never in an effect that could fire after her first
@@ -134,6 +136,7 @@ function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () 
     void run(
       async () => {
         const updated = await renameDuesTier(tier.id, trimmed)
+        toast.success(text.saved)
         onRenamed()
         return updated
       },
@@ -230,6 +233,7 @@ function RateRow({
   refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<unknown>()
+  const toast = useToast()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [amount, setAmount] = useState(rate.amount)
@@ -263,6 +267,7 @@ function RateRow({
         const updated = await updateDuesRate(rate.id, amount)
         setEditing(false)
         setConfirming(false)
+        toast.success(text.rateSaved)
         onChanged()
         return updated
       },
@@ -309,6 +314,7 @@ function RateRow({
                     async () => {
                       await deleteDuesRate(rate.id)
                       setEditing(false)
+                      toast.success(text.rateDeleted)
                       onChanged()
                     },
                     { settle: refresh },
@@ -359,6 +365,7 @@ function RateRow({
  * the past. */
 function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesRate>()
+  const toast = useToast()
   const [amount, setAmount] = useState(0)
   const [effectiveFrom, setEffectiveFrom] = useState(currentPeriod)
 
@@ -372,6 +379,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
         const created = await createDuesRate(tierId, amount, effectiveFrom)
         setAmount(0)
         setEffectiveFrom(currentPeriod())
+        toast.success(text.rateSaved)
         onAdded()
         return created
       },
@@ -413,6 +421,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
  * (ADR-014). */
 function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<void>()
+  const toast = useToast()
   const [confirming, setConfirming] = useState(false)
 
   const busy = state.status === 'loading'
@@ -447,6 +456,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
               void run(
                 async () => {
                   await deleteDuesTier(tier.id)
+                  toast.success(text.deleted)
                   onDeleted()
                 },
                 { settle: refresh },

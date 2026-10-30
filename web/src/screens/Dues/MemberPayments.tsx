@@ -5,6 +5,7 @@ import ReversalDateLine from '@/components/ReversalDateLine'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -40,6 +41,7 @@ const text = copy.dues.history
 export default function MemberPayments({ memberId, period, onReversed }: { memberId: number; period: string; onReversed: () => void }) {
   const [state, run] = useApi<Transaction[]>()
   const [submitState, submitRun] = useApi<unknown>()
+  const toast = useToast()
 
   // Which payment's reversal form is open, if any - one at a time.
   const [reversingId, setReversingId] = useState<number | null>(null)
@@ -85,6 +87,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
         // treasurer's job.
         await run(loadRows)
         onReversed()
+        toast.success(text.success)
         return result
       },
       { settle: () => run(loadRows, { silent: true }) },

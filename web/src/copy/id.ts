@@ -141,6 +141,10 @@ export const copy = {
   // and ReceiptDialog.tsx (the viewer). Upload error codes live in
   // common.errors below with every other wire code.
   receipts: {
+    // The toast after each photo write (#743).
+    added: 'Foto nota sudah ditambahkan.',
+    replaced: 'Foto nota sudah diganti.',
+    deleted: 'Foto nota sudah dihapus.',
     // The record-time field's label (RecordTransaction.tsx, the reimbursement
     // claim form) - also ReceiptPicker's "choose a file" button caption, since
     // picking a photo IS this field. The after-the-fact affordance on a row
@@ -617,11 +621,13 @@ export const copy = {
     // come from the same fund), so this is a placeholder that keeps a row
     // readable rather than a state with meaning of its own.
     purposeUnknown: 'Tanpa pos',
-    // date is already formatted (Intl.DateTimeFormat) by the caller. hasNewEntries
-    // is the server's yes/no (has_new_entries): something was recorded after the
-    // count, so the status above is about the count, not about now.
-    lastChecked: (date: string, hasNewEntries: boolean) =>
-      hasNewEntries ? `Terakhir dicek ${date} · ada catatan baru sejak itu` : `Terakhir dicek ${date}`,
+    // date is already formatted (Intl.DateTimeFormat) by the caller.
+    // newEntriesSince follows when the server's has_new_entries says something
+    // was recorded after the count, so the status above is about the count, not
+    // about now.
+    lastChecked: (date: string) => `Terakhir dicek ${date}.`,
+    // Its own line under lastChecked (#743), only when has_new_entries.
+    newEntriesSince: 'Ada catatan baru sejak itu.',
   },
   // The label line TransactionList.tsx renders on a row the app itself created
   // - never a row she recorded herself (Decisions.md). Built at display time
@@ -717,7 +723,9 @@ export const copy = {
     matched: 'Kas dan catatan cocok saat dicek.',
     // amount is already formatted (formatIDR) by the caller - never a raw
     // number crosses into copy.
-    discrepancy: (amount: string) => `Ada selisih ${amount}. Mau dicek bareng?`,
+    discrepancy: (amount: string) => `Ada selisih ${amount}.`,
+    // On its own line under the amount (#743), so the gap reads first.
+    discrepancyPrompt: 'Mau dicek bareng?',
     // The per-location verdict while counting; the whole-fund strings above
     // stay for Beranda's banner and the result headline. amount is formatted.
     lineMatched: 'Cocok.',
@@ -970,6 +978,11 @@ export const copy = {
       // The 409 from a member who already has posted history: a refusal that
       // points at the right action, as the locations section's does.
       deleteRefused: 'Anggota ini sudah punya catatan — nonaktifkan saja, jangan dihapus.',
+      // The toast after a save in the edit or add dialog (#743): one sentence per outcome.
+      saved: 'Anggota sudah disimpan.',
+      deactivated: 'Anggota sudah dinonaktifkan.',
+      reactivated: 'Anggota sudah diaktifkan lagi.',
+      deleted: 'Anggota sudah dihapus.',
     },
   },
   // One bundled settings screen, not four top-level destinations: naming a
@@ -992,6 +1005,8 @@ export const copy = {
       // The whole card is the edit affordance, so the word for the action
       // lives on the dialog it opens. There is one kas, so the card never
       // needs to say which one.
+      // The toast after a rename (#743).
+      saved: 'Nama kas sudah disimpan.',
       editTitle: 'Ubah nama kas',
       // Read before the card's visible text (a visually hidden prefix), so the
       // button's name is "Ubah <label> <value>" and holds every visible word.
@@ -999,6 +1014,8 @@ export const copy = {
       // The fund's second setting (ADR-041): a card opening a dialog at
       // ?edit=fund:time_zone, showing the zone's label from copy.timeZone.options.
       zone: {
+        // The toast after the zone is changed (#743).
+        saved: 'Zona waktu sudah disimpan.',
         editTitle: 'Ubah zona waktu',
         body: 'Dipakai untuk tanggal hari ini, pergantian bulan, dan laporan publik. Menggantinya tidak mengubah catatan yang sudah ada.',
         editVerb: 'Ubah',
@@ -1058,6 +1075,8 @@ export const copy = {
       // The consequence, in terracotta (ADR-032).
       renewConfirm: 'Tautan lama berhenti bekerja. Siapa pun yang memegangnya harus diberi tautan baru.',
       renewConfirmAction: 'Ya, buat tautan baru',
+      // The toast once the new link is made (#743).
+      renewed: 'Tautan laporan sudah diganti.',
     },
     locations: {
       heading: 'Lokasi penyimpanan',
@@ -1102,6 +1121,11 @@ export const copy = {
       // phrased as a failure: deactivating is what she wants, and this points
       // her at it.
       deleteRefused: 'Lokasi ini sudah punya riwayat — nonaktifkan saja, jangan dihapus.',
+      // The toast after a save in the edit or add dialog (#743): one sentence per outcome.
+      saved: 'Lokasi sudah disimpan.',
+      deactivated: 'Lokasi sudah dinonaktifkan.',
+      reactivated: 'Lokasi sudah diaktifkan lagi.',
+      deleted: 'Lokasi sudah dihapus.',
     },
     passThrough: {
       heading: 'Titipan',
@@ -1120,6 +1144,8 @@ export const copy = {
       editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
+      // The toast after an add or an edit (#743).
+      saved: 'Titipan sudah disimpan.',
     },
     tiers: {
       heading: 'Kategori iuran',
@@ -1159,6 +1185,11 @@ export const copy = {
         'Kategori ini akan dihapus selamanya, beserta riwayat nominalnya. Hanya bisa untuk kategori yang belum pernah dipakai anggota mana pun.',
       deleteConfirmAction: 'Ya, hapus',
       deleteRefused: 'Kategori ini pernah dipakai anggota, jadi tidak bisa dihapus. Kalau perlu, ganti saja namanya.',
+      // The toast after a save (#743).
+      saved: 'Kategori sudah disimpan.',
+      deleted: 'Kategori sudah dihapus.',
+      rateSaved: 'Nominal sudah disimpan.',
+      rateDeleted: 'Nominal sudah dihapus.',
       // A tier with no rate yet is an ordinary state, not a problem.
       noRates: 'Nominal belum ditentukan.',
       ratesHeading: 'Nominal',
@@ -1209,6 +1240,8 @@ export const copy = {
       // The dialog heading's word (copy.incidentals.open.heading) - one word
       // for "start a new envelope", not two.
       add: 'Buka amplop',
+      // The toast once the envelope is open (#743).
+      opened: 'Amplop sudah dibuka.',
       cardVerb: 'Lihat',
     },
     // The whole fund as one file (ADR-012), plus - ADR-013 - the list of
@@ -1429,7 +1462,7 @@ export const copy = {
       success: 'Talangan sudah diputihkan.',
     },
     unwaive: {
-      success: 'Pemutihan dibatalkan — talangan kembali ditagih.',
+      success: 'Pemutihan dibatalkan. Talangan kembali ditagih.',
     },
     delete: {
       success: 'Talangan dihapus.',

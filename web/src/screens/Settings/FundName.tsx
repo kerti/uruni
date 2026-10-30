@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/toast/useToast'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -50,6 +51,7 @@ export default function FundName({
   refresh: () => Promise<void>
 }) {
   const { value, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   // 'fund' is this section's prefix (dialogTarget.ts). The rename dialog is
   // addressed by name rather than id, so it lands as `invalid` on that parser -
@@ -91,6 +93,7 @@ export default function FundName({
         onClose={close}
         onRenamed={(updated) => {
           onChanged(updated)
+          toast.success(text.saved)
           close()
         }}
         refresh={refresh}
@@ -101,6 +104,7 @@ export default function FundName({
         onClose={close}
         onChanged={(updated) => {
           onChanged(updated)
+          toast.success(text.zone.saved)
           close()
         }}
         refresh={refresh}

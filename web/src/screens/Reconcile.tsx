@@ -651,7 +651,14 @@ function Confirmation({
         className={`flex items-center gap-2 rounded-lg px-4 py-3 ${hasOpenGap ? 'bg-attention-soft text-attention-text' : 'bg-success-soft text-success'}`}
       >
         {hasOpenGap ? <Search aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
-        {hasOpenGap ? text.discrepancy(formatIDR(openTotal)) : text.matched}
+        {hasOpenGap ? (
+          <span className="flex flex-col">
+            <span>{text.discrepancy(formatIDR(openTotal))}</span>
+            <span>{text.discrepancyPrompt}</span>
+          </span>
+        ) : (
+          text.matched
+        )}
       </div>
 
       <ReconciliationLines lines={detail.lines} accountNames={accountNames} />

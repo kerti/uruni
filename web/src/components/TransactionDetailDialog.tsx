@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { isPurposePair, isTransfer, rowLabelFor, transferKind } from '@/components/rowLabel'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
+import { useToast } from '@/components/toast/useToast'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -100,6 +101,7 @@ function Detail({
   onReceiptsChanged?: () => void
 }) {
   const [upload, runUpload] = useApi<unknown>()
+  const toast = useToast()
   const fileInput = useRef<HTMLInputElement>(null)
   const incoming = transaction.direction === 'in'
   // A transfer is one row for two legs (#738): it has no direction, and its
@@ -125,6 +127,7 @@ function Detail({
       async () => {
         const result = await uploadReceipt('transactions', transaction.id, file)
         onReceiptsChanged?.()
+        toast.success(copy.receipts.added)
         return result
       },
       // A lost response may still have stored the photo; re-read before she retries.

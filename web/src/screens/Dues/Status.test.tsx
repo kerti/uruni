@@ -222,10 +222,9 @@ describe('DuesStatus', () => {
     await screen.findByText('Warga Satu')
     const callsBefore = fetchMock.mock.calls.length
 
-    rerender(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} refetchKey="b" notice={copy.dues.payment.success} />)
+    rerender(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} refetchKey="b" />)
 
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore)
-    expect(await screen.findByText(copy.dues.payment.success)).toBeInTheDocument()
   })
 
   it('refetches when the period selector changes', async () => {

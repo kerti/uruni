@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { copy } from '@/copy/id'
 import type { Incidental } from '@/lib/incidentals'
@@ -83,22 +84,24 @@ function LocationProbe() {
 function renderAt(entry = '/settings') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/settings"
-          element={
-            <>
-              <SettingsIncidentals />
-              <LocationProbe />
-            </>
-          }
-        />
-        {/* A card navigates here (App.tsx's real route) - present only so
-            the navigation has somewhere to land; this suite does not assert
-            anything about what renders past it. */}
-        <Route path="/incidentals" element={<LocationProbe />} />
-        <Route path="/incidentals/closed" element={<LocationProbe />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <>
+                <SettingsIncidentals />
+                <LocationProbe />
+              </>
+            }
+          />
+          {/* A card navigates here (App.tsx's real route) - present only so
+              the navigation has somewhere to land; this suite does not assert
+              anything about what renders past it. */}
+          <Route path="/incidentals" element={<LocationProbe />} />
+          <Route path="/incidentals/closed" element={<LocationProbe />} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }
@@ -174,6 +177,8 @@ describe('Settings incidentals', () => {
     // A successful open closes the dialog and drops the param.
     await waitFor(() => expect(currentLocation()).toBe('/settings'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // ...and says so (#743).
+    expect(await screen.findByText(text.opened)).toBeInTheDocument()
   })
 
   // ADR-034: the open dialog also carries the envelope's minimum and its

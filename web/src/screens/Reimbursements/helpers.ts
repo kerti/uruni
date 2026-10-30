@@ -1,4 +1,5 @@
 import { copy } from '@/copy/id'
+import type { ArrivalToast } from '@/components/toast/useArrivalToast'
 import type { ApiError } from '@/lib/api'
 
 const text = copy.reimbursements
@@ -25,6 +26,13 @@ export function doneText(done: TalanganState['reimbursementDone']): string {
     case 'corrected':
       return text.correct.success
   }
+}
+
+/** useArrivalToast's reader for the tab: the confirmation a settle or correct
+ * screen handed back, if any. */
+export function pickTalanganArrival(state: unknown): ArrivalToast | null {
+  const done = (state as TalanganState | null)?.reimbursementDone
+  return done ? { tone: 'success', text: doneText(done) } : null
 }
 
 /** Wire error code -> Indonesian copy, scoped first to this feature's codes

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import Incidentals from '@/screens/Incidentals'
 import { chooseOption, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
@@ -96,17 +97,19 @@ function LocationProbe() {
 function renderIncidentals(node: Parameters<typeof render>[0], entry = '/incidentals') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/incidentals"
-          element={
-            <>
-              {node}
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route
+            path="/incidentals"
+            element={
+              <>
+                {node}
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   )
 }
@@ -928,7 +931,7 @@ describe('Incidentals', () => {
     expect(within(dialog).getByLabelText(text.rename.nameLabel)).toHaveValue('Halal bihalal RT')
   })
 
-  it("submits a rename, refetches the detail, and shows the corrected occasion through the screen's own feedback banner", async () => {
+  it('submits a rename, refetches the detail, and shows the corrected occasion and confirms with a toast', async () => {
     const detail = {
       ...openEnvelope,
       collected_amount: 0,

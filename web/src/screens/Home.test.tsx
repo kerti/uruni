@@ -1,9 +1,10 @@
 import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
@@ -17,7 +18,13 @@ import type { Transaction } from '@/lib/setup'
 // The recent-activity list keeps its entry-detail dialog in the URL, so Home
 // needs a router around it.
 function render(ui: ReactElement) {
-  return rtlRender(ui, { wrapper: MemoryRouter })
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <MemoryRouter>
+        <ToastProvider>{children}</ToastProvider>
+      </MemoryRouter>
+    ),
+  })
 }
 
 afterEach(() => {
@@ -218,8 +225,8 @@ describe('Home', () => {
     expect(screen.queryByText(copy.reconciliation.neverChecked)).not.toBeInTheDocument()
     // Nothing recorded since the count: the date line stays plain.
     const date = formatUnixSeconds(latestReconciliation.performed_at)
-    expect(screen.getByText(copy.home.lastChecked(date, false))).toBeInTheDocument()
-    expect(screen.queryByText(/ada catatan baru/)).not.toBeInTheDocument()
+    expect(screen.getByText(copy.home.lastChecked(date))).toBeInTheDocument()
+    expect(screen.queryByText(copy.home.newEntriesSince)).not.toBeInTheDocument()
   })
 
   // "Cocok" is a claim about the count; once the server says something was
@@ -238,7 +245,9 @@ describe('Home', () => {
     )
 
     const date = formatUnixSeconds(latestReconciliation.performed_at)
-    expect(await screen.findByText(copy.home.lastChecked(date, true))).toBeInTheDocument()
+    // The new-entries note is its own line under the date.
+    expect(await screen.findByText(copy.home.lastChecked(date))).toBeInTheDocument()
+    expect(screen.getByText(copy.home.newEntriesSince)).toBeInTheDocument()
     expect(screen.getByText(copy.reconciliation.matched)).toBeInTheDocument()
   })
 
@@ -257,7 +266,8 @@ describe('Home', () => {
     )
 
     expect(await screen.findByText(copy.reconciliation.discrepancy(formatIDR(20_000)))).toBeInTheDocument()
-    expect(screen.getByText(/ada catatan baru sejak itu$/)).toBeInTheDocument()
+    expect(screen.getByText(copy.reconciliation.discrepancyPrompt)).toBeInTheDocument()
+    expect(screen.getByText(copy.home.newEntriesSince)).toBeInTheDocument()
   })
 
   // The reconciliation banner is the reconcile screen's entry point - Home

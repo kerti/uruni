@@ -8,6 +8,7 @@ import { transferHeadline, transferKind } from '@/components/rowLabel'
 import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/toast/useToast'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
@@ -95,9 +96,7 @@ export default function TransactionList({
       live = false
     }
   }, [wantsSelectable, selectable])
-  // One-shot "done" lines, like Riwayat's always were.
-  const [corrected, setCorrected] = useState(false)
-  const [reversed, setReversed] = useState(false)
+  const toast = useToast()
   // The row whose reversal form is open under it (ADR-042), if any - one at a
   // time, so the reason always belongs to a single row.
   const [reversingId, setReversingId] = useState<number | null>(null)
@@ -134,16 +133,6 @@ export default function TransactionList({
 
   return (
     <>
-      {corrected && (
-        <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
-          {copy.purposeCorrection.success}
-        </p>
-      )}
-      {reversed && (
-        <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
-          {reverseText.reverseSuccess}
-        </p>
-      )}
       <ul className="flex flex-col gap-2">
         {transactions.map((transaction) => {
           const note = noteForDisplay(transaction)
@@ -223,7 +212,7 @@ export default function TransactionList({
                     onCancel={() => setReversingId(null)}
                     onReversed={() => {
                       setReversingId(null)
-                      setReversed(true)
+                      toast.success(reverseText.reverseSuccess)
                       void onRefresh()
                     }}
                     refresh={onRefresh}
@@ -241,7 +230,6 @@ export default function TransactionList({
             onRefresh
               ? (transaction) => {
                   handoff.current = { kind: 'reverse', transaction }
-                  setReversed(false)
                   entry.close()
                   setReversingId(transaction.id)
                 }
@@ -270,7 +258,6 @@ export default function TransactionList({
             handoff.current = null
             event.preventDefault()
             if (next.kind === 'correct') {
-              setCorrected(false)
               correction.open(`purpose-correction:${next.transaction.id}`)
             } else if (next.kind === 'receipts') {
               setReceiptsForId(next.transaction.id)
@@ -303,7 +290,7 @@ export default function TransactionList({
             onClose={correction.close}
             onCorrected={() => {
               correction.close()
-              setCorrected(true)
+              toast.success(copy.purposeCorrection.success)
               void onRefresh()
             }}
             refresh={async () => {

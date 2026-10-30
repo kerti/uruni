@@ -51,8 +51,8 @@ export default function ReconciliationBanner({
 }) {
   if (!everReconciled) {
     return (
-      <Wrapper onClick={onClick} className="bg-muted text-muted-foreground">
-        <CircleHelp aria-hidden="true" />
+      <Wrapper onClick={onClick} className="text-foreground" ring="ring-foreground/10">
+        <CircleHelp aria-hidden="true" className="shrink-0 text-muted-foreground" />
         {copy.reconciliation.neverChecked}
       </Wrapper>
     )
@@ -60,8 +60,8 @@ export default function ReconciliationBanner({
 
   if (openLines.length === 0) {
     return (
-      <Wrapper onClick={onClick} className="bg-success-soft text-success">
-        <CircleCheck aria-hidden="true" />
+      <Wrapper onClick={onClick} className="text-foreground" ring="ring-success/50">
+        <CircleCheck aria-hidden="true" className="shrink-0 text-success" />
         {copy.reconciliation.matched}
       </Wrapper>
     )
@@ -70,9 +70,13 @@ export default function ReconciliationBanner({
   const totalDifference = openLines.reduce((sum, line) => sum + Math.abs(line.remainder_amount), 0)
 
   return (
-    <Wrapper onClick={onClick} className="bg-attention-soft text-attention-text">
-      <Search aria-hidden="true" />
-      {copy.reconciliation.discrepancy(formatIDR(totalDifference))}
+    <Wrapper onClick={onClick} className="text-attention-text" ring="ring-attention/50">
+      <Search aria-hidden="true" className="shrink-0" />
+      {/* The question on its own line, so the amount reads first. */}
+      <span className="flex flex-col">
+        <span>{copy.reconciliation.discrepancy(formatIDR(totalDifference))}</span>
+        <span>{copy.reconciliation.discrepancyPrompt}</span>
+      </span>
     </Wrapper>
   )
 }
@@ -81,10 +85,23 @@ export default function ReconciliationBanner({
  * branches rather than a dynamic `Tag = onClick ? 'button' : 'p'`, which
  * would let a `type="button"` meant for the button leak into the <p> branch's
  * props at the type level. */
-function Wrapper({ onClick, className, children }: { onClick?: () => void; className: string; children: ReactNode }) {
+function Wrapper({
+  onClick,
+  className,
+  ring,
+  children,
+}: {
+  onClick?: () => void
+  className: string
+  /** The edge carries the state (#743): a white card like the pos rows below
+   * it, so it never reads as a passing toast, with the icon and this border in
+   * the status colour - green cocok, terracotta selisih, neutral never checked. */
+  ring: string
+  children: ReactNode
+}) {
   // w-full + text-left: a <button> doesn't inherit <p>'s block-level,
   // full-width, left-aligned defaults.
-  const combined = `flex w-full items-center gap-2 rounded-lg px-4 py-3 text-left ${className}`
+  const combined = `flex w-full items-center gap-2 rounded-lg bg-card px-4 py-3 text-left ring-1 ${ring} ${className}`
   if (onClick) {
     // The tinted panel alone reads as a status message, not something to tap.
     // What makes it a control: a chevron pointing where it goes, a hairline
@@ -95,7 +112,7 @@ function Wrapper({ onClick, className, children }: { onClick?: () => void; class
     return (
       <button
         type="button"
-        className={`${combined} min-h-11 justify-between shadow-card ring-1 ring-foreground/10 transition-all outline-none hover:brightness-[0.98] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px motion-reduce:transition-none`}
+        className={`${combined} min-h-11 justify-between shadow-card transition-all outline-none hover:brightness-[0.98] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px motion-reduce:transition-none`}
         onClick={onClick}
       >
         <span className="flex items-center gap-2">{children}</span>

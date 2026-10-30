@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/toast/useToast'
 import AmountInput from '@/components/money/AmountInput'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import Loading from '@/components/states/Loading'
@@ -63,6 +64,7 @@ export default function SettingsIncidentals() {
   // shows a filled picker instead of a spinner.
   const [membersState, membersRun] = useApi<Member[]>()
   const { value, open, close, clear } = useDialogParam()
+  const toast = useToast()
 
   useEffect(() => {
     // listRun/membersRun are stable useCallbacks (useApi.ts): fires once.
@@ -117,6 +119,7 @@ export default function SettingsIncidentals() {
         onClose={close}
         onOpened={() => {
           close()
+          toast.success(text.opened)
           reload()
         }}
       />

@@ -84,8 +84,10 @@ describe('ReconciliationBanner', () => {
   })
 
   // The colour is half the message: green is earned by a count, terracotta
-  // marks a normal gap, alarm red never appears (CLAUDE.md rule 9). Pin the
-  // token classes so a restyle can't swap them silently.
+  // marks a normal gap, alarm red never appears (CLAUDE.md rule 9). Since #743
+  // it is a white card whose border and icon carry the state (never a tinted
+  // panel, which read like the success toast). Pin the token classes so a
+  // restyle can't swap them silently.
   describe('colour', () => {
     function panel(text: string) {
       return screen.getByText(text).closest('p')
@@ -95,7 +97,8 @@ describe('ReconciliationBanner', () => {
       render(<ReconciliationBanner openLines={[]} everReconciled />)
 
       const el = panel(copy.reconciliation.matched)
-      expect(el).toHaveClass('bg-success-soft', 'text-success')
+      expect(el).toHaveClass('bg-card', 'ring-success/50')
+      expect(el?.querySelector('svg')).toHaveClass('text-success')
       expect(el?.className).not.toMatch(/attention|destructive/)
     })
 
@@ -103,15 +106,17 @@ describe('ReconciliationBanner', () => {
       render(<ReconciliationBanner openLines={[line({ difference_amount: -15_000, remainder_amount: -15_000 })]} everReconciled />)
 
       const el = panel(copy.reconciliation.discrepancy(formatIDR(15_000)))
-      expect(el).toHaveClass('bg-attention-soft', 'text-attention-text')
+      expect(el).toHaveClass('bg-card', 'ring-attention/50', 'text-attention-text')
       expect(el?.className).not.toMatch(/success|destructive/)
+      // The question sits on its own line under the amount.
+      expect(el).toHaveTextContent(copy.reconciliation.discrepancyPrompt)
     })
 
     it('keeps the never-checked state neutral, neither green nor terracotta', () => {
       render(<ReconciliationBanner openLines={[]} everReconciled={false} />)
 
       const el = panel(copy.reconciliation.neverChecked)
-      expect(el).toHaveClass('bg-muted', 'text-muted-foreground')
+      expect(el).toHaveClass('bg-card', 'ring-foreground/10')
       expect(el?.className).not.toMatch(/success|attention|destructive/)
     })
 
@@ -119,7 +124,7 @@ describe('ReconciliationBanner', () => {
       render(<ReconciliationBanner openLines={[line({})]} everReconciled onClick={() => {}} />)
 
       const button = screen.getByRole('button')
-      expect(button).toHaveClass('bg-attention-soft', 'text-attention-text')
+      expect(button).toHaveClass('bg-card', 'ring-attention/50', 'text-attention-text')
       expect(button.className).not.toMatch(/destructive/)
     })
   })

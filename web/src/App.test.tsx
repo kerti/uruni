@@ -517,6 +517,8 @@ describe('App (record loop)', () => {
 
     expect(await screen.findByText(copy.record.successOut)).toBeInTheDocument()
     expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
+    // The confirmation was spent on arrival: a reload or Back finds no flag to toast again.
+    await waitFor(() => expect(window.history.state?.usr?.recorded).toBeUndefined())
   })
 
   // The confirmation belongs to the history entry the successful post
@@ -530,7 +532,9 @@ describe('App (record loop)', () => {
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await userEvent.type(await screen.findByLabelText(copy.record.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
-    await screen.findByText(copy.record.successOut)
+    // Tapping the toast puts it away; going round again must not bring it back.
+    await userEvent.click(await screen.findByRole('button', { name: copy.record.successOut }))
+    expect(screen.queryByText(copy.record.successOut)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await screen.findByRole('heading', { name: copy.record.headingOut })
