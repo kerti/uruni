@@ -17,8 +17,12 @@ describe('ReconciliationLines', () => {
       resolution: 'matched',
     } as ReconciliationLine
     render(<ReconciliationLines lines={[line]} accountNames={new Map([[1, 'Tunai']])} />)
-    expect(
-      screen.getByText(`${copy.reconciliation.recordedLabel} Rp2.152.000 \u00b7 ${copy.reconciliation.countedLabel} Rp2.152.000`),
-    ).toBeInTheDocument()
+    // Each figure on its own line, never joined into one.
+    expect(screen.getByText(copy.reconciliation.recordedLabel).parentElement).toHaveTextContent(
+      new RegExp(`^${copy.reconciliation.recordedLabel}\\s*Rp2\\.152\\.000$`),
+    )
+    expect(screen.getByText(copy.reconciliation.countedLabel).parentElement).toHaveTextContent(
+      new RegExp(`^${copy.reconciliation.countedLabel}\\s*Rp2\\.152\\.000$`),
+    )
   })
 })

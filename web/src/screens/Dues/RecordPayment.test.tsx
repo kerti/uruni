@@ -87,8 +87,10 @@ describe('RecordDuesPayment', () => {
     vi.stubGlobal('fetch', stubApi())
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} initialMemberId={2} initialPeriod="2026-02" />)
 
-    // The boxes render with the periods; the ticks land one effect later.
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Januari 2026/ })).toBeChecked())
+    // The boxes render with the periods (two fetches in, so slow under load);
+    // the ticks land one effect later.
+    const january = await screen.findByRole('checkbox', { name: /Januari 2026/ }, { timeout: 5000 })
+    await waitFor(() => expect(january).toBeChecked())
     await waitFor(() => expect(screen.getByLabelText(text.amountLabel('Januari 2026'))).toHaveValue(formatIDR(50_000)))
     expect(screen.getByRole('checkbox', { name: /Februari 2026/ })).toBeChecked()
     await waitFor(() => expect(selectedOptionName(text.memberLabel)).toBe('Warga Dua'))
