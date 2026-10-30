@@ -1,4 +1,4 @@
-# Uruni v0.10.0
+# Uruni v0.11.0-alpha.1
 # Uruni self-host stack: the app (single Go binary serving API + report + SPA)
 # behind Caddy for automatic HTTPS. Copy .env.example to .env and fill it in.
 x-logging: &logging
