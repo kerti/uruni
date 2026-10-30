@@ -1450,9 +1450,6 @@ export const copy = {
     },
     actions: {
       settle: 'Bayar',
-      // The row's "more" menu holding Ubah, Putihkan and Hapus - named like
-      // the receipt viewer's menu (receipts.photoMenuAria).
-      menuAria: 'Pilihan talangan',
       waive: 'Putihkan',
       unwaive: 'Batalkan pemutihan',
       correct: 'Ubah',
@@ -1463,6 +1460,14 @@ export const copy = {
       outstanding: 'Belum dibayar',
       waived: 'Diputihkan',
       settled: 'Dibayar',
+    },
+    // The claim's detail (#768): the card is one tap target and every action
+    // lives here, as in transactionDetail.
+    detail: {
+      heading: 'Rincian talangan',
+      // Names the card's full-width tap target, with the claim's facts.
+      openAria: (memberName: string, purposeName: string, amount: string, date: string) =>
+        `Lihat rincian talangan: ${memberName}, ${purposeName}, ${amount}, ${date}`,
     },
     waive: {
       success: 'Talangan sudah diputihkan.',

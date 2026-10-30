@@ -216,6 +216,7 @@ const duesPaymentKeys: Keys<DuesPaymentHistoryRow> = {
   reverses_transaction_id: true,
   reversed_by_transaction_id: true,
   reverses_occurred_on: true,
+  receipt_ids: true,
 }
 const transferKeys: Keys<Transfer> = { id: true, kind: true, created_at: true }
 const sessionKeys: Keys<SessionStatus> = { authenticated: true, has_account: true, demo_email: true, demo_password: true }

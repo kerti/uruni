@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
-import { chooseMenuItem, chooseOption } from './popper'
+import { chooseOption } from './popper'
 
 // Records a claim the way she does: Catat -> Keluar -> "Pengeluaran ini
 // ditalangi" -> member and amount -> Simpan. Lands on Beranda with the
@@ -30,6 +30,21 @@ async function openTalangan(page: Page) {
   await page.getByRole('link', { name: copy.shell.nav.history }).click()
   await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
   await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
+}
+
+// A claim's card is one tap target that opens its detail (#768), and every
+// action lives there. `amount` picks the card by its figure; none picks the
+// first. Returns the detail dialog, for the caller to act in.
+async function openClaim(page: Page, amount?: string) {
+  const cards = page.getByRole('main').getByRole('listitem')
+  const card = amount ? cards.filter({ hasText: amount }) : cards
+  await card
+    .first()
+    .getByRole('button', { name: /^Lihat rincian talangan/ })
+    .click()
+  const detail = page.getByRole('dialog', { name: copy.reimbursements.detail.heading })
+  await expect(detail).toBeVisible()
+  return detail
 }
 
 // Record a reimbursement claim, verify it appears in the outstanding list,
@@ -75,7 +90,8 @@ test.describe('reimbursements', () => {
     // mode). Open settle form. `exact: true` is required: name matching is a
     // case-insensitive substring search, so "Bayar" otherwise also matches the
     // "Belum dibayar" row badge.
-    await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
+    const detail = await openClaim(page)
+    await detail.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).click()
     // Bayar opens a dialog on the tab (ADR-046), addressed by the URL.
     await expect(page).toHaveURL(/\/history\/reimbursements\?edit=settle(%3A|:)\d+$/)
     const settleDialog = page.getByRole('dialog', { name: copy.reimbursements.settle.heading })
@@ -109,13 +125,9 @@ test.describe('reimbursements', () => {
     await openTalangan(page)
     await expect(page.getByText('Rp30.000')).toBeVisible()
 
-    // Ubah sits in the row's "more" menu and opens the claim's screen.
-    await chooseMenuItem(
-      page,
-      page.locator('li', { hasText: 'Rp30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
-      copy.reimbursements.actions.correct,
-      { exact: true },
-    )
+    // Ubah is in the claim's detail and opens the claim's screen.
+    const detail = await openClaim(page, 'Rp30.000')
+    await detail.getByRole('button', { name: copy.reimbursements.actions.correct, exact: true }).click()
     await expect(page).toHaveURL(/\/reimbursements\/correct\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.correct.heading })).toBeVisible()
 
@@ -134,7 +146,8 @@ test.describe('reimbursements', () => {
     await expect(page.getByText('Rp30.000')).not.toBeVisible()
 
     // Settle it so the next test starts from an empty outstanding list.
-    await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
+    const settleFrom = await openClaim(page)
+    await settleFrom.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).click()
     await chooseOption(page, copy.reimbursements.settle.accountLabel)
     await page
       .getByRole('dialog', { name: copy.reimbursements.settle.heading })
@@ -155,26 +168,23 @@ test.describe('reimbursements', () => {
     await expect(page.getByText('Rp20.000')).toBeVisible()
 
     // Waive it: the row leaves the outstanding list and feedback confirms.
-    // Putihkan sits in the row's "more" menu, behind the one plain Bayar.
-    await chooseMenuItem(
-      page,
-      page.locator('li', { hasText: 'Rp20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
-      copy.reimbursements.actions.waive,
-      { exact: true },
-    )
+    // Putihkan is in the claim's detail, which closes once it is done.
+    const detail = await openClaim(page, 'Rp20.000')
+    await detail.getByRole('button', { name: copy.reimbursements.actions.waive, exact: true }).click()
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
     await expect(page.getByText('Rp20.000')).not.toBeVisible()
 
-    // The full list carries the waived row, with "Batalkan pemutihan" where the
-    // outstanding filter (which drops waived rows) can never reach. The
-    // row-scoped badge locators keep the match to that row.
+    // The full list carries the waived row, with "Batalkan pemutihan" in its
+    // detail where the outstanding filter (which drops waived rows) can never
+    // reach. The row-scoped badge locators keep the match to that row.
     await page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel }).uncheck()
     const row = page.locator('li', { hasText: 'Rp20.000' })
     await expect(row.getByText(copy.reimbursements.status.waived)).toBeVisible()
-    await expect(page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true })).toBeVisible()
+    const waived = await openClaim(page, 'Rp20.000')
+    await expect(waived.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true })).toBeVisible()
 
     // Un-waive: the claim is owed again and its own badge flips back.
-    await page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true }).click()
+    await waived.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true }).click()
     await expect(page.getByText(copy.reimbursements.unwaive.success)).toBeVisible()
     await expect(row.getByText(copy.reimbursements.status.outstanding)).toBeVisible()
   })

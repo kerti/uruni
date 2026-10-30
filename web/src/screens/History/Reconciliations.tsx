@@ -118,7 +118,7 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
               <button
                 type="button"
                 onClick={() => open(String(row.id))}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 outline-none select-none transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <span>{formatUnixSeconds(row.performed_at)}</span>
                 <SnapshotBadge row={row} />

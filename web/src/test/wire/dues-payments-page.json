@@ -10,6 +10,7 @@
       "member_name": "Budi",
       "note": null,
       "occurred_on": "2026-09-05",
+      "receipt_ids": [],
       "reversed_by_transaction_id": null,
       "reverses_occurred_on": null,
       "reverses_transaction_id": null
@@ -24,6 +25,7 @@
       "member_name": "Budi",
       "note": null,
       "occurred_on": "2026-09-05",
+      "receipt_ids": [],
       "reversed_by_transaction_id": null,
       "reverses_occurred_on": null,
       "reverses_transaction_id": null
@@ -38,6 +40,7 @@
       "member_name": "Citra",
       "note": null,
       "occurred_on": "2026-07-05",
+      "receipt_ids": [],
       "reversed_by_transaction_id": null,
       "reverses_occurred_on": null,
       "reverses_transaction_id": null

@@ -1,7 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, Camera, PenLine, Undo2 } from 'lucide-react'
 import { useRef } from 'react'
-import type { ReactNode } from 'react'
 
+import DetailField from '@/components/DetailField'
 import { isPurposePair, isTransfer, rowLabelFor, transferKind } from '@/components/rowLabel'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
@@ -163,33 +163,33 @@ function Detail({
 
       <dl className="flex flex-col gap-3 text-sm">
         {!isPurposePair(transaction) && (
-          <Field label={text.purposeLabel}>
+          <DetailField label={text.purposeLabel}>
             {purposeName}
             {corrected && transaction.effective_purpose_id !== undefined && (
               <span className="block text-muted-foreground">
                 {copy.purposeCorrection.currentLabel(purposeNames.get(transaction.effective_purpose_id) ?? copy.home.purposeUnknown)}
               </span>
             )}
-          </Field>
+          </DetailField>
         )}
         {note && (
-          <Field label={text.noteLabel}>
+          <DetailField label={text.noteLabel}>
             <span className="break-words whitespace-pre-wrap">{note}</span>
-          </Field>
+          </DetailField>
         )}
         {transaction.account_name && !(transfer && transaction.transfer_kind === 'between_accounts') && (
-          <Field label={text.locationLabel}>{transaction.account_name}</Field>
+          <DetailField label={text.locationLabel}>{transaction.account_name}</DetailField>
         )}
-        <Field label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</Field>
-        <Field label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</Field>
+        <DetailField label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</DetailField>
+        <DetailField label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</DetailField>
         {receiptIds.length > 0 && (
-          <Field label={text.receiptsLabel}>
+          <DetailField label={text.receiptsLabel}>
             <span className="mt-1 flex flex-wrap gap-2">
               {receiptIds.map((id) => (
                 <img key={id} src={receiptUrl(id)} alt="" className="size-16 rounded-md object-cover ring-1 ring-foreground/10" />
               ))}
             </span>
-          </Field>
+          </DetailField>
         )}
       </dl>
 
@@ -244,15 +244,6 @@ function Detail({
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
     </div>
   )
 }

@@ -25,6 +25,16 @@ export const transactionReversalCopy: ReversalCopy = {
   submitting: reverseText.reverseSubmitting,
 }
 
+/** A dues payment's own wording (MemberPayments, Riwayat's Iuran tab): no
+ * explainer, and the shared error map (a dues payment says "iuran"). */
+export const duesReversalCopy: ReversalCopy = {
+  title: copy.dues.history.reverse,
+  noteLabel: copy.dues.history.noteLabel,
+  cancel: copy.dues.history.cancel,
+  confirm: copy.dues.history.confirm,
+  submitting: copy.dues.history.submitting,
+}
+
 /** Wire error code -> Indonesian copy, scoped first to the transaction list's
  * wording (transaction_already_reversed reads as "iuran" in the shared map,
  * ADR-042) then falling back to it. */

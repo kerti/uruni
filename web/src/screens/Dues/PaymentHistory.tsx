@@ -1,6 +1,9 @@
-import { ArrowDownLeft, ArrowUpRight, Search } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Camera, Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+
+import DuesEntryDialogs from '@/screens/Dues/DuesEntryDialogs'
+import { useDialogParam } from '@/lib/useDialogParam'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,7 +57,19 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
   const [moreError, setMoreError] = useState<ApiError | null>(null)
   const generation = useRef(0)
 
+  const entry = useDialogParam('entry')
+
   const loadFirstPage = useCallback((): Promise<DuesPaymentsPage> => listDuesPayments({ q: q || undefined }), [q])
+
+  // After a reversal or a nota: re-read the first page in place, so the card
+  // and the dialog over it do not drop to Loading.
+  const refreshFirstPage = useCallback(() => {
+    generation.current += 1
+    setMore(null)
+    setMoreLoading(false)
+    setMoreError(null)
+    void run(loadFirstPage, { silent: true })
+  }, [run, loadFirstPage])
 
   useEffect(() => {
     generation.current += 1
@@ -130,9 +145,10 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
       <>
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (
-            <PaymentHistoryRow key={row.id} row={row} />
+            <PaymentHistoryRow key={row.id} row={row} onOpen={() => entry.open(String(row.id))} />
           ))}
         </ul>
+        <DuesEntryDialogs rows={rows} onRefresh={refreshFirstPage} />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
           <Button
@@ -181,32 +197,62 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
   )
 }
 
-function PaymentHistoryRow({ row }: { row: DuesPaymentHistoryRow }) {
+function PaymentHistoryRow({ row, onOpen }: { row: DuesPaymentHistoryRow; onOpen: () => void }) {
   const reversed = row.reversed_by_transaction_id !== null
+  const receiptCount = row.receipt_ids.length
 
   return (
-    <li className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
-      <span className="flex min-w-0 items-start gap-2">
-        {row.is_reversal ? (
-          <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
-        ) : (
-          <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
-        )}
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate">
-            {row.member_name}
-            {row.is_reversal && ` \u00b7 ${rowText.reversalRow}`}
-          </span>
-          <span className="text-sm text-muted-foreground">{formatPeriod(row.dues_period)}</span>
-          <span className="text-sm text-muted-foreground">{formatIsoDate(row.occurred_on)}</span>
-          {row.is_reversal && row.reverses_occurred_on && (
-            <span className="text-sm text-muted-foreground">{text.reversesLabel(formatIsoDate(row.reverses_occurred_on))}</span>
+    <li className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+      {/* The whole card is one tap target that opens the entry in full (#768),
+          as on Transaksi: a full-card button underneath the content, which
+          ignores pointer events so a tap anywhere falls through to it. Every
+          action (Batalkan, the nota) lives in the detail. */}
+      <button
+        type="button"
+        aria-label={
+          copy.transactionDetail.openAria(
+            `${row.member_name}, ${formatPeriod(row.dues_period)}`,
+            formatIDR(row.amount),
+            formatIsoDate(row.occurred_on),
+          ) + (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
+        }
+        onClick={onOpen}
+        className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+      />
+      <div className="pointer-events-none relative flex items-start justify-between gap-3">
+        <span className="flex min-w-0 items-start gap-2">
+          {row.is_reversal ? (
+            <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
+          ) : (
+            <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
           )}
-          {row.note && <span className="truncate text-sm text-muted-foreground">{row.note}</span>}
-          {!row.is_reversal && reversed && <span className="text-sm text-muted-foreground">{rowText.reversedBadge}</span>}
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">
+              {row.member_name}
+              {row.is_reversal && ` \u00b7 ${rowText.reversalRow}`}
+            </span>
+            <span className="text-sm text-muted-foreground">{formatPeriod(row.dues_period)}</span>
+            <span className="text-sm text-muted-foreground">{formatIsoDate(row.occurred_on)}</span>
+            {row.is_reversal && row.reverses_occurred_on && (
+              <span className="text-sm text-muted-foreground">{text.reversesLabel(formatIsoDate(row.reverses_occurred_on))}</span>
+            )}
+            {row.note && <span className="truncate text-sm text-muted-foreground">{row.note}</span>}
+            {!row.is_reversal && reversed && <span className="text-sm text-muted-foreground">{rowText.reversedBadge}</span>}
+          </span>
         </span>
-      </span>
-      <span className="tabular shrink-0 font-medium">{formatIDR(row.amount)}</span>
+        {/* As a Transaksi card: the amount alone on its line, the camera and
+            count under it once a nota exists (read-only; the count rides in
+            the button's name). */}
+        <span className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="tabular font-medium">{formatIDR(row.amount)}</span>
+          {receiptCount > 0 && (
+            <span aria-hidden="true" className="flex items-center gap-1 text-primary">
+              <Camera className="size-4" />
+              <span className="tabular text-sm font-medium">{receiptCount}</span>
+            </span>
+          )}
+        </span>
+      </div>
     </li>
   )
 }

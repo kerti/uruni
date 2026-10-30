@@ -109,6 +109,10 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 // a reversal is never itself reversed). reverses_occurred_on rides only on a
 // reversal row, the original payment's date, so the link reads right even
 // when the original sits on a later page.
+//
+// receipt_ids is every nota on the row, oldest first, as GET
+// /api/transactions carries it (#154): the Iuran card shows the same camera
+// and count as a Transaksi card (#768).
 type duesPaymentHistoryResponse struct {
 	ID                      int64   `json:"id"`
 	IsReversal              bool    `json:"is_reversal"`
@@ -122,6 +126,7 @@ type duesPaymentHistoryResponse struct {
 	ReversesTransactionID   *int64  `json:"reverses_transaction_id"`
 	ReversedByTransactionID *int64  `json:"reversed_by_transaction_id"`
 	ReversesOccurredOn      *string `json:"reverses_occurred_on"`
+	ReceiptIDs              []int64 `json:"receipt_ids"`
 }
 
 // toDuesPaymentHistoryResponse maps one ListDuesPaymentsPage row to the wire.
@@ -151,6 +156,7 @@ func toDuesPaymentHistoryResponse(row store.ListDuesPaymentsPageRow) duesPayment
 		ReversesTransactionID:   row.ReversesTransactionID,
 		ReversedByTransactionID: row.ReversedByTransactionID,
 		ReversesOccurredOn:      row.ReversesOccurredOn,
+		ReceiptIDs:              []int64{},
 	}
 }
 
@@ -214,9 +220,23 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
+	// One batched, fund-scoped receipt lookup for the page, never a query per
+	// row (see receiptIDsForTransactions). A dues row is one ledger row.
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
+	if err != nil {
+		mapSQLiteError(w, a.log(r), err)
+		return
+	}
+
 	resp := make([]duesPaymentHistoryResponse, 0, len(rows))
 	for _, row := range rows {
-		resp = append(resp, toDuesPaymentHistoryResponse(row))
+		item := toDuesPaymentHistoryResponse(row)
+		item.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[row.ID])
+		resp = append(resp, item)
 	}
 	writeJSON(w, http.StatusOK, duesPaymentsPageResponse{DuesPayments: resp, NextCursor: nextCursor})
 }

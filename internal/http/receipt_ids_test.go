@@ -342,3 +342,48 @@ func TestReimbursementReceiptIDsCreatedEmptyListedAccuratelyAndSurvivesPatch(t *
 		t.Errorf("patched claim's receipt_ids = %v, want %v (a correction must not lose a receipt uploaded before it)", patched.ReceiptIDs, want)
 	}
 }
+
+// TestGetDuesPaymentsCarriesReceiptIDs is #768: the Iuran tab's card shows the
+// same camera and count as a Transaksi card, so GET /api/dues-payments carries
+// receipt_ids like GET /api/transactions - the row's own notas, oldest first,
+// and [] (never null) on a row with none.
+func TestGetDuesPaymentsCarriesReceiptIDs(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	withNota := postOneDuesPayment(t, r, setup, memberID, periodAt(0), "2026-08-05")
+	without := postOneDuesPayment(t, r, setup, memberID, periodAt(1), "2026-08-06")
+
+	fixture := encodeTestJPEG(t, solidBlockImage(16, 16, 4, 4, fixtureBG, fixtureBlock))
+	var want []int64
+	for range 2 {
+		rec := postReceiptFile(t, r, "/api/transactions/"+strconv.FormatInt(withNota, 10)+"/receipts", fixture)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST .../receipts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		want = append(want, decodeReceiptResponse(t, rec).ID)
+	}
+
+	rec := getDuesPayments(t, r, "")
+	var raw struct {
+		DuesPayments []map[string]json.RawMessage `json:"dues_payments"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decoding GET /api/dues-payments: %v (body: %s)", err, rec.Body.String())
+	}
+	page := decodeDuesPaymentsPage(t, rec)
+	for i, row := range page.DuesPayments {
+		switch row.ID {
+		case withNota:
+			if !slices.Equal(row.ReceiptIDs, want) {
+				t.Errorf("receipt_ids on the row with notas = %v, want %v", row.ReceiptIDs, want)
+			}
+		case without:
+			if got := string(raw.DuesPayments[i]["receipt_ids"]); got != "[]" {
+				t.Errorf("receipt_ids on the row with none = %s, want the literal empty array []", got)
+			}
+		}
+	}
+}

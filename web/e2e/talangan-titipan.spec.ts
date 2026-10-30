@@ -75,19 +75,26 @@ async function openTalangan(page: Page) {
   await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
 }
 
-// The row's "more" menu, then Hapus.
-async function chooseHapus(card: Locator, page: Page) {
-  await chooseMenuItem(page, card.getByRole('button', { name: copy.reimbursements.actions.menuAria }), copy.reimbursements.actions.delete, {
-    exact: true,
-  })
+// A claim's card opens its detail (#768); every action lives there.
+async function openClaimDetail(card: Locator, page: Page): Promise<Locator> {
+  await card.getByRole('button', { name: /^Lihat rincian talangan/ }).click()
+  const detail = page.getByRole('dialog', { name: copy.reimbursements.detail.heading })
+  await expect(detail).toBeVisible()
+  return detail
 }
 
-// The delete dialog (ADR-046), once Hapus has been chosen from the menu.
+// The card's detail, then Hapus, which hands off to the delete dialog.
+async function chooseHapus(card: Locator, page: Page) {
+  const detail = await openClaimDetail(card, page)
+  await detail.getByRole('button', { name: copy.reimbursements.actions.delete, exact: true }).click()
+}
+
+// The delete dialog (ADR-046), once Hapus has been chosen in the detail.
 function deleteDialog(page: Page) {
   return page.getByRole('dialog', { name: copy.reimbursements.delete.dialogTitle })
 }
 
-// Hapus from the menu, then the dialog's own "Ya, hapus".
+// Hapus from the detail, then the dialog's own "Ya, hapus".
 async function removeClaim(card: Locator, page: Page) {
   await chooseHapus(card, page)
   await deleteDialog(page).getByRole('button', { name: copy.reimbursements.delete.confirm, exact: true }).click()
@@ -189,16 +196,19 @@ test.describe('talangan and titipan', () => {
     await openTalangan(page)
     const card = claim(page, salah)
 
-    // Attach: the row control offers to add, the dialog takes the photo.
-    await card.getByRole('button', { name: copy.receipts.rowControlAria(false) }).click()
-    const dialog = page.getByRole('dialog', { name: copy.receipts.dialogHeading, exact: true })
-    await expect(dialog.getByText(copy.receipts.emptyReimbursement)).toBeVisible()
-    await dialog.locator('input[type="file"]').setInputFiles({ name: 'nota.jpg', mimeType: 'image/jpeg', buffer: TINY_JPEG })
-    await dialog.getByRole('button', { name: copy.receipts.addFromRow, exact: true }).last().click()
-    const photo = dialog.getByRole('button', { name: copy.receipts.zoomAria }).locator('img')
-    await expect(photo).toHaveCount(1)
+    // Attach: the detail offers to add, and the picker takes the photo there.
+    const detail = await openClaimDetail(card, page)
+    await detail.locator('input[type="file"]').setInputFiles({ name: 'nota.jpg', mimeType: 'image/jpeg', buffer: TINY_JPEG })
+    await expect(detail.getByRole('button', { name: copy.receipts.viewReceipt })).toBeVisible()
+    await detail.getByRole('button', { name: copy.common.close }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    // View: the photo is read back from the server and opens full screen.
+    // View: the detail hands off to the viewer, where the photo is read back
+    // from the server and opens full screen.
+    const dialog = page.getByRole('dialog', { name: copy.receipts.dialogHeading, exact: true })
+    const photo = dialog.getByRole('button', { name: copy.receipts.zoomAria }).locator('img')
+    await (await openClaimDetail(card, page)).getByRole('button', { name: copy.receipts.viewReceipt }).click()
+    await expect(photo).toHaveCount(1)
     await dialog.getByRole('button', { name: copy.receipts.zoomAria }).click()
     await expect(page.getByRole('button', { name: copy.common.close }).last()).toBeVisible()
     await page.getByRole('button', { name: copy.common.close }).last().click()
@@ -206,8 +216,9 @@ test.describe('talangan and titipan', () => {
     await dialog.getByRole('button', { name: copy.common.close }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    // The row now carries the photo (the control opens the viewer).
-    await expect(card.getByRole('button', { name: copy.receipts.rowControlAria(true) })).toBeVisible()
+    // The card now carries the photo, in its accessible name.
+    const countName = new RegExp(copy.transactionDetail.receiptCountAria(1))
+    await expect(card.getByRole('button', { name: countName })).toBeVisible()
 
     // Hapus while the photo is still on it: refused, with the fix named, and
     // the claim stays.
@@ -218,7 +229,7 @@ test.describe('talangan and titipan', () => {
     await expect(card).toBeVisible()
 
     // Delete the photo behind its own confirm.
-    await card.getByRole('button', { name: copy.receipts.rowControlAria(true) }).click()
+    await (await openClaimDetail(card, page)).getByRole('button', { name: copy.receipts.viewReceipt }).click()
     await expect(dialog).toBeVisible()
     await chooseMenuItem(page, dialog.getByRole('button', { name: copy.receipts.photoMenuAria }), copy.receipts.delete)
     await expect(dialog.getByText(copy.receipts.deleteConfirm)).toBeVisible()
@@ -227,7 +238,7 @@ test.describe('talangan and titipan', () => {
     await expect(photo).toHaveCount(0)
     await dialog.getByRole('button', { name: copy.common.close }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(card.getByRole('button', { name: copy.receipts.rowControlAria(false) })).toBeVisible()
+    await expect(card.getByRole('button', { name: countName })).toHaveCount(0)
   })
 
   test('Hapus removes a claim entered by mistake, and Beranda owes less', async ({ page }) => {
