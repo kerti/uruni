@@ -6,7 +6,8 @@ import DetailField from '@/components/DetailField'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
 import { useToast } from '@/components/toast/useToast'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -149,14 +150,6 @@ function Detail({
         actions={[
           ...(open
             ? [
-                {
-                  key: 'settle',
-                  label: text.actions.settle,
-                  icon: HandCoins,
-                  tone: 'primary' as const,
-                  disabled: busy,
-                  onClick: () => onSettle(claim),
-                },
                 { key: 'correct', label: text.actions.correct, icon: Pencil, disabled: busy, onClick: () => onCorrect(claim) },
                 { key: 'waive', label: text.actions.waive, icon: Eraser, disabled: busy, onClick: () => onWaive(claim) },
               ]
@@ -204,6 +197,16 @@ function Detail({
         />
       )}
       {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
+      {/* Paying is what an open claim is for, so it is this dialog's decision:
+          the filled button, last, in the footer like every dialog's (#768). */}
+      {open && (
+        <DialogFooter className="mt-1">
+          <Button type="button" size="lg" disabled={busy} onClick={() => onSettle(claim)}>
+            <HandCoins aria-hidden="true" />
+            {text.actions.settle}
+          </Button>
+        </DialogFooter>
+      )}
     </div>
   )
 }

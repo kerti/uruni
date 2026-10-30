@@ -5,11 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import DetailActions from '@/components/DetailActions'
 
 describe('DetailActions (#768)', () => {
-  it('puts the primary action first and full width, the rest in two columns, an odd last one across the row', () => {
+  it('lays the actions out in two columns, an odd last one across the row in the destructive tone', () => {
     render(
       <DetailActions
         actions={[
-          { key: 'pay', label: 'Bayar', tone: 'primary', onClick: vi.fn() },
           { key: 'edit', label: 'Ubah', onClick: vi.fn() },
           { key: 'waive', label: 'Putihkan', onClick: vi.fn() },
           { key: 'delete', label: 'Hapus', tone: 'destructive', onClick: vi.fn() },
@@ -18,12 +17,10 @@ describe('DetailActions (#768)', () => {
     )
 
     const buttons = screen.getAllByRole('button')
-    expect(buttons.map((b) => b.textContent)).toEqual(['Bayar', 'Ubah', 'Putihkan', 'Hapus'])
-    expect(buttons[0]).toHaveClass('col-span-2')
+    expect(buttons.map((b) => b.textContent)).toEqual(['Ubah', 'Putihkan', 'Hapus'])
+    expect(buttons[0]).not.toHaveClass('col-span-2')
     expect(buttons[1]).not.toHaveClass('col-span-2')
-    expect(buttons[2]).not.toHaveClass('col-span-2')
-    // Three after the primary: the destructive one is alone in its row.
-    expect(buttons[3]).toHaveClass('col-span-2', 'text-destructive')
+    expect(buttons[2]).toHaveClass('col-span-2', 'text-destructive')
   })
 
   it('pairs an even count with no full-width button', () => {

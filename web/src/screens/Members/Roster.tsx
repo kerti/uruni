@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { CirclePause, CirclePlay, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -587,12 +587,13 @@ function EditMemberDialog({
                   inactive
                     ? {
                         key: 'reinstate',
+                        icon: CirclePlay,
                         label: busy ? text.reinstating : text.reinstate,
                         disabled: busy,
                         onClick: () => void submit(() => updateMember(shown.id, { inactiveOn: null }), text.reactivated),
                       }
-                    : { key: 'deactivate', label: text.deactivate, onClick: () => setConfirming('deactivate') },
-                  { key: 'delete', label: text.delete, tone: 'destructive', onClick: () => setConfirming('delete') },
+                    : { key: 'deactivate', label: text.deactivate, icon: CirclePause, onClick: () => setConfirming('deactivate') },
+                  { key: 'delete', label: text.delete, icon: Trash2, tone: 'destructive', onClick: () => setConfirming('delete') },
                 ]}
               />
             </div>

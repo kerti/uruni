@@ -13,36 +13,34 @@ export interface DetailAction {
   icon?: LucideIcon
   onClick: () => void
   disabled?: boolean
-  /** `primary`: the record's everyday action (Bayar) - filled, full width,
-   * first. `destructive`: undoes or removes (Hapus, Batalkan transaksi) - in
-   * the destructive tone, last. Anything else is a plain outline button. */
-  tone?: 'primary' | 'destructive'
+  /** `destructive`: undoes or removes (Hapus, Batalkan transaksi) - in the
+   * destructive tone, last. Anything else is a plain outline button. */
+  tone?: 'destructive'
 }
 
 /**
  * The actions of one record in a detail or edit dialog, laid out one way
- * everywhere (#768): the everyday action, if there is one, full width and
- * filled; the rest in two columns of outline buttons with their full labels;
- * the destructive one last, spanning both columns when it is alone in its row.
- * Five full-width buttons took more height than the record above them; this
- * keeps every label visible and readable at the size of every other button,
- * without hiding anything in a menu.
+ * everywhere (#768): two columns of outline buttons with their full labels,
+ * the destructive one last, spanning both columns when it is alone in its
+ * row. Five full-width buttons took more height than the record above them;
+ * this keeps every label visible and readable at the size of every other
+ * button, without hiding anything in a menu.
+ *
+ * Never the dialog's filled button: that is the decision the dialog exists
+ * for, and it always sits last, in DialogFooter (Simpan, Bayar, Ya, hapus) -
+ * the bottom of the dialog, nearest the thumb. These are the other things she
+ * can do with the record, each leading somewhere else.
  *
  * The caller passes only the actions that apply to this record, in reading
- * order, primary first and destructive last.
+ * order, destructive last.
  */
 export default function DetailActions({ actions }: { actions: DetailAction[] }) {
   if (actions.length === 0) return null
-  const primary = actions.filter((action) => action.tone === 'primary')
-  const rest = actions.filter((action) => action.tone !== 'primary')
   return (
     <div className="grid grid-cols-2 gap-2">
-      {primary.map((action) => (
-        <ActionButton key={action.key} action={action} full />
-      ))}
-      {rest.map((action, index) => (
+      {actions.map((action, index) => (
         // An odd one out is the last one, alone in its row: it takes the row.
-        <ActionButton key={action.key} action={action} full={rest.length % 2 === 1 && index === rest.length - 1} />
+        <ActionButton key={action.key} action={action} full={actions.length % 2 === 1 && index === actions.length - 1} />
       ))}
     </div>
   )
@@ -54,7 +52,7 @@ function ActionButton({ action, full }: { action: DetailAction; full: boolean })
     <Button
       type="button"
       size="lg"
-      variant={action.tone === 'primary' ? 'default' : 'outline'}
+      variant="outline"
       className={cn('min-w-0', full && 'col-span-2', action.tone === 'destructive' && 'text-destructive')}
       disabled={action.disabled}
       onClick={action.onClick}

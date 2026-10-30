@@ -209,6 +209,11 @@ describe('Reimbursements tab', () => {
       expect(within(detail).getByRole('button', { name })).toBeInTheDocument()
     }
     expect(within(detail).queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
+    // Paying is the dialog's decision: the filled button, alone in the footer;
+    // every other action sits in the body (#768).
+    const footer = within(detail).getByRole('button', { name: text.actions.settle }).closest('[data-slot="dialog-footer"]')
+    expect(footer).not.toBeNull()
+    expect(within(footer as HTMLElement).getAllByRole('button')).toHaveLength(1)
   })
 
   it('a waived claim offers only Batalkan pemutihan and the nota; a settled one only the nota', async () => {
