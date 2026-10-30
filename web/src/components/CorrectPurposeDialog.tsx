@@ -4,6 +4,7 @@ import PurposePicker from '@/components/pickers/PurposePicker'
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import TransactionSummary from '@/components/TransactionSummary'
 import { copy } from '@/copy/id'
 import { correctPurpose } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -94,6 +95,9 @@ export default function CorrectPurposeDialog({
           <DialogTitle>{text.heading}</DialogTitle>
         </DialogHeader>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+          {/* The record being corrected (ADR-046), without its pos: the
+              picker below is the pos, seeded with where the money is now. */}
+          {transaction !== null && <TransactionSummary transaction={transaction} />}
           {alreadyCorrected && effectivePurposeId !== null && (
             <p className="text-sm text-muted-foreground">
               {text.currentLabel(purposeNames.get(effectivePurposeId) ?? copy.home.purposeUnknown)}

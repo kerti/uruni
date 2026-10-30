@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
@@ -11,15 +11,15 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { errorCode } from '@/lib/api'
-import { dateBounds, formatIsoDate, todayISODate } from '@/lib/dates'
+import { dateBounds, todayISODate } from '@/lib/dates'
 import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
-import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Reimbursement } from '@/lib/reimbursements'
+import ClaimSummary from './ClaimSummary'
 import { errorText } from './helpers'
 
 const text = copy.reimbursements
@@ -175,13 +175,7 @@ function SettleForm({
 
   return (
     <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
-      <dl className="flex flex-col gap-2 text-sm">
-        <SummaryRow label={text.record.memberLabel} value={memberName} />
-        <SummaryRow label={text.record.purposeLabel} value={purposeName} />
-        <SummaryRow label={text.record.dateLabel} value={formatIsoDate(claim.incurred_on)} />
-        {claim.note && <SummaryRow label={copy.transactionDetail.noteLabel} value={claim.note} />}
-        <SummaryRow label={text.record.amountLabel} value={<span className="tabular font-medium">{formatIDR(claim.amount)}</span>} />
-      </dl>
+      <ClaimSummary claim={claim} memberName={memberName} purposeName={purposeName} />
 
       <AccountPicker
         id="settle-account"
@@ -210,14 +204,5 @@ function SettleForm({
         </Button>
       </DialogFooter>
     </form>
-  )
-}
-
-function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-muted-foreground shrink-0">{label}</dt>
-      <dd className="text-right break-words">{value}</dd>
-    </div>
   )
 }

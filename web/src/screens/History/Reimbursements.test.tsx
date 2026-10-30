@@ -350,6 +350,10 @@ describe('Reimbursements tab', () => {
 
     await chooseFromRowMenu(text.actions.delete)
     const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+    // The claim it deletes, named the way Bayar names it (ADR-046).
+    const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
+    expect(summary).toHaveTextContent(`${text.record.memberLabel}Jane`)
+    expect(summary).toHaveTextContent(`${text.record.amountLabel}Rp15.000`)
     // The footer's Tutup comes before the X in the DOM.
     await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

@@ -459,6 +459,18 @@ describe('TransactionList reversal (ADR-042)', () => {
     expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
   })
 
+  it('names the transaction it reverses: pos, location, date and amount (ADR-046)', async () => {
+    renderReversible([transaction({ id: 35, reversible: true, purpose_id: 2, note: 'Sewa tenda' })])
+
+    const dialog = await openForm()
+    const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.purposeLabel}Jane's wedding`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.locationLabel}Tunai`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.dateLabel}12 Agustus 2026`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.noteLabel}Sewa tenda`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.amountLabel}Rp25.000`)
+  })
+
   it("states the original's date when no cek kas has counted the row", async () => {
     renderReversible([transaction({ id: 33, reversible: true, counted: false, occurred_on: '2026-08-12' })])
 
@@ -467,7 +479,7 @@ describe('TransactionList reversal (ADR-042)', () => {
     expect(screen.getByText(text.reverseDateOriginal('12 Agustus 2026'))).toBeInTheDocument()
     expect(screen.getByText('Dicatat pada 12 Agustus 2026.')).toBeInTheDocument()
     expect(screen.queryByText(text.reverseDateToday)).not.toBeInTheDocument()
-    expect(screen.queryByText(copy.record.dateLabel)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(copy.record.dateLabel)).not.toBeInTheDocument()
   })
 
   it('says it is recorded today once a cek kas has counted the row', async () => {

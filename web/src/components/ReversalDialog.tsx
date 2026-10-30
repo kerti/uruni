@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 
 import ReversalDateLine from '@/components/ReversalDateLine'
+import TransactionSummary from '@/components/TransactionSummary'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,7 @@ import type { Transaction } from '@/lib/transactions'
  */
 export default function ReversalDialog({
   transaction,
+  purposeName,
   open,
   onClose,
   onReversed,
@@ -35,6 +37,9 @@ export default function ReversalDialog({
   errorText = transactionReversalErrorText,
 }: {
   transaction: Transaction | null
+  /** The pos as it reads now, for the summary; omitted where the caller has
+   * no pos names (a member's dues payments). */
+  purposeName?: string
   open: boolean
   onClose: () => void
   onReversed: () => void
@@ -53,6 +58,7 @@ export default function ReversalDialog({
         {transaction !== null && (
           <ReversalBody
             transaction={transaction}
+            purposeName={purposeName}
             onClose={onClose}
             onReversed={onReversed}
             refresh={refresh}
@@ -67,6 +73,7 @@ export default function ReversalDialog({
 
 function ReversalBody({
   transaction,
+  purposeName,
   onClose,
   onReversed,
   refresh,
@@ -74,6 +81,7 @@ function ReversalBody({
   errorText,
 }: {
   transaction: Transaction
+  purposeName?: string
   onClose: () => void
   onReversed: () => void
   refresh?: () => Promise<void> | void
@@ -106,6 +114,7 @@ function ReversalBody({
         <DialogTitle>{words.title}</DialogTitle>
       </DialogHeader>
       <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+        <TransactionSummary transaction={transaction} purposeName={purposeName} />
         <div className="flex flex-col gap-1">
           {words.explainer && <p className="text-sm text-muted-foreground">{words.explainer}</p>}
           <ReversalDateLine transaction={transaction} />

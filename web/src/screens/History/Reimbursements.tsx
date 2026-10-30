@@ -28,6 +28,7 @@ import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
 import SettleDialog from '@/screens/Reimbursements/SettleDialog'
+import ClaimSummary from '@/screens/Reimbursements/ClaimSummary'
 import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
 
 const text = copy.reimbursements
@@ -143,10 +144,11 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // dialog checks its own claim: it reads it from the server, not this list.)
   const { clear: clearDialog } = dialog
   const listLoaded = listState.status === 'success' && listState.data !== undefined
-  const listHasDeleteClaim =
-    deleteId !== null &&
-    listState.data !== undefined &&
-    [...listState.data.reimbursements, ...(more?.reimbursements ?? [])].some((c) => c.id === deleteId)
+  const deleteClaim =
+    deleteId !== null && listState.data !== undefined
+      ? ([...listState.data.reimbursements, ...(more?.reimbursements ?? [])].find((c) => c.id === deleteId) ?? null)
+      : null
+  const listHasDeleteClaim = deleteClaim !== null
   useEffect(() => {
     if (settleTarget.kind === 'invalid' || deleteTarget.kind === 'invalid' || settleTarget.kind === 'new' || deleteTarget.kind === 'new') {
       clearDialog()
@@ -475,8 +477,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
 
       <SettleDialog claimId={settleId} onClose={dialog.close} onSettled={handleSettled} onUnusable={clearDialog} />
       <DeleteClaimDialog
-        open={deleteId !== null && listHasDeleteClaim}
-        claimId={deleteId}
+        open={listHasDeleteClaim}
+        claim={deleteClaim}
+        memberName={(deleteClaim && formDataState.data?.members.find((m) => m.id === deleteClaim.member_id)?.name) ?? '-'}
+        purposeName={(deleteClaim && formDataState.data?.purposes.find((p) => p.id === deleteClaim.purpose_id)?.name) ?? '-'}
         onClose={dialog.close}
         onDeleted={handleDeleted}
         refresh={() => listRun(loadFirstPage, { silent: true })}
@@ -495,13 +499,17 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
  */
 function DeleteClaimDialog({
   open,
-  claimId,
+  claim,
+  memberName,
+  purposeName,
   onClose,
   onDeleted,
   refresh,
 }: {
   open: boolean
-  claimId: number | null
+  claim: Reimbursement | null
+  memberName: string
+  purposeName: string
   onClose: () => void
   onDeleted: () => void
   refresh: () => Promise<void>
@@ -514,19 +522,32 @@ function DeleteClaimDialog({
       }}
     >
       <DialogContent closeLabel={copy.common.close}>
-        {claimId !== null && <DeleteClaimBody claimId={claimId} onClose={onClose} onDeleted={onDeleted} refresh={refresh} />}
+        {claim !== null && (
+          <DeleteClaimBody
+            claim={claim}
+            memberName={memberName}
+            purposeName={purposeName}
+            onClose={onClose}
+            onDeleted={onDeleted}
+            refresh={refresh}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
 function DeleteClaimBody({
-  claimId,
+  claim,
+  memberName,
+  purposeName,
   onClose,
   onDeleted,
   refresh,
 }: {
-  claimId: number
+  claim: Reimbursement
+  memberName: string
+  purposeName: string
   onClose: () => void
   onDeleted: () => void
   refresh: () => Promise<void>
@@ -539,6 +560,7 @@ function DeleteClaimBody({
       <DialogHeader>
         <DialogTitle>{text.delete.dialogTitle}</DialogTitle>
       </DialogHeader>
+      <ClaimSummary claim={claim} memberName={memberName} purposeName={purposeName} />
       <p className="text-sm">{text.delete.body}</p>
       {state.status === 'error' && state.error && (
         <p role="alert" className="text-sm text-attention-text">
@@ -557,7 +579,7 @@ function DeleteClaimBody({
           onClick={() =>
             void run(
               async () => {
-                await deleteReimbursement(claimId)
+                await deleteReimbursement(claim.id)
                 onDeleted()
               },
               { settle: refresh },

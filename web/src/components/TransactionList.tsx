@@ -262,6 +262,7 @@ export default function TransactionList({
         {onRefresh && (
           <ReversalDialog
             transaction={reversing}
+            purposeName={reversing ? purposeNames.get(reversing.effective_purpose_id ?? reversing.purpose_id) : undefined}
             open={reversing !== null}
             onClose={reversal.close}
             onReversed={() => {

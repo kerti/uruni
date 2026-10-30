@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -125,7 +125,12 @@ describe('MemberPayments', () => {
     renderPayments()
 
     await userEvent.click(await screen.findByRole('button', { name: text.reverse }))
-    await screen.findByRole('dialog', { name: text.reverse })
+    const dialog = await screen.findByRole('dialog', { name: text.reverse })
+    // The payment it reverses (ADR-046): the month, the date and the amount.
+    const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.periodLabel}Januari 2026`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.dateLabel}5 Januari 2026`)
+    expect(summary).toHaveTextContent(`${copy.transactionDetail.amountLabel}Rp50.000`)
 
     await new Promise((resolve) => setTimeout(resolve, 10))
     const overlay = document.querySelector('[data-slot="dialog-overlay"]')!

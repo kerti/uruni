@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
+import RecordSummary from '@/components/RecordSummary'
 import OpeningDateHint from '@/components/OpeningDateHint'
 import { useToast } from '@/components/toast/useToast'
 import { dateBounds, todayISODate } from '@/lib/dates'
@@ -246,6 +247,7 @@ export default function Incidentals({
       />
       <CloseEnvelopeDialog
         purposeId={purposeId}
+        envelope={detailState.data ?? null}
         accounts={accountsState.data ?? []}
         open={closeWantsThis && detailState.data?.closed_on === null}
         onClose={closeDialog}
@@ -445,6 +447,7 @@ function DetailView({
  */
 function CloseEnvelopeDialog({
   purposeId,
+  envelope,
   accounts,
   open,
   onClose,
@@ -452,6 +455,8 @@ function CloseEnvelopeDialog({
   refresh,
 }: {
   purposeId: number
+  /** What the summary names: the occasion and its leftover. */
+  envelope: IncidentalDetail | null
   accounts: Account[]
   open: boolean
   onClose: () => void
@@ -466,7 +471,7 @@ function CloseEnvelopeDialog({
       }}
     >
       <DialogContent closeLabel={copy.common.close} posts>
-        <CloseEnvelopeBody purposeId={purposeId} accounts={accounts} onClosed={onClosed} refresh={refresh} />
+        <CloseEnvelopeBody purposeId={purposeId} envelope={envelope} accounts={accounts} onClosed={onClosed} refresh={refresh} />
       </DialogContent>
     </Dialog>
   )
@@ -474,11 +479,13 @@ function CloseEnvelopeDialog({
 
 function CloseEnvelopeBody({
   purposeId,
+  envelope,
   accounts,
   onClosed,
   refresh,
 }: {
   purposeId: number
+  envelope: IncidentalDetail | null
   accounts: Account[]
   onClosed: () => void
   refresh: () => Promise<void>
@@ -512,6 +519,20 @@ function CloseEnvelopeBody({
         <DialogTitle>{text.close.heading}</DialogTitle>
       </DialogHeader>
       <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+        {/* The envelope being closed and what it holds (ADR-046): the leftover
+            is what the close rolls out to Kas Utama (or, below zero, what it
+            covers from it), signed as the detail screen shows it. */}
+        {envelope && (
+          <RecordSummary
+            items={[
+              { label: text.close.envelopeLabel, value: envelope.occasion },
+              {
+                label: text.detail.remainingLabel,
+                value: <span className="tabular font-medium whitespace-nowrap">{formatIDR(envelope.balance_amount)}</span>,
+              },
+            ]}
+          />
+        )}
         <AccountPicker
           id="incidental-close-account"
           label={text.close.accountLabel}

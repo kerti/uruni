@@ -482,6 +482,10 @@ describe('Incidentals', () => {
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
     const dialog = await screen.findByRole('dialog', { name: text.close.heading })
     expect(currentSearch()).toBe('?edit=close%3A1')
+    // The envelope it closes and what that rolls out (ADR-046).
+    const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
+    expect(summary).toHaveTextContent(`${text.close.envelopeLabel}Halal bihalal RT`)
+    expect(summary).toHaveTextContent(`${text.detail.remainingLabel}Rp50.000`)
 
     // An edit dialog's way out is the X (#742): the footer holds the primary alone.
     expect(within(dialog).queryByRole('button', { name: copy.common.back })).not.toBeInTheDocument()

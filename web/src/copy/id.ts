@@ -1379,10 +1379,16 @@ export const copy = {
     receiptCountAria: (count: number) => `${count} foto nota`,
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
+    // memberLabel, periodLabel and amountLabel label TransactionSummary, the
+    // record a confirm dialog acts on (ADR-046); the detail itself shows the
+    // amount as its headline instead.
+    memberLabel: 'Anggota',
     purposeLabel: 'Pos',
+    periodLabel: 'Periode',
     noteLabel: 'Catatan',
     locationLabel: 'Lokasi',
     dateLabel: 'Tanggal',
+    amountLabel: 'Jumlah',
     recordedAtLabel: 'Dicatat pada',
     receiptsLabel: 'Foto nota',
   },
@@ -1525,6 +1531,9 @@ export const copy = {
     },
     close: {
       heading: 'Tutup amplop',
+      // The envelope the dialog closes, named above its fields (ADR-046);
+      // its leftover reads with detail.remainingLabel.
+      envelopeLabel: 'Amplop',
       // The close moves money between pos inside one location, so the field
       // is just "Lokasi" (#737). Still direction-neutral (ADR-031): leftover
       // out to Kas Utama, or a shortfall covered from it - a label naming one

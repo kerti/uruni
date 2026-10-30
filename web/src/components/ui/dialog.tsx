@@ -151,8 +151,12 @@ function DialogContent({
         {/* The scroller is an inner box, not the Content itself: the close
          * button is a sibling of it, so it stays put while the form scrolls,
          * and the sticky DialogHeader pins the title beside it. The box
-         * carries the padding, so a focused field's ring is never clipped. */}
-        <div data-slot="dialog-body" className="grid min-h-0 gap-4 overflow-y-auto p-4">
+         * carries the padding, so a focused field's ring is never clipped.
+         * grid-cols-1 (minmax(0, 1fr)), not the implicit auto column: an auto
+         * track grows to its widest content, so one long pos or location name
+         * in a picker, or a long title, widened the whole form past the
+         * dialog's edge instead of wrapping or truncating inside it. */}
+        <div data-slot="dialog-body" className="grid min-h-0 grid-cols-1 gap-4 overflow-y-auto p-4">
           {children}
         </div>
         <DialogPrimitive.Close
