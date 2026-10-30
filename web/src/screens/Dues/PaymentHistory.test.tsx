@@ -1,13 +1,15 @@
-import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/toast/ToastProvider'
 import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { DuesPaymentHistoryRow } from '@/lib/dues'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.history.dues
 const rowText = copy.dues.history
@@ -34,6 +36,7 @@ function payment(id: number, memberName: string, overrides: Partial<DuesPaymentH
     reverses_transaction_id: null,
     reversed_by_transaction_id: null,
     reverses_occurred_on: null,
+    receipt_ids: [],
     ...overrides,
   }
 }
@@ -47,7 +50,7 @@ function LocationProbe() {
 function render(ui: ReactElement, entry = '/history/dues') {
   const wrap = (el: ReactElement) => (
     <MemoryRouter initialEntries={[entry]}>
-      {el}
+      <ToastProvider>{el}</ToastProvider>
       <LocationProbe />
     </MemoryRouter>
   )
@@ -77,6 +80,21 @@ function stubApi(pageFor: (url: URL) => Page) {
 }
 
 describe('PaymentHistory', () => {
+  it('shows the camera and count under the amount once a payment has notas, the count in the card name (#768)', async () => {
+    stubApi(() => ({ dues_payments: [payment(1, 'Warga Satu', { receipt_ids: [4, 9] }), payment(2, 'Warga Dua')], next_cursor: null }))
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
+
+    const withNota = (await screen.findByText('Warga Satu')).closest('li')!
+    expect(within(withNota).getByRole('button')).toHaveAccessibleName(
+      copy.transactionDetail.openAria('Warga Satu, Agustus 2026', formatIDR(25_000), '1 Agustus 2026') +
+        `, ${copy.transactionDetail.receiptCountAria(2)}`,
+    )
+    const amount = within(withNota).getByText(formatIDR(25_000))
+    expect(amount.parentElement).toHaveTextContent('2')
+    const without = screen.getByText('Warga Dua').closest('li')!
+    expect(within(without).getByText(formatIDR(25_000)).parentElement?.textContent).toBe(formatIDR(25_000))
+  })
+
   it('renders a page of payments under its own heading', async () => {
     stubApi(() => ({ dues_payments: [payment(1, 'Warga Satu')], next_cursor: null }))
     render(<PaymentHistory onOpenStatus={vi.fn()} />)
@@ -196,5 +214,102 @@ describe('PaymentHistory', () => {
 
     await user.click(screen.getByRole('button', { name: copy.dues.entryLink }))
     expect(onOpenStatus).toHaveBeenCalledTimes(1)
+  })
+
+  describe('the card is one tap target (#768)', () => {
+    function duesTransaction(id: number, overrides: Partial<Transaction> = {}): Transaction {
+      return {
+        id,
+        account_id: 7,
+        purpose_id: 3,
+        direction: 'in',
+        amount: 25_000,
+        occurred_on: '2026-08-01',
+        kind: 'dues',
+        member_id: 1,
+        dues_period: '2026-08',
+        reimbursement_id: null,
+        transfer_id: null,
+        reverses_transaction_id: null,
+        note: null,
+        created_at: 1,
+        reversible: true,
+        ...overrides,
+      }
+    }
+
+    /** The list, the transaction behind it (filtered by member and period, as
+     * the server does), the purposes and the reversal write. */
+    function stubDetailApi() {
+      const calls: { method: string; url: URL }[] = []
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(String(input), 'http://localhost')
+          const method = (init?.method ?? 'GET').toUpperCase()
+          calls.push({ method, url })
+          if (url.pathname === '/api/dues-payments') return jsonResponse({ dues_payments: [payment(7, 'Warga Satu')], next_cursor: null })
+          if (url.pathname === '/api/transactions' && method === 'GET') {
+            return jsonResponse({ transactions: [duesTransaction(7)], next_cursor: null })
+          }
+          if (url.pathname === '/api/transactions/7/reversal' && method === 'POST') {
+            return jsonResponse(duesTransaction(8, { direction: 'out', reverses_transaction_id: 7 }), 201)
+          }
+          if (url.pathname === '/api/purposes') return jsonResponse([{ id: 3, kind: 'main', name: 'Kas Utama', created_at: 1 }])
+          return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
+        }),
+      )
+      return calls
+    }
+
+    it('has one button, the whole card, named by its facts, and no button of its own', async () => {
+      stubDetailApi()
+      render(<PaymentHistory onOpenStatus={vi.fn()} />)
+
+      const card = (await screen.findByText('Warga Satu')).closest('li')!
+      const buttons = within(card).getAllByRole('button')
+      expect(buttons).toHaveLength(1)
+      expect(buttons[0]).toHaveAccessibleName(
+        copy.transactionDetail.openAria('Warga Satu, Agustus 2026', formatIDR(25_000), '1 Agustus 2026'),
+      )
+      expect(card).toHaveClass('rounded-lg', 'px-4', 'py-3')
+    })
+
+    it('opens the entry detail at ?entry=<id>, and Batalkan hands off to the reversal dialog, worded as on Transaksi, and posts', async () => {
+      const calls = stubDetailApi()
+      const user = userEvent.setup()
+      render(<PaymentHistory onOpenStatus={vi.fn()} />)
+
+      await user.click(await screen.findByRole('button', { name: /^Lihat rincian/ }))
+      const detail = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+      expect(screen.getByTestId('location')).toHaveTextContent('?entry=7')
+      // A dues row is not eligible for Perbaiki pos.
+      expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+      expect(calls.some((c) => c.url.pathname === '/api/transactions' && c.url.searchParams.get('member_id') === '1')).toBe(true)
+      expect(calls.some((c) => c.url.pathname === '/api/transactions' && c.url.searchParams.get('dues_period') === '2026-08')).toBe(true)
+
+      await user.click(within(detail).getByRole('button', { name: copy.history.transactions.reverse }))
+
+      // The detail is gone before the reversal dialog opens: never two at once.
+      const dialog = await screen.findByRole('dialog', { name: copy.history.transactions.reverse })
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
+      expect(screen.getByTestId('location').textContent).toContain('edit=reverse')
+      expect(screen.getByTestId('location').textContent).not.toContain('entry=')
+
+      await user.click(within(dialog).getByRole('button', { name: copy.history.transactions.reverseConfirm }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByText(rowText.success)).toBeInTheDocument()
+      expect(calls.some((c) => c.method === 'POST' && c.url.pathname === '/api/transactions/7/reversal')).toBe(true)
+    })
+
+    it('strips an ?entry= naming a payment this list does not hold', async () => {
+      stubDetailApi()
+      render(<PaymentHistory onOpenStatus={vi.fn()} />, '/history/dues?entry=99')
+
+      await screen.findByText('Warga Satu')
+      await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('entry='))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 })

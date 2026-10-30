@@ -141,6 +141,9 @@ export interface DuesPaymentHistoryRow {
   reverses_transaction_id: number | null
   reversed_by_transaction_id: number | null
   reverses_occurred_on: string | null
+  /** Every nota on the row, oldest first (#154, #768) - the card shows the
+   * camera and count from it, as a Transaksi card does. */
+  receipt_ids: number[]
 }
 
 /** GET /api/dues-payments's optional query parameters (ADR-032 "Lists: paging

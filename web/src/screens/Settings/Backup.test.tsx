@@ -10,7 +10,6 @@ import type { StoredBackup } from '@/lib/backup'
 import type { RestoreInspectResult } from '@/lib/restore'
 
 const text = copy.settings.backup
-const confirmText = copy.restoreConfirm
 const common = copy.common
 
 const stagedPreview = {
@@ -335,7 +334,9 @@ describe('Settings backup card - automatic backup list', () => {
     )
     // Past this point it is the identical confirm dialog RestoreDialog.test.tsx
     // covers in depth - only the entry point differs.
-    expect(await screen.findByText(confirmText.dateLabel('2026-09-30'))).toBeInTheDocument()
+    expect(
+      within(await screen.findByRole('dialog', { name: copy.restoreConfirm.heading })).getByText(formatIsoDate('2026-09-30')),
+    ).toBeInTheDocument()
   })
 
   it('gives every row download control a touch target at least 44px', async () => {

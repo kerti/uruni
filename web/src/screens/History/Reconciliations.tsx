@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import ReconciliationLines from '@/components/ReconciliationLines'
 import { Button } from '@/components/ui/button'
+import DetailField from '@/components/DetailField'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -118,7 +119,7 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
               <button
                 type="button"
                 onClick={() => open(String(row.id))}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 outline-none select-none transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <span>{formatUnixSeconds(row.performed_at)}</span>
                 <SnapshotBadge row={row} />
@@ -191,7 +192,7 @@ function SnapshotDialog({ id, open, onClose, accounts }: { id: number | null; op
     >
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
-          <DialogTitle>{state.data ? formatUnixSeconds(state.data.performed_at) : text.heading}</DialogTitle>
+          <DialogTitle>{tabText.detailHeading}</DialogTitle>
         </DialogHeader>
 
         {(state.status === 'idle' || state.status === 'loading') && <Loading />}
@@ -199,12 +200,19 @@ function SnapshotDialog({ id, open, onClose, accounts }: { id: number | null; op
           <ErrorState error={state.error} onRetry={() => id !== null && void run(() => getReconciliation(id))} />
         )}
         {state.status === 'success' && state.data && (
+          // The same reading layout as the other detail dialogs (#768): each
+          // fact with its label above it, the counted locations between.
           <div className="flex flex-col gap-3">
+            <dl className="flex flex-col gap-3 text-sm">
+              <DetailField label={tabText.performedAtLabel}>{formatUnixSeconds(state.data.performed_at)}</DetailField>
+            </dl>
             <ReconciliationLines lines={state.data.lines} accountNames={accountNames} />
             {state.data.note && (
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{tabText.noteLabel}:</span> {state.data.note}
-              </p>
+              <dl className="flex flex-col gap-3 text-sm">
+                <DetailField label={tabText.noteLabel}>
+                  <span className="whitespace-pre-wrap">{state.data.note}</span>
+                </DetailField>
+              </dl>
             )}
           </div>
         )}

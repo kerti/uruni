@@ -1,11 +1,13 @@
 import { forwardRef, useImperativeHandle, useRef, useState, type FormEvent } from 'react'
 
+import RecordSummary from '@/components/RecordSummary'
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import PasswordInput from '@/components/PasswordInput'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
+import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { confirmRestore, inspectRestoreUpload, inspectStoredRestore } from '@/lib/restore'
 import { useApi } from '@/lib/useApi'
@@ -142,8 +144,15 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
 
           {staged && (
             <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
-              <p className="text-sm text-muted-foreground">{confirmText.dateLabel(staged.preview.date)}</p>
-              <p className="text-sm font-medium">{confirmText.totalLabel(formatIDR(staged.preview.total))}</p>
+              <RecordSummary
+                items={[
+                  { label: confirmText.dateLabel, value: formatIsoDate(staged.preview.date) },
+                  {
+                    label: confirmText.totalLabel,
+                    value: <span className="tabular font-medium whitespace-nowrap">{formatIDR(staged.preview.total)}</span>,
+                  },
+                ]}
+              />
 
               <ul className="flex flex-col gap-1">
                 {staged.preview.funds.map((fund) => (
@@ -194,6 +203,6 @@ function fundLine(fund: FundRestorePreview): string {
   if (fund.status === 'removed') return confirmText.fundRemoved(fund.name)
   if (fund.status === 'added') return confirmText.fundAdded(fund.name)
   if (fund.transactions_lost === 0) return confirmText.fundKeptSafe(fund.name)
-  if (fund.cutoff_date) return confirmText.fundKeptWithCutoff(fund.name, fund.transactions_lost, fund.cutoff_date)
+  if (fund.cutoff_date) return confirmText.fundKeptWithCutoff(fund.name, fund.transactions_lost, formatIsoDate(fund.cutoff_date))
   return confirmText.fundKeptNoCutoffDate(fund.name, fund.transactions_lost)
 }

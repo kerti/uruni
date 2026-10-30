@@ -1,5 +1,7 @@
+import { CirclePause, CirclePlay, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
+import DetailActions from '@/components/DetailActions'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -384,25 +386,23 @@ function EditLocationDialog({
           <KindField id="edit-location-kind" kind={kind} disabled={confirming !== null} onChange={setKind} />
 
           {confirming === null ? (
-            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-              {inactive ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  disabled={busy}
-                  onClick={() => void submit(() => setAccountInactiveOn(shown.id, null), text.reactivated)}
-                >
-                  {busy ? text.reinstating : text.reinstate}
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" size="lg" onClick={() => setConfirming('deactivate')}>
-                  {text.deactivate}
-                </Button>
-              )}
-              <Button type="button" variant="ghost" size="lg" className="text-destructive" onClick={() => setConfirming('delete')}>
-                {text.delete}
-              </Button>
+            // The record's own actions, laid out as every detail lays them
+            // out (DetailActions, #768): two columns, destructive last.
+            <div className="border-t border-border pt-3">
+              <DetailActions
+                actions={[
+                  inactive
+                    ? {
+                        key: 'reinstate',
+                        icon: CirclePlay,
+                        label: busy ? text.reinstating : text.reinstate,
+                        disabled: busy,
+                        onClick: () => void submit(() => setAccountInactiveOn(shown.id, null), text.reactivated),
+                      }
+                    : { key: 'deactivate', label: text.deactivate, icon: CirclePause, onClick: () => setConfirming('deactivate') },
+                  { key: 'delete', label: text.delete, icon: Trash2, tone: 'destructive', onClick: () => setConfirming('delete') },
+                ]}
+              />
             </div>
           ) : (
             // The consequence, named in terracotta and never alarm-red, right

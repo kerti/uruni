@@ -1,12 +1,10 @@
-import { MoreHorizontal, Search } from 'lucide-react'
+import { Camera, Search } from 'lucide-react'
 import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
-import ReceiptRowButton from '@/components/ReceiptRowButton'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/toast/useToast'
@@ -17,7 +15,6 @@ import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { formatIsoDate, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { cn } from '@/lib/utils'
 import { listPurposes } from '@/lib/purposes'
 import { listReimbursements, updateReimbursement, deleteReimbursement } from '@/lib/reimbursements'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -29,6 +26,7 @@ import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
 import SettleDialog from '@/screens/Reimbursements/SettleDialog'
 import ClaimSummary from '@/screens/Reimbursements/ClaimSummary'
+import ClaimDetailDialog from '@/screens/Reimbursements/ClaimDetailDialog'
 import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
 
 const text = copy.reimbursements
@@ -52,8 +50,10 @@ interface FormData {
 
 /**
  * Riwayat's Talangan tab (paged and searchable, ADR-032): the list of claims
- * a member fronted, with waive ("putihkan"), un-waive, settle ("bayar") and
- * delete in place. Settle and delete are dialogs on this tab, addressed by
+ * a member fronted. Each card is one tap target that opens the claim's detail
+ * (`?entry=<id>`, #768), and every action - Bayar, Ubah, Putihkan, Batalkan
+ * pemutihan, Hapus, the nota - lives there. Settle and delete are dialogs on
+ * this tab the detail hands off to, addressed by
  * `?edit=settle:<id>` and `?edit=delete-claim:<id>` (ADR-046: a confirm on one
  * record, where the record fixes the amount). The forms where she types an
  * amount - record a claim, correct it - are screens of their own (ADR-032: a
@@ -112,6 +112,15 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // CorrectPurposeDialog's `?edit=`): this tab owns `q` and no other dialog
   // here is a deep link, so component state is enough.
   const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
+  // The claim read in full, `?entry=<id>` (ADR-032: an open dialog is a search
+  // param). A different param from `?edit=`, so it coexists with the settle and
+  // delete dialogs the detail hands off to.
+  const entry = useDialogParam('entry')
+  const entryId = entry.value !== null && /^\d+$/.test(entry.value) ? Number(entry.value) : null
+  // What the detail handed off to when it closed. Run from the dialog's own
+  // onCloseAutoFocus, i.e. once it is gone, so two dialogs are never open at
+  // once (ADR-032).
+  const handoff = useRef<{ kind: 'settle' | 'delete' | 'correct' | 'receipts'; id: number } | null>(null)
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const toast = useToast()
@@ -149,6 +158,19 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
       ? ([...listState.data.reimbursements, ...(more?.reimbursements ?? [])].find((c) => c.id === deleteId) ?? null)
       : null
   const listHasDeleteClaim = deleteClaim !== null
+  const entryClaim =
+    entryId !== null && listState.data !== undefined
+      ? ([...listState.data.reimbursements, ...(more?.reimbursements ?? [])].find((c) => c.id === entryId) ?? null)
+      : null
+  const listHasEntryClaim = entryClaim !== null
+  // A malformed `?entry=`, or one naming a claim the loaded list does not
+  // hold, is stripped (clear(), never close(): a dead link is not a navigation
+  // to undo).
+  const { clear: clearEntry } = entry
+  const entryMalformed = entry.value !== null && entryId === null
+  useEffect(() => {
+    if (entryMalformed || (entryId !== null && listLoaded && !listHasEntryClaim)) clearEntry()
+  }, [entryMalformed, entryId, listLoaded, listHasEntryClaim, clearEntry])
   useEffect(() => {
     if (settleTarget.kind === 'invalid' || deleteTarget.kind === 'invalid' || settleTarget.kind === 'new' || deleteTarget.kind === 'new') {
       clearDialog()
@@ -244,11 +266,12 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
    * page after both outcomes: on success it shows the new state, on a 409 the
    * claim row unmounts with the message explaining why.
    */
-  function runWrite(api: () => Promise<unknown>, successText: string) {
+  function runWrite(api: () => Promise<unknown>, successText: string, onSuccess?: () => void) {
     void submitRun(async () => {
       setFeedback(null)
       try {
         await api()
+        onSuccess?.()
         toast.success(successText)
       } catch (err) {
         // A lost response may still have saved; re-read before she can retry.
@@ -273,12 +296,19 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     refetchFirstPage()
   }
 
+  // Both run from the detail, which closes on success; a refusal stays in it.
   function handleWaive(id: number) {
-    runWrite(() => updateReimbursement(id, { waived_on: todayISODate() }), text.waive.success)
+    runWrite(() => updateReimbursement(id, { waived_on: todayISODate() }), text.waive.success, entry.close)
   }
 
   function handleUnwaive(id: number) {
-    runWrite(() => updateReimbursement(id, { waived_on: null }), text.unwaive.success)
+    runWrite(() => updateReimbursement(id, { waived_on: null }), text.unwaive.success, entry.close)
+  }
+
+  function handOff(kind: 'settle' | 'delete' | 'correct' | 'receipts', claim: Reimbursement) {
+    setFeedback(null)
+    handoff.current = { kind, id: claim.id }
+    entry.close()
   }
 
   function renderList() {
@@ -305,98 +335,52 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
             {q ? searchText.noResults(q) : tab === 'outstanding' ? text.emptyOutstanding : text.emptyAll}
           </p>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {claims.map((claim) => (
-              <li key={claim.id} className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium">{memberNames.get(claim.member_id) ?? '-'}</span>
-                    <span className="truncate text-sm text-muted-foreground">{purposeNames.get(claim.purpose_id) ?? '-'}</span>
-                  </span>
-                  {/* Amount first and alone on its line, the photo control
-                      stacked under it - the same place TransactionList.tsx's
-                      rows put the camera and its count. The photo affordance
-                      (#154) is the same shared control: quiet "Tambah foto
-                      nota" with no photo yet, a Forest camera with the count
-                      once one exists. Shown on every tab, not only
-                      outstanding - a settled claim's nota is exactly as
-                      worth keeping. */}
-                  <span className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className="tabular font-medium">{formatIDR(claim.amount)}</span>
-                    <ReceiptRowButton receiptIds={claim.receipt_ids ?? []} onClick={() => setReceiptsForId(claim.id)} />
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{formatIsoDate(claim.incurred_on)}</span>
-                  <StatusBadge claim={claim} tab={tab} />
-                </div>
-
-                {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
-
-                {/* One line of row controls, never a row of buttons (#314):
-                    four full-size buttons made each claim read like a form.
-                    Right-aligned, only on the outstanding list: Bayar in plain
-                    ink, the everyday action, one tap, which opens its dialog
-                    (ADR-046); the rarer three behind a "more" menu, two. */}
-                {((tab === 'outstanding' && !claim.waived_on) || claim.waived_on) && (
-                  <div className="flex items-center justify-end gap-5">
-                    {tab === 'outstanding' && !claim.waived_on && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => dialog.open(`settle:${claim.id}`)}
-                          className={rowControlClass('text-sm font-medium text-primary hover:text-primary/80')}
-                        >
-                          {text.actions.settle}
-                        </button>
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label={text.actions.menuAria}
-                              disabled={submitting}
-                              className={rowControlClass('text-muted-foreground/70 hover:text-foreground disabled:opacity-50')}
-                            >
-                              <MoreHorizontal aria-hidden="true" className="size-5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => navigate(`/reimbursements/correct?id=${claim.id}`)}>
-                              {text.actions.correct}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => handleWaive(claim.id)}>{text.actions.waive}</DropdownMenuItem>
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onSelect={() => {
-                                setFeedback(null)
-                                dialog.open(`delete-claim:${claim.id}`)
-                              }}
-                            >
-                              {text.actions.delete}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
-                    )}
-                    {/* Un-waive for a waived claim - reachable on the "all" tab
-                        only: the outstanding list filters waived claims out, so
-                        this branch exists precisely where the claim can appear.
-                        The same plain ink as Bayar, on the same line. */}
-                    {claim.waived_on && (
-                      <button
-                        type="button"
-                        onClick={() => handleUnwaive(claim.id)}
-                        disabled={submitting}
-                        className={rowControlClass('text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50')}
-                      >
-                        {text.actions.unwaive}
-                      </button>
-                    )}
+          <ul className="flex flex-col gap-2">
+            {claims.map((claim) => {
+              const memberName = memberNames.get(claim.member_id) ?? '-'
+              const purposeName = purposeNames.get(claim.purpose_id) ?? '-'
+              const receiptCount = claim.receipt_ids?.length ?? 0
+              return (
+                <li
+                  key={claim.id}
+                  className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                >
+                  {/* One tap target (#768), the card shape Transaksi uses: a
+                    full-card button underneath the content, which ignores
+                    pointer events so a tap anywhere falls through to it.
+                    Every action lives in the claim's detail. The receipt
+                    count rides in the accessible name, since the glyph beside
+                    the amount is hidden from screen readers. */}
+                  <button
+                    type="button"
+                    aria-label={
+                      text.detail.openAria(memberName, purposeName, formatIDR(claim.amount), formatIsoDate(claim.incurred_on)) +
+                      (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
+                    }
+                    onClick={() => entry.open(String(claim.id))}
+                    className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+                  />
+                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate">{memberName}</span>
+                      <span className="truncate text-sm text-muted-foreground">{purposeName}</span>
+                      <span className="text-sm text-muted-foreground">{formatIsoDate(claim.incurred_on)}</span>
+                      {claim.note && <span className="truncate text-sm text-muted-foreground">{claim.note}</span>}
+                      <StatusBadge claim={claim} tab={tab} />
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span className="tabular font-medium">{formatIDR(claim.amount)}</span>
+                      {receiptCount > 0 && (
+                        <span aria-hidden="true" className="flex items-center gap-1 text-primary">
+                          <Camera className="size-4" />
+                          <span className="tabular text-sm font-medium">{receiptCount}</span>
+                        </span>
+                      )}
+                    </span>
                   </div>
-                )}
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
         <ReceiptDialog
@@ -475,6 +459,31 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
 
       {renderList()}
 
+      <ClaimDetailDialog
+        claim={entryClaim}
+        memberName={(entryClaim && formDataState.data?.members.find((m) => m.id === entryClaim.member_id)?.name) ?? '-'}
+        purposeName={(entryClaim && formDataState.data?.purposes.find((p) => p.id === entryClaim.purpose_id)?.name) ?? '-'}
+        busy={submitting}
+        error={feedback?.text ?? null}
+        onClose={entry.close}
+        onCloseAutoFocus={(event) => {
+          const next = handoff.current
+          if (next === null) return
+          handoff.current = null
+          event.preventDefault()
+          if (next.kind === 'settle') dialog.open(`settle:${next.id}`)
+          else if (next.kind === 'delete') dialog.open(`delete-claim:${next.id}`)
+          else if (next.kind === 'correct') navigate(`/reimbursements/correct?id=${next.id}`)
+          else setReceiptsForId(next.id)
+        }}
+        onSettle={(claim) => handOff('settle', claim)}
+        onCorrect={(claim) => handOff('correct', claim)}
+        onWaive={(claim) => handleWaive(claim.id)}
+        onUnwaive={(claim) => handleUnwaive(claim.id)}
+        onDelete={(claim) => handOff('delete', claim)}
+        onViewReceipts={(claim) => handOff('receipts', claim)}
+        onReceiptsChanged={() => void listRun(loadFirstPage, { silent: true })}
+      />
       <SettleDialog claimId={settleId} onClose={dialog.close} onSettled={handleSettled} onUnusable={clearDialog} />
       <DeleteClaimDialog
         open={listHasDeleteClaim}
@@ -595,26 +604,28 @@ function DeleteClaimBody({
 
 function StatusBadge({ claim, tab }: { claim: Reimbursement; tab: 'outstanding' | 'all' }) {
   if (claim.waived_on) {
-    return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.waived}</span>
+    return (
+      <span className="mt-1 self-start rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {text.status.waived}
+      </span>
+    )
   }
   // `settled` travels on the wire: the list queries compute whether a
   // kind='reimbursement' payout references the claim, so this badge is honest
   // on both tabs: the list says "Dibayar" only for a row a payout settled.
   if (claim.settled) {
-    return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.settled}</span>
+    return (
+      <span className="mt-1 self-start rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
+        {text.status.settled}
+      </span>
+    )
   }
   // The outstanding view's own filter already says "belum dibayar"; a badge
   // saying it on every card is the same sentence again. The all view needs it.
   if (tab === 'outstanding') return null
-  return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.outstanding}</span>
-}
-
-/** A row control's box: sized to its content so the row stays one quiet line,
- * with an invisible 44px hit area centred on it - the technique
- * ReceiptRowButton uses - so the target meets Design-System.md's minimum. */
-function rowControlClass(className: string): string {
-  return cn(
-    "relative flex shrink-0 items-center transition-colors after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
-    className,
+  return (
+    <span className="mt-1 self-start rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      {text.status.outstanding}
+    </span>
   )
 }

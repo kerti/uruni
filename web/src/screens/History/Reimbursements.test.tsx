@@ -81,12 +81,17 @@ function jsonResponse(body: unknown, status = 200) {
 
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
-/** Opens the first claim row's "more" menu and picks an item from it:
- * Ubah, Putihkan and Hapus live there, behind the row's one plain Bayar
- * control. */
-async function chooseFromRowMenu(name: string) {
-  await userEvent.click(screen.getAllByRole('button', { name: text.actions.menuAria })[0])
-  await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+/** Taps the first card, which opens the claim's detail (#768): the card is
+ * one tap target and every action lives in the detail. */
+async function openDetail() {
+  await userEvent.click(screen.getAllByRole('button', { name: /^Lihat rincian talangan/ })[0])
+  return screen.findByRole('dialog', { name: text.detail.heading })
+}
+
+/** Opens the first claim's detail and presses one of its buttons. */
+async function chooseFromDetail(name: string) {
+  const detail = await openDetail()
+  await userEvent.click(within(detail).getByRole('button', { name }))
 }
 
 /** Routes a stubbed fetch by method + path substring, recording every call */
@@ -172,19 +177,119 @@ describe('Reimbursements tab', () => {
     expect(screen.queryByText(text.status.outstanding, { selector: 'span' })).not.toBeInTheDocument()
   })
 
-  it('puts the photo control under the amount and Bayar with the menu at the bottom right', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+  it('is one tap target with no buttons of its own, named by its facts', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers({ outstanding: [claim(1, { receipt_ids: [9, 10] })] })))
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     const card = screen.getByText('Jane').closest('li')!
-    const amount = within(card).getByText(formatIDR(15_000))
-    const photo = within(card).getByRole('button', { name: copy.receipts.rowControlAria(false) })
-    expect(amount.parentElement).toContainElement(photo)
-    // The bottom line holds Bayar and the menu, not the photo control.
-    const pay = within(card).getByRole('button', { name: text.actions.settle })
-    expect(pay.parentElement).not.toContainElement(photo)
-    expect(pay.parentElement).toContainElement(within(card).getByRole('button', { name: text.actions.menuAria }))
+    // The one button is the whole card; its name carries the facts and, since
+    // the camera glyph is hidden from screen readers, the receipt count.
+    const buttons = within(card).getAllByRole('button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName(
+      `${text.detail.openAria('Jane', 'Kas Utama', formatIDR(15_000), '1 September 2026')}, ${copy.transactionDetail.receiptCountAria(2)}`,
+    )
+    // Transaksi's card shape, and the amount with the camera and count under it.
+    expect(card).toHaveClass('rounded-lg', 'px-4', 'py-3')
+    expect(card.parentElement).toHaveClass('gap-2')
+    expect(within(card).getByText(formatIDR(15_000)).parentElement).toHaveTextContent('2')
+  })
+
+  it('opens the claim detail with every action of an outstanding claim', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    const detail = await openDetail()
+    expect(screen.getByTestId('location')).toHaveTextContent('?entry=1')
+    expect(within(detail).getByText(text.status.outstanding)).toBeInTheDocument()
+    expect(within(detail).getByText('Parkir')).toBeInTheDocument()
+    for (const name of [text.actions.settle, text.actions.correct, text.actions.waive, text.actions.delete, copy.receipts.addFromRow]) {
+      expect(within(detail).getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(within(detail).queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
+    // Paying is the dialog's decision: the filled button, alone in the footer;
+    // every other action sits in the body (#768).
+    const footer = within(detail).getByRole('button', { name: text.actions.settle }).closest('[data-slot="dialog-footer"]')
+    expect(footer).not.toBeNull()
+    expect(within(footer as HTMLElement).getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('a waived claim offers only Batalkan pemutihan and the nota; a settled one only the nota', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(
+        getHandlers({
+          outstanding: [],
+          all: [claim(1, { waived_on: '2026-09-02' }), claim(2, { settled: true, receipt_ids: [4] })],
+        }),
+      ),
+    )
+    renderAt('/history/reimbursements?show=all')
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    let detail = await openDetail()
+    expect(within(detail).getByText(text.status.waived)).toBeInTheDocument()
+    expect(within(detail).getByRole('button', { name: text.actions.unwaive })).toBeInTheDocument()
+    expect(within(detail).getByRole('button', { name: copy.receipts.addFromRow })).toBeInTheDocument()
+    for (const name of [text.actions.settle, text.actions.correct, text.actions.waive, text.actions.delete]) {
+      expect(within(detail).queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    await userEvent.click(within(detail).getAllByRole('button', { name: copy.common.close })[0])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^Lihat rincian talangan/ })[1])
+    detail = await screen.findByRole('dialog', { name: text.detail.heading })
+    expect(within(detail).getByText(text.status.settled)).toBeInTheDocument()
+    expect(within(detail).getByRole('button', { name: copy.receipts.viewReceipt })).toBeInTheDocument()
+    expect(
+      within(detail)
+        .getAllByRole('button')
+        .filter((b) => b.textContent?.trim() && !b.matches('[data-slot="dialog-close"]')),
+    ).toHaveLength(1)
+  })
+
+  it('an entry naming no claim in the loaded list is stripped', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt('/history/reimbursements?entry=99')
+
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('entry='))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('Bayar and Hapus close the detail first, then open their own dialog, never two at once', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'GET' && /\/api\/reimbursements\/1$/.test(u), handle: () => Promise.resolve(jsonResponse(claim(1))) },
+        ...getHandlers(),
+      ]),
+    )
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    await chooseFromDetail(text.actions.settle)
+    await screen.findByRole('dialog', { name: text.settle.heading })
+    expect(screen.queryByRole('dialog', { name: text.detail.heading })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByTestId('location').textContent).not.toContain('entry=')
+    await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: copy.common.close })[0])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await chooseFromDetail(text.actions.delete)
+    await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+    expect(screen.queryByRole('dialog', { name: text.detail.heading })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  it('Ubah leaves the detail for the correct screen', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    await chooseFromDetail(text.actions.correct)
+    await waitFor(() => expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/correct?id=1'))
   })
 
   it('opens Catat with the claim ticked, and the correct screen instead of expanding a form', async () => {
@@ -197,8 +302,8 @@ describe('Reimbursements tab', () => {
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-    await chooseFromRowMenu(text.actions.correct)
-    expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/correct?id=1')
+    await chooseFromDetail(text.actions.correct)
+    await waitFor(() => expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/correct?id=1'))
   })
 
   it('shows the confirmation the correct screen handed back', async () => {
@@ -259,22 +364,26 @@ describe('Reimbursements tab', () => {
     )
 
     renderAt()
-    await waitFor(() => expect(screen.getAllByRole('button', { name: text.actions.menuAria })[0]).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-    // Waive: the row leaves the outstanding list and a feedback says so.
-    await chooseFromRowMenu(text.actions.waive)
+    // Waive: the detail closes, the row leaves the outstanding list and a
+    // toast says so.
+    await chooseFromDetail(text.actions.waive)
     await waitFor(() => expect(screen.getByText(text.waive.success)).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
 
     // The full list shows the waived row, where the un-waive affordance lives.
     await userEvent.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
-    await waitFor(() => expect(screen.getByRole('button', { name: text.actions.unwaive })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText(text.status.waived, { selector: 'span' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
 
-    // Un-waive: the claim is owed again, badge flips back.
-    await userEvent.click(screen.getByRole('button', { name: text.actions.unwaive }))
+    // Un-waive, from the detail: the claim is owed again, badge flips back.
+    await chooseFromDetail(text.actions.unwaive)
     await waitFor(() => expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument())
     expect(screen.getByText(text.unwaive.success)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('the full list is honest history: Dibayar only when the ledger settled it', async () => {
@@ -290,8 +399,10 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText(formatIDR(25_000))).toBeInTheDocument())
     expect(screen.getByText(text.status.settled, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
+    // No card has a button of its own, and no action is on the screen until a
+    // detail opens.
     expect(screen.queryByRole('button', { name: text.actions.settle })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.actions.menuAria })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Lihat rincian talangan/ })).toHaveLength(2)
   })
 
   it('delete calls DELETE and re-fetches', async () => {
@@ -330,7 +441,7 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Hapus opens its dialog, addressed by the URL; the confirm is in it.
-    await chooseFromRowMenu(text.actions.delete)
+    await chooseFromDetail(text.actions.delete)
     const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
     expect(screen.getByTestId('location')).toHaveTextContent('?edit=delete-claim%3A1')
     expect(within(dialog).getByText(text.delete.body)).toBeInTheDocument()
@@ -348,7 +459,7 @@ describe('Reimbursements tab', () => {
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-    await chooseFromRowMenu(text.actions.delete)
+    await chooseFromDetail(text.actions.delete)
     const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
     // The claim it deletes, named the way Bayar names it (ADR-046).
     const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
@@ -358,7 +469,7 @@ describe('Reimbursements tab', () => {
     await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
-    await chooseFromRowMenu(text.actions.delete)
+    await chooseFromDetail(text.actions.delete)
     await screen.findByRole('dialog', { name: text.delete.dialogTitle })
     await new Promise((resolve) => setTimeout(resolve, 10))
     const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
@@ -407,10 +518,11 @@ describe('Reimbursements tab', () => {
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-      await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
+      await chooseFromDetail(text.actions.settle)
 
       const dialog = await screen.findByRole('dialog', { name: text.settle.heading })
       expect(screen.getByTestId('location')).toHaveTextContent('?edit=settle%3A1')
+      expect(screen.getByTestId('location').textContent).not.toContain('entry=')
       const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
       expect(summary).toHaveTextContent(`${text.record.memberLabel}Jane`)
       expect(summary).toHaveTextContent(`${text.record.amountLabel}Rp15.000`)
@@ -636,7 +748,7 @@ describe('Reimbursements tab', () => {
   describe('receipt photos', () => {
     const receiptsText = copy.receipts
 
-    it('attaches a photo after the fact from the claim row, and the row control then opens the viewer', async () => {
+    it('attaches a photo after the fact from the claim detail, and the card then names the count', async () => {
       let attached = false
       vi.stubGlobal(
         'fetch',
@@ -669,26 +781,20 @@ describe('Reimbursements tab', () => {
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-      // No photo yet: the row control's own accessible name is "Tambah foto nota".
-      await userEvent.click(screen.getByRole('button', { name: receiptsText.addFromRow }))
-      const dialog = await screen.findByRole('dialog')
+      // No photo yet: the detail's own button picks the file and uploads it.
+      const detail = await openDetail()
       await userEvent.upload(
-        within(dialog).getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
+        within(detail).getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
         new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
       )
-      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.addFromRow }))
 
-      // The dialog shows the new photo once the refetch resolves - the
-      // per-photo "more" menu only renders once a receipt exists (the photo is
-      // alt="" - decorative, no accessible "img" role). Radix hides the row
-      // underneath from the accessibility tree while the dialog stays open, so
-      // the row's renamed control is only checked after closing it.
-      await waitFor(() => expect(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria })).toBeInTheDocument())
-      await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
-
-      // The list refetch now answers with a receipt attached, so the row's
-      // control renames itself to "Lihat nota".
-      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
+      // The list refetch answers with a receipt attached, so the detail's
+      // button renames itself to "Lihat nota" and the card names the count.
+      await waitFor(() => expect(within(detail).getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
+      expect(screen.getByText(receiptsText.added)).toBeInTheDocument()
+      await userEvent.click(within(detail).getAllByRole('button', { name: copy.common.close })[0])
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByRole('button', { name: new RegExp(copy.transactionDetail.receiptCountAria(1)) })).toBeInTheDocument()
     })
 
     it('deletes a photo from the viewer, after the confirm', async () => {
@@ -722,10 +828,12 @@ describe('Reimbursements tab', () => {
         ]),
       )
       renderAt()
-      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-      await userEvent.click(screen.getByRole('button', { name: receiptsText.viewReceipt }))
-      const dialog = await screen.findByRole('dialog')
+      // The detail hands off to the viewer, and is gone before it opens.
+      await chooseFromDetail(receiptsText.viewReceipt)
+      const dialog = await screen.findByRole('dialog', { name: receiptsText.dialogHeading })
+      expect(screen.getAllByRole('dialog')).toHaveLength(1)
 
       // Hapus foto lives inside the per-photo "more" menu, not a footer
       // button under the image.
@@ -740,7 +848,12 @@ describe('Reimbursements tab', () => {
       await waitFor(() => expect(within(dialog).queryByRole('button', { name: receiptsText.photoMenuAria })).not.toBeInTheDocument())
       await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
 
-      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.addFromRow })).toBeInTheDocument())
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /^Lihat rincian talangan/ })).not.toHaveAccessibleName(
+          new RegExp(copy.transactionDetail.receiptCountAria(1)),
+        ),
+      )
     })
 
     it('refuses to delete a claim that still has a receipt, with the specific copy', async () => {
@@ -772,7 +885,7 @@ describe('Reimbursements tab', () => {
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-      await chooseFromRowMenu(text.actions.delete)
+      await chooseFromDetail(text.actions.delete)
       const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
       await userEvent.click(within(dialog).getByRole('button', { name: text.delete.confirm }))
 

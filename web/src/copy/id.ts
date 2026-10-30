@@ -117,6 +117,10 @@ export const copy = {
       // "Catatan" label to reuse (every other is "Catatan (opsional)", a form
       // field's label).
       noteLabel: 'Catatan',
+      // The detail dialog's title, like Rincian transaksi and Rincian
+      // talangan (#768); when the count was made is its first field.
+      detailHeading: 'Rincian cek kas',
+      performedAtLabel: 'Dicek pada',
     },
     // The Iuran tab: the dues payment history (ADR-032), with the status
     // matrix on its own screen, opened by copy.dues.entryLink at the top of
@@ -152,6 +156,10 @@ export const copy = {
     // inside the viewer the "attach another" action, since adding a first photo
     // and a second are the same action.
     addFromRow: 'Tambah foto nota',
+    // The same action as a half-width button in a record's detail
+    // (DetailActions, #768), where the full phrase does not fit beside a
+    // neighbour; the camera icon carries "tambah".
+    addShort: 'Foto nota',
     // The dialog's blank state, per parent kind - a claim is a talangan, not a
     // transaksi.
     emptyTransaction: 'Transaksi ini belum punya foto nota. Tambahkan dengan tombol di bawah.',
@@ -1300,8 +1308,10 @@ export const copy = {
   // fund is removed outright; a file-only fund is added.
   restoreConfirm: {
     heading: 'Pulihkan dari cadangan',
-    dateLabel: (date: string) => `Cadangan dari ${date}`,
-    totalLabel: (total: string) => `Total seluruh dana: ${total}`,
+    // The backup's facts, as label/value lines like every confirm's record
+    // (RecordSummary, #768); the caller formats the date and the amount.
+    dateLabel: 'Tanggal cadangan',
+    totalLabel: 'Total seluruh dana',
     fundKeptSafe: (name: string) => `${name}: semua transaksi tetap ada`,
     fundKeptWithCutoff: (name: string, count: number, date: string) => `${name}: ${count} transaksi setelah ${date} akan hilang`,
     fundKeptNoCutoffDate: (name: string, count: number) => `${name}: ${count} transaksi akan hilang`,
@@ -1450,9 +1460,6 @@ export const copy = {
     },
     actions: {
       settle: 'Bayar',
-      // The row's "more" menu holding Ubah, Putihkan and Hapus - named like
-      // the receipt viewer's menu (receipts.photoMenuAria).
-      menuAria: 'Pilihan talangan',
       waive: 'Putihkan',
       unwaive: 'Batalkan pemutihan',
       correct: 'Ubah',
@@ -1463,6 +1470,14 @@ export const copy = {
       outstanding: 'Belum dibayar',
       waived: 'Diputihkan',
       settled: 'Dibayar',
+    },
+    // The claim's detail (#768): the card is one tap target and every action
+    // lives here, as in transactionDetail.
+    detail: {
+      heading: 'Rincian talangan',
+      // Names the card's full-width tap target, with the claim's facts.
+      openAria: (memberName: string, purposeName: string, amount: string, date: string) =>
+        `Lihat rincian talangan: ${memberName}, ${purposeName}, ${amount}, ${date}`,
     },
     waive: {
       success: 'Talangan sudah diputihkan.',
@@ -1513,6 +1528,11 @@ export const copy = {
       // always members.
       recipientsLabel: 'Untuk siapa amplop ini? (opsional)',
       recipientsEmpty: 'Belum ada anggota aktif.',
+      // The recipients field lists only who is chosen (#768): a picker adds
+      // one more, an X beside each name takes it off the list - never off the
+      // roster, so the name is read out with "dari daftar".
+      recipientsAdd: 'Pilih anggota',
+      recipientRemoveAria: (name: string) => `Hapus ${name} dari daftar`,
       submit: 'Buka',
       submitting: 'Membuka…',
     },

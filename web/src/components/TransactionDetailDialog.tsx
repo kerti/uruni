@@ -1,13 +1,13 @@
 import { ArrowDownLeft, ArrowUpRight, Camera, PenLine, Undo2 } from 'lucide-react'
 import { useRef } from 'react'
-import type { ReactNode } from 'react'
 
+import DetailActions from '@/components/DetailActions'
+import DetailField from '@/components/DetailField'
 import { isPurposePair, isTransfer, rowLabelFor, transferKind } from '@/components/rowLabel'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
 import { useToast } from '@/components/toast/useToast'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { copy } from '@/copy/id'
 import { formatIsoDate, formatUnixSecondsWithTime } from '@/lib/dates'
@@ -163,96 +163,93 @@ function Detail({
 
       <dl className="flex flex-col gap-3 text-sm">
         {!isPurposePair(transaction) && (
-          <Field label={text.purposeLabel}>
+          <DetailField label={text.purposeLabel}>
             {purposeName}
             {corrected && transaction.effective_purpose_id !== undefined && (
               <span className="block text-muted-foreground">
                 {copy.purposeCorrection.currentLabel(purposeNames.get(transaction.effective_purpose_id) ?? copy.home.purposeUnknown)}
               </span>
             )}
-          </Field>
+          </DetailField>
         )}
         {note && (
-          <Field label={text.noteLabel}>
+          <DetailField label={text.noteLabel}>
             <span className="break-words whitespace-pre-wrap">{note}</span>
-          </Field>
+          </DetailField>
         )}
         {transaction.account_name && !(transfer && transaction.transfer_kind === 'between_accounts') && (
-          <Field label={text.locationLabel}>{transaction.account_name}</Field>
+          <DetailField label={text.locationLabel}>{transaction.account_name}</DetailField>
         )}
-        <Field label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</Field>
-        <Field label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</Field>
+        <DetailField label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</DetailField>
+        <DetailField label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</DetailField>
         {receiptIds.length > 0 && (
-          <Field label={text.receiptsLabel}>
+          <DetailField label={text.receiptsLabel}>
             <span className="mt-1 flex flex-wrap gap-2">
               {receiptIds.map((id) => (
                 <img key={id} src={receiptUrl(id)} alt="" className="size-16 rounded-md object-cover ring-1 ring-foreground/10" />
               ))}
             </span>
-          </Field>
+          </DetailField>
         )}
       </dl>
 
-      {/* Every action of the row, stacked, destructive last (#739). Perbaiki
+      {/* Every action of the row, destructive last (#739), laid out by
+          DetailActions (#768). Perbaiki
           pos on the row's eligibility (the one PurposeLine used to apply,
           never a transfer); Nota only where receipts are wired; Batalkan on
           the server's `reversible` (ADR-042). */}
-      {(canCorrect || onReceiptsChanged || canReverse) && (
-        <div className="flex flex-col gap-2">
-          {canCorrect && (
-            <Button type="button" variant="outline" size="lg" onClick={() => onCorrectPurpose?.(transaction)}>
-              <PenLine aria-hidden="true" />
-              {copy.purposeCorrection.heading}
-            </Button>
-          )}
-          {onReceiptsChanged &&
-            (receiptIds.length > 0 ? (
-              <Button type="button" variant="outline" size="lg" onClick={() => onViewReceipts?.(transaction)}>
-                <Camera aria-hidden="true" />
-                {copy.receipts.viewReceipt}
-              </Button>
-            ) : (
-              <>
-                {/* No dialog for a first nota: the picker opens directly and
-                    the upload runs on pick, as ReceiptDialog's add does. */}
-                <Button type="button" variant="outline" size="lg" disabled={uploading} onClick={() => fileInput.current?.click()}>
-                  <Camera aria-hidden="true" />
-                  {uploading ? copy.receipts.uploading : copy.receipts.addFromRow}
-                </Button>
-                {/* Hidden from the accessibility tree: the button above is the one
-                    control, and an exposed file input reads as a second
-                    "Tambah foto nota" button. */}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept={ACCEPTED_TYPES}
-                  aria-label={copy.receipts.addFromRow}
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  className="sr-only"
-                  disabled={uploading}
-                  onChange={handlePick}
-                />
-              </>
-            ))}
-          {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
-          {canReverse && (
-            <Button type="button" variant="outline" size="lg" onClick={() => onReverse?.(transaction)}>
-              <Undo2 aria-hidden="true" />
-              {copy.history.transactions.reverse}
-            </Button>
-          )}
-        </div>
+      <DetailActions
+        actions={[
+          ...(canCorrect
+            ? [{ key: 'correct', label: copy.purposeCorrection.heading, icon: PenLine, onClick: () => onCorrectPurpose?.(transaction) }]
+            : []),
+          ...(onReceiptsChanged
+            ? [
+                receiptIds.length > 0
+                  ? { key: 'receipts', label: copy.receipts.viewReceipt, icon: Camera, onClick: () => onViewReceipts?.(transaction) }
+                  : {
+                      key: 'receipts',
+                      label: uploading ? copy.receipts.uploading : copy.receipts.addFromRow,
+                      shortLabel: uploading ? copy.receipts.uploading : copy.receipts.addShort,
+                      icon: Camera,
+                      disabled: uploading,
+                      // No dialog for a first nota: the picker opens directly
+                      // and the upload runs on pick, as ReceiptDialog's add does.
+                      onClick: () => fileInput.current?.click(),
+                    },
+              ]
+            : []),
+          ...(canReverse
+            ? [
+                {
+                  key: 'reverse',
+                  label: copy.history.transactions.reverse,
+                  wide: true,
+                  icon: Undo2,
+                  tone: 'destructive' as const,
+                  onClick: () => onReverse?.(transaction),
+                },
+              ]
+            : []),
+        ]}
+      />
+      {/* Hidden from the accessibility tree: the nota button above is the one
+          control, and an exposed file input reads as a second "Tambah foto
+          nota" button. */}
+      {onReceiptsChanged && receiptIds.length === 0 && (
+        <input
+          ref={fileInput}
+          type="file"
+          accept={ACCEPTED_TYPES}
+          aria-label={copy.receipts.addFromRow}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="sr-only"
+          disabled={uploading}
+          onChange={handlePick}
+        />
       )}
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
+      {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
     </div>
   )
 }

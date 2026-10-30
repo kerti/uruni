@@ -29,11 +29,16 @@ export default function ReceiptPicker({
   value,
   onChange,
   disabled,
+  asAction = false,
 }: {
   id: string
   value: File | null
   onChange: (file: File | null) => void
   disabled?: boolean
+  /** In a form the button reads as a field, left-aligned with the inputs
+   * around it; in ReceiptDialog it is an action, centred like every other
+   * button in a dialog (#768). */
+  asAction?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   // The preview is an object URL over the file already in memory - never
@@ -62,7 +67,7 @@ export default function ReceiptPicker({
           type="button"
           variant="outline"
           size="lg"
-          className="justify-start"
+          className={asAction ? undefined : 'justify-start'}
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
         >

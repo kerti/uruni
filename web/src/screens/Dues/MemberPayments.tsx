@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { Undo2 } from 'lucide-react'
 
 import ReversalDialog from '@/components/ReversalDialog'
-import { sharedErrorText, type ReversalCopy } from '@/components/reversalCopy'
+import { sharedErrorText } from '@/components/reversalCopy'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
@@ -17,16 +17,6 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
-
-/** The dues payment's own wording for the shared reversal dialog: no
- * explainer, and the shared error map (a dues payment says "iuran"). */
-const reversalWords: ReversalCopy = {
-  title: text.reverse,
-  noteLabel: text.noteLabel,
-  cancel: text.cancel,
-  confirm: text.confirm,
-  submitting: text.submitting,
-}
 
 /**
  * One member's dues rows for one period, with a reversal action on each
@@ -155,7 +145,6 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
         onClose={reversal.close}
         onReversed={handleReversed}
         refresh={() => run(loadRows, { silent: true })}
-        words={reversalWords}
         errorText={sharedErrorText}
       />
     </>
