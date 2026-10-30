@@ -8,31 +8,22 @@ const text = copy.reimbursements
 export const TALANGAN_PATH = '/history/reimbursements'
 
 /**
- * What a Talangan screen hands back to the tab through router location state,
+ * What the Talangan correct screen hands back to the tab through router location state,
  * as App.tsx's HomeState and DuesState do: the confirmation belongs to the one
  * history entry that navigation creates, so opening the tab later does not
  * show a stale one. The tab turns the key into copy. (Recording a claim is
  * Catat's, and lands on Beranda.)
  */
 export interface TalanganState {
-  reimbursementDone: 'settled' | 'corrected'
+  reimbursementDone: 'corrected'
 }
 
-/** The tab's success line for a finished screen. */
-export function doneText(done: TalanganState['reimbursementDone']): string {
-  switch (done) {
-    case 'settled':
-      return text.settle.success
-    case 'corrected':
-      return text.correct.success
-  }
-}
-
-/** useArrivalToast's reader for the tab: the confirmation a settle or correct
- * screen handed back, if any. */
+/** useArrivalToast's reader for the tab: the confirmation the correct screen
+ * handed back, if any. (Settling is a dialog on the tab, ADR-046, and toasts
+ * where it stands.) */
 export function pickTalanganArrival(state: unknown): ArrivalToast | null {
   const done = (state as TalanganState | null)?.reimbursementDone
-  return done ? { tone: 'success', text: doneText(done) } : null
+  return done === 'corrected' ? { tone: 'success', text: text.correct.success } : null
 }
 
 /** Wire error code -> Indonesian copy, scoped first to this feature's codes

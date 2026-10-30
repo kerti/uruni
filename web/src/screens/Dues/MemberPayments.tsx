@@ -1,21 +1,32 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import { Undo2 } from 'lucide-react'
 
-import ReversalDateLine from '@/components/ReversalDateLine'
+import ReversalDialog from '@/components/ReversalDialog'
+import { sharedErrorText, type ReversalCopy } from '@/components/reversalCopy'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { listTransactions, reverseTransaction } from '@/lib/transactions'
+import { parseDialogTarget } from '@/lib/dialogTarget'
+import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
+
+/** The dues payment's own wording for the shared reversal dialog: no
+ * explainer, and the shared error map (a dues payment says "iuran"). */
+const reversalWords: ReversalCopy = {
+  title: text.reverse,
+  noteLabel: text.noteLabel,
+  cancel: text.cancel,
+  confirm: text.confirm,
+  submitting: text.submitting,
+}
 
 /**
  * One member's dues rows for one period, with a reversal action on each
@@ -40,12 +51,15 @@ const text = copy.dues.history
  */
 export default function MemberPayments({ memberId, period, onReversed }: { memberId: number; period: string; onReversed: () => void }) {
   const [state, run] = useApi<Transaction[]>()
-  const [submitState, submitRun] = useApi<unknown>()
   const toast = useToast()
 
-  // Which payment's reversal form is open, if any - one at a time.
-  const [reversingId, setReversingId] = useState<number | null>(null)
-  const [note, setNote] = useState('')
+  // The reversal dialog, `?edit=reverse:<id>` (ADR-046), shared with
+  // TransactionList. Several members' payments can be expanded at once, so a
+  // value naming a row this one does not hold is left alone, never cleared:
+  // it may be a neighbour's.
+  const reversal = useDialogParam()
+  const reversalTarget = parseDialogTarget('reverse', reversal.value)
+  const reversalId = reversalTarget.kind === 'edit' ? reversalTarget.id : null
 
   const loadRows = useCallback(async (): Promise<Transaction[]> => {
     const page = await listTransactions({ memberId, duesPeriod: period })
@@ -66,32 +80,16 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   // A payment is spent once any row reverses it.
   const reversedIds = new Set(rows.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
 
-  const submitting = submitState.status === 'loading'
+  const reversing = rows.find((row) => row.id === reversalId) ?? null
 
-  function openReversal(transactionId: number) {
-    setReversingId(transactionId)
-    setNote('')
-  }
-
-  function submitReversal(transactionId: number) {
-    void submitRun(
-      async () => {
-        const trimmed = note.trim()
-        // A blank reason sends null, never a generated default: the reversal
-        // explains itself through TransactionList's display label
-        // ("Pembatalan - {period} - {anggota}").
-        const result = await reverseTransaction(transactionId, trimmed === '' ? null : trimmed)
-        setReversingId(null)
-        // Refetch this list *and* tell the roster above to refetch: the member
-        // reads as unpaid for the period again, and neither refresh is the
-        // treasurer's job.
-        await run(loadRows)
-        onReversed()
-        toast.success(text.success)
-        return result
-      },
-      { settle: () => run(loadRows, { silent: true }) },
-    )
+  function handleReversed() {
+    reversal.close()
+    // Refetch this list *and* tell the roster above to refetch: the member
+    // reads as unpaid for the period again, and neither refresh is the
+    // treasurer's job.
+    void run(loadRows, { silent: true })
+    onReversed()
+    toast.success(text.success)
   }
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -117,66 +115,49 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   // far from the one below. Each row owning its padding and top border
   // centres the hairline.
   return (
-    <ul className="flex flex-col [&>li]:border-t [&>li]:border-foreground/10 [&>li]:py-3 [&>li:first-child]:border-t-0 [&>li:first-child]:pt-0 [&>li:last-child]:pb-0">
-      {rows.map((row) => {
-        const isReversal = row.reverses_transaction_id !== null
-        const reversed = reversedIds.has(row.id)
-        return (
-          <li key={row.id} className="flex flex-col gap-1 text-sm">
-            <div className="tabular flex items-center justify-between gap-3">
-              {/* The date leads the row, so it carries the same weight the
+    <>
+      <ul className="flex flex-col [&>li]:border-t [&>li]:border-foreground/10 [&>li]:py-3 [&>li:first-child]:border-t-0 [&>li:first-child]:pt-0 [&>li:last-child]:pb-0">
+        {rows.map((row) => {
+          const isReversal = row.reverses_transaction_id !== null
+          const reversed = reversedIds.has(row.id)
+          return (
+            <li key={row.id} className="flex flex-col gap-1 text-sm">
+              <div className="tabular flex items-center justify-between gap-3">
+                {/* The date leads the row, so it carries the same weight the
                   amount does at the other end of it. */}
-              <span className="font-semibold text-muted-foreground">
-                {formatIsoDate(row.occurred_on)}
-                {isReversal && ` \u00b7 ${text.reversalRow}`}
-              </span>
-              <span className="font-medium">{formatIDR(row.amount)}</span>
-            </div>
+                <span className="font-semibold text-muted-foreground">
+                  {formatIsoDate(row.occurred_on)}
+                  {isReversal && ` \u00b7 ${text.reversalRow}`}
+                </span>
+                <span className="font-medium">{formatIDR(row.amount)}</span>
+              </div>
 
-            {row.note && <span className="truncate text-muted-foreground">{row.note}</span>}
+              {row.note && <span className="truncate text-muted-foreground">{row.note}</span>}
 
-            {!isReversal && reversed && <span className="text-muted-foreground">{text.reversedBadge}</span>}
+              {!isReversal && reversed && <span className="text-muted-foreground">{text.reversedBadge}</span>}
 
-            {/* `lg` on every control in this panel, never `sm` (h-7 = 28px):
+              {/* `lg` on every control in this panel, never `sm` (h-7 = 28px):
                 Design-System.md's minimum touch target is 44x44px, and a
                 control that undoes money is the last place to shave it. */}
-            {!isReversal && !reversed && reversingId !== row.id && (
-              <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => openReversal(row.id)}>
-                <Undo2 aria-hidden="true" />
-                {text.reverse}
-              </Button>
-            )}
-
-            {reversingId === row.id && (
-              <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-                <ReversalDateLine transaction={row} />
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`dues-reversal-note-${row.id}`}>{text.noteLabel}</Label>
-                  <Input
-                    id={`dues-reversal-note-${row.id}`}
-                    type="text"
-                    className="h-11"
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    disabled={submitting}
-                  />
-                </div>
-
-                {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="outline" size="lg" disabled={submitting} onClick={() => setReversingId(null)}>
-                    {text.cancel}
-                  </Button>
-                  <Button type="button" size="lg" disabled={submitting} onClick={() => submitReversal(row.id)}>
-                    {submitting ? text.submitting : text.confirm}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </li>
-        )
-      })}
-    </ul>
+              {!isReversal && !reversed && (
+                <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => reversal.open(`reverse:${row.id}`)}>
+                  <Undo2 aria-hidden="true" />
+                  {text.reverse}
+                </Button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      <ReversalDialog
+        transaction={reversing}
+        open={reversing !== null}
+        onClose={reversal.close}
+        onReversed={handleReversed}
+        refresh={() => run(loadRows, { silent: true })}
+        words={reversalWords}
+        errorText={sharedErrorText}
+      />
+    </>
   )
 }

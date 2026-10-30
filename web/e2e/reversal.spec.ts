@@ -5,7 +5,7 @@ import { formatIsoDate } from '../src/lib/dates'
 import { expect, logIn, test } from './fixtures'
 
 // Reversing an ordinary transaction (ADR-042): one door, the entry detail's
-// Batalkan transaksi, which hands off to the form under the row; the pair then
+// Batalkan transaksi, which hands off to the reversal dialog (ADR-046); the pair then
 // reads as linked in Riwayat and on the public report.
 //
 // Two rows, one on each side of a cek kas, because the form's date line is the
@@ -49,7 +49,12 @@ async function openForm(page: Page, note: string) {
     .getByRole('button', { name: /^Lihat rincian:/ })
     .click()
   await page.getByRole('dialog', { name: copy.transactionDetail.heading }).getByRole('button', { name: t.reverse }).click()
-  await expect(page.getByRole('dialog')).toBeHidden()
+  // The detail hands off: it closes, and the reversal dialog opens in its place.
+  await expect(page.getByRole('dialog', { name: t.reverse })).toBeVisible()
+}
+
+function reversalDialog(page: Page): Locator {
+  return page.getByRole('dialog', { name: t.reverse })
 }
 
 test.describe('reversing an ordinary transaction', () => {
@@ -87,14 +92,14 @@ test.describe('reversing an ordinary transaction', () => {
     await post('in', 25_000, uncounted, firstOfMonth)
   })
 
-  test('a row no cek kas has counted: the form says it is recorded on its own day, and the pair reads linked', async ({ page }) => {
+  test('a row no cek kas has counted: the dialog says it is recorded on its own day, and the pair reads linked', async ({ page }) => {
     await logIn(page)
     await page.goto('/history')
     await expect(row(page, uncounted)).toBeVisible()
     await expect(row(page, uncounted).getByRole('button', { name: t.reverse })).toHaveCount(0)
 
     await openForm(page, uncounted)
-    const form = row(page, uncounted)
+    const form = reversalDialog(page)
     await expect(form.getByText(t.reverseExplainer)).toBeVisible()
     await expect(form.getByText(t.reverseDateOriginal(formatIsoDate(firstOfMonth)))).toBeVisible()
     await form.getByRole('button', { name: t.reverseConfirm }).click()
@@ -111,12 +116,12 @@ test.describe('reversing an ordinary transaction', () => {
     await expect(dialog.getByRole('button', { name: t.reverse })).toHaveCount(0)
   })
 
-  test('a row a cek kas has counted: the form says it is recorded today', async ({ page }) => {
+  test('a row a cek kas has counted: the dialog says it is recorded today', async ({ page }) => {
     await logIn(page)
     await page.goto('/history')
 
     await openForm(page, counted)
-    const form = row(page, counted)
+    const form = reversalDialog(page)
     await expect(form.getByText(t.reverseDateToday)).toBeVisible()
     await expect(form.getByText(/^Dicatat pada/)).toHaveCount(0)
     await form.getByLabel(t.reverseNoteLabel).fill('Salah arah')

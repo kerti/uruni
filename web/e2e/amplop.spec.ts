@@ -72,7 +72,7 @@ async function finishRecord(page: Page, direction: 'in' | 'out', amount: number,
 async function close(page: Page) {
   await page.getByRole('button', { name: t.actions.close, exact: true }).click()
   await chooseOption(page, t.close.accountLabel, 'Tunai')
-  await page.getByRole('button', { name: t.close.submit, exact: true }).click()
+  await page.getByRole('dialog', { name: t.close.heading }).getByRole('button', { name: t.close.submit, exact: true }).click()
   await expect(page.getByText(t.close.success)).toBeVisible()
 }
 
@@ -140,13 +140,16 @@ test.describe('amplop in depth', () => {
       .getByRole('listitem')
       .filter({ has: page.getByText('Sumbangan Warga Dua', { exact: true }) })
     // One door (ADR-042): the card opens the entry, whose Batalkan transaksi
-    // hands off to the form under the row.
+    // hands off to the reversal dialog (ADR-046).
     await row.getByRole('button', { name: /^Lihat rincian:/ }).click()
     await page
       .getByRole('dialog', { name: copy.transactionDetail.heading })
       .getByRole('button', { name: copy.history.transactions.reverse })
       .click()
-    await row.getByRole('button', { name: copy.history.transactions.reverseConfirm }).click()
+    await page
+      .getByRole('dialog', { name: copy.history.transactions.reverse })
+      .getByRole('button', { name: copy.history.transactions.reverseConfirm })
+      .click()
     await expect(page.getByText(copy.history.transactions.reverseSuccess)).toBeVisible()
 
     await openFromBeranda(page, occasion)

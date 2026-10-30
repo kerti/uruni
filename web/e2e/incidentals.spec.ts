@@ -121,9 +121,10 @@ test.describe('incidentals', () => {
     await berandaRow(page).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
-    // Open the close form
+    // Open the close dialog (ADR-046)
     await page.getByRole('button', { name: copy.incidentals.actions.close, exact: true }).click()
-    await expect(page.getByRole('heading', { name: copy.incidentals.close.heading })).toBeVisible()
+    const closeDialog = page.getByRole('dialog', { name: copy.incidentals.close.heading })
+    await expect(closeDialog).toBeVisible()
 
     // Pick the location (it opens on a default; picking is explicit), submit (date defaults to today)
     await chooseOption(page, copy.incidentals.close.accountLabel)
@@ -131,7 +132,7 @@ test.describe('incidentals', () => {
     // reading as two unexplained rows in the ledger.
     await page.getByLabel(copy.incidentals.close.noteLabel).fill('Sisa halal bihalal')
 
-    await page.getByRole('button', { name: copy.incidentals.close.submit, exact: true }).click()
+    await closeDialog.getByRole('button', { name: copy.incidentals.close.submit, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 
     // The rollover (Rp60.000 collected, nothing disbursed - all of it rolls

@@ -70,7 +70,7 @@ function errorText(err: ApiError): string {
  * ordinary POST /api/transactions calls tagged to the envelope's purpose, and
  * RecordTransaction.tsx has every field they need. `onRecordFor` (App.tsx)
  * navigates there with the purpose pre-chosen (`/record?purpose=<id>`).
- * Closing IS specific to an envelope, so it keeps an inline form here.
+ * Closing IS specific to an envelope, so it has its own dialog here (`?edit=close:<id>`, ADR-046).
  *
  * Opening a new envelope and the card list of every envelope (open and
  * closed) live in Pengaturan (screens/Settings/Incidentals.tsx) - the same
@@ -107,8 +107,6 @@ export default function Incidentals({
   const [participationState, participationRun] = useApi<IncidentalParticipation>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  const [showCloseForm, setShowCloseForm] = useState(false)
-
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const toast = useToast()
 
@@ -119,6 +117,10 @@ export default function Incidentals({
   const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
   const dialogTarget = parseDialogTarget('incidental', dialogValue)
   const isRenaming = dialogTarget.kind === 'edit' && dialogTarget.id === purposeId
+  // The close dialog, `?edit=close:<id>` (ADR-046): same param, its own prefix,
+  // so each effect below clears only the values it owns (ADR-032).
+  const closeTarget = parseDialogTarget('close', dialogValue)
+  const closeWantsThis = closeTarget.kind === 'edit' && closeTarget.id === purposeId
 
   useEffect(() => {
     void accountsRun(listAccounts)
@@ -144,6 +146,15 @@ export default function Incidentals({
     if (isRenaming) return
     clearDialog()
   }, [dialogValue, dialogTarget.kind, detailState.status, isRenaming, clearDialog])
+
+  // A `close:` value naming another envelope or malformed: strip it once the
+  // detail has loaded, never closeDialog() (see the effect above).
+  useEffect(() => {
+    if (closeTarget.kind === 'foreign' || closeTarget.kind === 'new') return
+    if (detailState.status !== 'success') return
+    if (closeWantsThis) return
+    clearDialog()
+  }, [dialogValue, closeTarget.kind, detailState.status, closeWantsThis, clearDialog])
 
   const submitting = submitState.status === 'loading'
 
@@ -180,16 +191,10 @@ export default function Incidentals({
   // refetched detail already states the rollover, and a second copy in
   // component state survived exactly one screen-lifetime. See DetailView's
   // rolledAmount for the derivation.
-  function handleClose(accountId: number, closedOn: string, note: string) {
-    runWrite(
-      () => closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note }),
-      text.close.success,
-      () => {
-        rememberAccountId(accountId)
-        setShowCloseForm(false)
-        void detailRun(() => getIncidental(purposeId))
-      },
-    )
+  function handleClosed() {
+    closeDialog()
+    toast.success(text.close.success)
+    void detailRun(() => getIncidental(purposeId))
   }
 
   // The way back from a closed envelope (ADR-031): reopening clears closed_on
@@ -224,24 +229,28 @@ export default function Incidentals({
       <DetailView
         detailState={detailState}
         participationState={participationState}
-        accounts={accountsState.data ?? []}
         feedback={feedback}
         submitting={submitting}
-        showCloseForm={showCloseForm}
         onRecord={(memberId) => onRecordFor(purposeId, memberId)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
         onActivityChanged={refreshDetail}
         onShowClose={() => {
-          setShowCloseForm(true)
+          openDialog(`close:${purposeId}`)
           setFeedback(null)
         }}
-        onCancelClose={() => setShowCloseForm(false)}
-        onClose={handleClose}
         onReopen={handleReopen}
         onRename={() => openDialog(`incidental:${purposeId}`)}
         onRetry={() => void detailRun(() => getIncidental(purposeId))}
         onBack={onBack}
         backLabel={backLabel}
+      />
+      <CloseEnvelopeDialog
+        purposeId={purposeId}
+        accounts={accountsState.data ?? []}
+        open={closeWantsThis && detailState.data?.closed_on === null}
+        onClose={closeDialog}
+        onClosed={handleClosed}
+        refresh={refreshDetail}
       />
       <RenameIncidentalDialog
         envelope={detailState.data ?? null}
@@ -268,16 +277,12 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
 function DetailView({
   detailState,
   participationState,
-  accounts,
   feedback,
   submitting,
-  showCloseForm,
   onRecord,
   onViewTransactions,
   onActivityChanged,
   onShowClose,
-  onCancelClose,
-  onClose,
   onReopen,
   onRename,
   onRetry,
@@ -286,16 +291,12 @@ function DetailView({
 }: {
   detailState: ReturnType<typeof useApi<IncidentalDetail>>[0]
   participationState: ReturnType<typeof useApi<IncidentalParticipation>>[0]
-  accounts: Account[]
   feedback: Feedback | null
   submitting: boolean
-  showCloseForm: boolean
   onRecord: (memberId?: number) => void
   onViewTransactions: () => void
   onActivityChanged: () => Promise<void>
   onShowClose: () => void
-  onCancelClose: () => void
-  onClose: (accountId: number, closedOn: string, note: string) => void
   onReopen: () => void
   onRename: () => void
   onRetry: () => void
@@ -392,40 +393,35 @@ function DetailView({
         </div>
       )}
 
-      {/* One action row for both states, so the close form replaces the
-          whole of it rather than half; primary on the right (Design-System,
+      {/* One action row for both states; primary on the right (Design-System,
           "Action rows"). Ubah nama corrects a mistyped occasion (#264), open
           or closed, since the typo is usually noticed only after the
           occasion is over. */}
-      {!showCloseForm && (
-        <div className={isOpen ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
-          <Button type="button" size="lg" variant="outline" onClick={onRename}>
-            {text.actions.rename}
-          </Button>
-          {isOpen ? (
-            <>
-              <Button type="button" size="lg" variant="outline" onClick={onShowClose}>
-                {text.actions.close}
-              </Button>
-              {/* Contributions and disbursements both go through the real
-                  record form (M6.8), pre-chosen to this envelope's purpose -
-                  direction is decided there, by its own toggle. */}
-              <Button type="button" size="lg" onClick={() => onRecord()}>
-                {text.actions.record}
-              </Button>
-            </>
-          ) : (
-            /* The way back from a closed envelope (ADR-031): reopening rejoins
-                           the open row - Catat for the late entry and Tutup to close again
-                           - rather than a bare toggle with nothing next. */
-            <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
-              {text.actions.reopen}
+      <div className={isOpen ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
+        <Button type="button" size="lg" variant="outline" onClick={onRename}>
+          {text.actions.rename}
+        </Button>
+        {isOpen ? (
+          <>
+            <Button type="button" size="lg" variant="outline" onClick={onShowClose}>
+              {text.actions.close}
             </Button>
-          )}
-        </div>
-      )}
-
-      {isOpen && showCloseForm && <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />}
+            {/* Contributions and disbursements both go through the real
+                record form (M6.8), pre-chosen to this envelope's purpose -
+                direction is decided there, by its own toggle. */}
+            <Button type="button" size="lg" onClick={() => onRecord()}>
+              {text.actions.record}
+            </Button>
+          </>
+        ) : (
+          /* The way back from a closed envelope (ADR-031): reopening rejoins
+                         the open row - Catat for the late entry and Tutup to close again
+                         - rather than a bare toggle with nothing next. */
+          <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
+            {text.actions.reopen}
+          </Button>
+        )}
+      </div>
 
       {/* Who has given and how much (ADR-034, #211) - its own section,
           separated by a hairline the same way the activity list below it is. */}
@@ -440,73 +436,124 @@ function DetailView({
   )
 }
 
-function CloseForm({
+/**
+ * Closing an envelope, as a dialog (ADR-046): Lokasi, date and note. The
+ * roll-over amount is the envelope's own, so she types no money figure. It
+ * posts, so a tap outside does nothing (`posts`); the X closes it, and an edit
+ * dialog carries no cancel button of its own (#742). The body is its own
+ * component so the fields start fresh every time it opens.
+ */
+function CloseEnvelopeDialog({
+  purposeId,
   accounts,
-  onSubmit,
-  onCancel,
-  submitting,
+  open,
+  onClose,
+  onClosed,
+  refresh,
 }: {
+  purposeId: number
   accounts: Account[]
-  onSubmit: (accountId: number, closedOn: string, note: string) => void
-  onCancel: () => void
-  submitting: boolean
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+  refresh: () => Promise<void>
 }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent closeLabel={copy.common.close} posts>
+        <CloseEnvelopeBody purposeId={purposeId} accounts={accounts} onClosed={onClosed} refresh={refresh} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CloseEnvelopeBody({
+  purposeId,
+  accounts,
+  onClosed,
+  refresh,
+}: {
+  purposeId: number
+  accounts: Account[]
+  onClosed: () => void
+  refresh: () => Promise<void>
+}) {
+  const [state, run] = useApi<unknown>()
   // Until she picks, the same default every source picker has (#737).
   const [pickedAccountId, setAccountId] = useState<number | null>(null)
   const accountId = pickedAccountId ?? defaultSourceAccountId(accounts)
   const [closedOn, setClosedOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
+  const submitting = state.status === 'loading'
   const canSubmit = accountId !== null && closedOn !== '' && !submitting
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || accountId === null) return
-    onSubmit(accountId, closedOn, note)
+    void run(
+      async () => {
+        await closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note })
+        rememberAccountId(accountId)
+        onClosed()
+      },
+      { settle: refresh },
+    )
   }
 
   return (
-    <form className="flex flex-col gap-3 rounded-lg bg-muted p-3" onSubmit={handleSubmit} noValidate>
-      <h3 className="text-sm font-semibold">{text.close.heading}</h3>
-
-      <AccountPicker
-        id="incidental-close-account"
-        label={text.close.accountLabel}
-        accounts={accounts}
-        value={accountId}
-        onChange={setAccountId}
-        disabled={submitting}
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="incidental-close-date">{text.close.dateLabel}</Label>
-        <DateField id="incidental-close-date" value={closedOn} onChange={setClosedOn} bounds={dateBounds.entry()} disabled={submitting} />
-        <OpeningDateHint date={closedOn} accounts={accounts} accountIds={[accountId]} />
-      </div>
-
-      {/* The roll is a transfer the treasurer never asks for directly (#210),
-          so without this it appears in the list as two unexplained rows. */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="incidental-close-note">{text.close.noteLabel}</Label>
-        <Input
-          id="incidental-close-note"
-          className="h-11"
-          placeholder={text.close.notePlaceholder}
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
+    <>
+      <DialogHeader>
+        <DialogTitle>{text.close.heading}</DialogTitle>
+      </DialogHeader>
+      <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+        <AccountPicker
+          id="incidental-close-account"
+          label={text.close.accountLabel}
+          accounts={accounts}
+          value={accountId}
+          onChange={setAccountId}
           disabled={submitting}
         />
-      </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
-          {copy.common.back}
-        </Button>
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.close.submitting : text.close.submit}
-        </Button>
-      </div>
-    </form>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="incidental-close-date">{text.close.dateLabel}</Label>
+          <DateField id="incidental-close-date" value={closedOn} onChange={setClosedOn} bounds={dateBounds.entry()} disabled={submitting} />
+          <OpeningDateHint date={closedOn} accounts={accounts} accountIds={[accountId]} />
+        </div>
+
+        {/* The roll is a transfer the treasurer never asks for directly (#210),
+            so without this it appears in the list as two unexplained rows. */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="incidental-close-note">{text.close.noteLabel}</Label>
+          <Input
+            id="incidental-close-note"
+            className="h-11"
+            placeholder={text.close.notePlaceholder}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            disabled={submitting}
+          />
+        </div>
+
+        {state.status === 'error' && state.error && (
+          <p role="alert" className="text-sm text-attention-text">
+            {errorText(state.error)}
+          </p>
+        )}
+
+        <DialogFooter className="mt-1">
+          <Button type="submit" size="lg" disabled={!canSubmit}>
+            {submitting ? text.close.submitting : text.close.submit}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   )
 }
 

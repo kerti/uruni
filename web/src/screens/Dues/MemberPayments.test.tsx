@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MemberPayments from '@/screens/Dues/MemberPayments'
@@ -78,7 +79,11 @@ function amountMatcher(amount: number) {
 }
 
 function renderPayments(onReversed = vi.fn()) {
-  render(<MemberPayments memberId={1} period="2026-01" onReversed={onReversed} />)
+  render(
+    <MemoryRouter>
+      <MemberPayments memberId={1} period="2026-01" onReversed={onReversed} />
+    </MemoryRouter>,
+  )
   return onReversed
 }
 
@@ -112,6 +117,30 @@ describe('MemberPayments', () => {
     // derived default. The row explains itself through TransactionList's
     // display label.
     expect(body.note).toBeNull()
+  })
+
+  it('reverses from a dialog that ignores a tap outside it and closes on Escape and Tidak jadi', async () => {
+    const fetchMock = stubTransactions()
+    vi.stubGlobal('fetch', fetchMock)
+    renderPayments()
+
+    await userEvent.click(await screen.findByRole('button', { name: text.reverse }))
+    await screen.findByRole('dialog', { name: text.reverse })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
+    fireEvent.pointerDown(overlay)
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+    expect(screen.getByRole('dialog', { name: text.reverse })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.reverse }))
+    await userEvent.click(await screen.findByRole('button', { name: text.cancel }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(fetchMock.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === 'POST')).toBe(false)
   })
 
   it("states the original's date on the form when no cek kas has counted the payment", async () => {

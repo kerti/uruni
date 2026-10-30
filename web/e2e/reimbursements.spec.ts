@@ -76,14 +76,16 @@ test.describe('reimbursements', () => {
     // case-insensitive substring search, so "Bayar" otherwise also matches the
     // "Belum dibayar" row badge.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
-    await expect(page).toHaveURL(/\/reimbursements\/settle\?id=\d+$/)
-    await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
+    // Bayar opens a dialog on the tab (ADR-046), addressed by the URL.
+    await expect(page).toHaveURL(/\/history\/reimbursements\?edit=settle(%3A|:)\d+$/)
+    const settleDialog = page.getByRole('dialog', { name: copy.reimbursements.settle.heading })
+    await expect(settleDialog).toBeVisible()
 
     // Pick where the money is paid from (it opens on a default; picking is explicit).
     await chooseOption(page, copy.reimbursements.settle.accountLabel)
 
     // Submit settle (date defaults to today)
-    await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
+    await settleDialog.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
     await expect(page).toHaveURL(/\/history\/reimbursements$/)
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
 
@@ -107,7 +109,7 @@ test.describe('reimbursements', () => {
     await openTalangan(page)
     await expect(page.getByText('Rp30.000')).toBeVisible()
 
-    // Perbaiki sits in the row's "more" menu and opens the claim's screen.
+    // Ubah sits in the row's "more" menu and opens the claim's screen.
     await chooseMenuItem(
       page,
       page.locator('li', { hasText: 'Rp30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
@@ -134,7 +136,10 @@ test.describe('reimbursements', () => {
     // Settle it so the next test starts from an empty outstanding list.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
     await chooseOption(page, copy.reimbursements.settle.accountLabel)
-    await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
+    await page
+      .getByRole('dialog', { name: copy.reimbursements.settle.heading })
+      .getByRole('button', { name: copy.reimbursements.settle.submit, exact: true })
+      .click()
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
   })
 

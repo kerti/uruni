@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -82,7 +82,7 @@ function jsonResponse(body: unknown, status = 200) {
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
 /** Opens the first claim row's "more" menu and picks an item from it:
- * Perbaiki, Putihkan and Hapus live there, behind the row's one plain Bayar
+ * Ubah, Putihkan and Hapus live there, behind the row's one plain Bayar
  * control. */
 async function chooseFromRowMenu(name: string) {
   await userEvent.click(screen.getAllByRole('button', { name: text.actions.menuAria })[0])
@@ -151,7 +151,6 @@ function renderAt(entry: string | { pathname: string; state: unknown } = '/histo
             }
           />
           <Route path="/record" element={<ScreenProbe />} />
-          <Route path="/reimbursements/settle" element={<ScreenProbe />} />
           <Route path="/reimbursements/correct" element={<ScreenProbe />} />
         </Routes>
       </ToastProvider>
@@ -168,13 +167,27 @@ describe('Reimbursements tab', () => {
     expect(screen.getByRole('checkbox', { name: text.outstandingFilterLabel })).toBeChecked()
     expect(screen.getByText('Parkir')).toBeInTheDocument()
     expect(screen.getByText(formatIDR(15_000))).toBeInTheDocument()
-    // The outstanding list labels a still-owed claim "Belum dibayar". `settled`
-    // rides the wire (the list queries compute it), so the badge is a fact, not
-    // a tab-dependent guess.
-    expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
+    // The outstanding view's own filter already says "belum dibayar", so its
+    // cards do not repeat it (the all view does, below).
+    expect(screen.queryByText(text.status.outstanding, { selector: 'span' })).not.toBeInTheDocument()
   })
 
-  it('opens Catat with the claim ticked, and the settle and correct screens instead of expanding a form', async () => {
+  it('puts the photo control under the amount and Bayar with the menu at the bottom right', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    const card = screen.getByText('Jane').closest('li')!
+    const amount = within(card).getByText(formatIDR(15_000))
+    const photo = within(card).getByRole('button', { name: copy.receipts.rowControlAria(false) })
+    expect(amount.parentElement).toContainElement(photo)
+    // The bottom line holds Bayar and the menu, not the photo control.
+    const pay = within(card).getByRole('button', { name: text.actions.settle })
+    expect(pay.parentElement).not.toContainElement(photo)
+    expect(pay.parentElement).toContainElement(within(card).getByRole('button', { name: text.actions.menuAria }))
+  })
+
+  it('opens Catat with the claim ticked, and the correct screen instead of expanding a form', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
     const first = renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -182,36 +195,27 @@ describe('Reimbursements tab', () => {
     expect(screen.getByTestId('screen')).toHaveTextContent('/record?fronted=1')
     first.unmount()
 
-    const second = renderAt()
-    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
-    expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/settle?id=1')
-    second.unmount()
-
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     await chooseFromRowMenu(text.actions.correct)
     expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/correct?id=1')
   })
 
-  it.each([
-    ['settled', text.settle.success],
-    ['corrected', text.correct.success],
-  ])('shows the confirmation a screen handed back (%s)', async (done, message) => {
+  it('shows the confirmation the correct screen handed back', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: done } })
+    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: 'corrected' } })
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-    expect(screen.getByText(message)).toBeInTheDocument()
+    expect(screen.getByText(text.correct.success)).toBeInTheDocument()
   })
 
   it('a tap puts the confirmation a screen handed back away', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: 'settled' } })
+    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: 'corrected' } })
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-    expect(screen.getByText(text.settle.success)).toBeInTheDocument()
+    expect(screen.getByText(text.correct.success)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: text.settle.success }))
-    expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: text.correct.success }))
+    expect(screen.queryByText(text.correct.success)).not.toBeInTheDocument()
   })
 
   it('waive is reversible: un-waive is reachable from the full list', async () => {
@@ -325,15 +329,108 @@ describe('Reimbursements tab', () => {
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-    // Click delete to show confirmation
+    // Hapus opens its dialog, addressed by the URL; the confirm is in it.
     await chooseFromRowMenu(text.actions.delete)
-    // Confirm delete
-    await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+    const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+    expect(screen.getByTestId('location')).toHaveTextContent('?edit=delete-claim%3A1')
+    expect(within(dialog).getByText(text.delete.body)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: text.delete.confirm }))
 
     // After deletion the list refreshes (the claim disappears) and feedback
     // confirms the write landed.
     await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
     expect(screen.getByText(text.delete.success)).toBeInTheDocument()
+  })
+
+  it('Hapus closes on Tutup and on a tap outside, deleting nothing: it posts nothing', async () => {
+    const fetchMock = routedFetch(getHandlers())
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    await chooseFromRowMenu(text.actions.delete)
+    const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+    // The footer's Tutup comes before the X in the DOM.
+    await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await chooseFromRowMenu(text.actions.delete)
+    await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
+    fireEvent.pointerDown(overlay)
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
+  })
+
+  it('strips a delete-claim param naming a claim this list does not hold', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt('/history/reimbursements?edit=delete-claim:99')
+
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('edit='))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  describe('Bayar dialog (ADR-046)', () => {
+    const oneClaim = (settled = false): Handler => ({
+      match: (m, u) => m === 'GET' && /\/api\/reimbursements\/1$/.test(u),
+      handle: () => Promise.resolve(jsonResponse(claim(1, { settled }))),
+    })
+
+    it('opens from Bayar at ?edit=settle:<id>, shows the claim, pays from the remembered location and toasts', async () => {
+      let settled = false
+      const fetchMock = routedFetch([
+        oneClaim(),
+        {
+          match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+          handle: () => {
+            settled = true
+            return Promise.resolve(jsonResponse({ id: 50 }, 201))
+          },
+        },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/reimbursements') && !/\/api\/reimbursements\/1$/.test(u),
+          handle: () => Promise.resolve(jsonResponse(page(settled ? [] : [claim(1)]))),
+        },
+        ...getHandlers().filter(
+          (h) => h.match('GET', '/api/members') || h.match('GET', '/api/purposes') || h.match('GET', '/api/accounts'),
+        ),
+      ])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
+
+      const dialog = await screen.findByRole('dialog', { name: text.settle.heading })
+      expect(screen.getByTestId('location')).toHaveTextContent('?edit=settle%3A1')
+      const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
+      expect(summary).toHaveTextContent(`${text.record.memberLabel}Jane`)
+      expect(summary).toHaveTextContent(`${text.record.amountLabel}Rp15.000`)
+      expect(within(dialog).getByRole('combobox', { name: text.settle.accountLabel })).toHaveTextContent('Tunai')
+      // An edit dialog's way out is the X.
+      expect(within(dialog).queryByRole('button', { name: copy.common.back })).not.toBeInTheDocument()
+
+      await userEvent.click(within(dialog).getByRole('button', { name: text.settle.submit }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByText(text.settle.success)).toBeInTheDocument()
+      expect(await screen.findByText(text.emptyOutstanding)).toBeInTheDocument()
+      const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 1 })
+      expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('1')
+    })
+
+    it('opens straight from a deep link, and strips the param for a claim that is already settled', async () => {
+      vi.stubGlobal('fetch', routedFetch([oneClaim(true), ...getHandlers()]))
+      renderAt('/history/reimbursements?edit=settle:1')
+
+      await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('edit='))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 
   it('reads ?q= from the URL into the field and sends it to the server', async () => {
@@ -672,9 +769,12 @@ describe('Reimbursements tab', () => {
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
       await chooseFromRowMenu(text.actions.delete)
-      await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+      const dialog = await screen.findByRole('dialog', { name: text.delete.dialogTitle })
+      await userEvent.click(within(dialog).getByRole('button', { name: text.delete.confirm }))
 
-      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.referenced_by_other_records))
+      // The refusal is said inside the dialog, which stays open.
+      await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toBe(text.errors.referenced_by_other_records))
+      expect(screen.getByRole('dialog', { name: text.delete.dialogTitle })).toBeInTheDocument()
     })
   })
 })

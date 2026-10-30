@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -455,6 +455,48 @@ describe('Incidentals', () => {
     // close form stays open so she can read why.
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.incidental_already_closed))
     expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument()
+  })
+
+  it('closes from a dialog addressed by ?edit=close:<id>, with no cancel button, ignoring a tap outside', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 50000,
+      recipients: [],
+    } satisfies IncidentalDetail
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
+    const dialog = await screen.findByRole('dialog', { name: text.close.heading })
+    expect(currentSearch()).toBe('?edit=close%3A1')
+
+    // An edit dialog's way out is the X (#742): the footer holds the primary alone.
+    expect(within(dialog).queryByRole('button', { name: copy.common.back })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: text.close.submit })).toBeInTheDocument()
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
+    fireEvent.pointerDown(overlay)
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+    expect(screen.getByRole('dialog', { name: text.close.heading })).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.common.close }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(currentSearch()).toBe('')
   })
 
   it('a closed envelope shows the reopen affordance instead of record/close', async () => {

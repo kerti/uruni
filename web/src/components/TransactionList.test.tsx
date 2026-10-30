@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
@@ -405,12 +405,13 @@ describe('TransactionList reversal (ADR-042)', () => {
     return { ...result, onReversed }
   }
 
-  /** Taps the card, then the door in the entry detail. */
+  /** Taps the card, then the door in the entry detail; resolves to the reversal dialog. */
   async function openForm() {
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
     const dialog = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
     await userEvent.click(within(dialog).getByRole('button', { name: text.reverse }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    // The detail hands off: it closes, and only then does the reversal dialog open.
+    return screen.findByRole('dialog', { name: text.reverse })
   }
 
   it('offers Batalkan transaksi in the entry detail of a reversible row, and the button posts nothing', async () => {
@@ -494,10 +495,33 @@ describe('TransactionList reversal (ADR-042)', () => {
       '/api/transactions/36/reversal',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ note: 'Salah arah' }) }),
     )
-    expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('closes the form on Tidak jadi, posting nothing', async () => {
+  it('is a dialog that ignores a tap outside it, and closes on Escape and on Tidak jadi, posting nothing', async () => {
+    const fetchMock = vi.fn(routePurposes(() => Promise.reject(new Error('no write expected'))))
+    vi.stubGlobal('fetch', fetchMock)
+    renderReversible([transaction({ id: 44, reversible: true })])
+
+    await openForm()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]')
+    expect(overlay).not.toBeNull()
+    fireEvent.pointerDown(overlay!)
+    fireEvent.pointerUp(overlay!)
+    fireEvent.click(overlay!)
+    expect(screen.getByRole('dialog', { name: text.reverse })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await openForm()
+    await userEvent.click(screen.getByRole('button', { name: text.reverseCancel }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(writesOf(fetchMock)).toEqual([])
+  })
+
+  it('closes the dialog on Tidak jadi, posting nothing', async () => {
     const fetchMock = vi.fn(routePurposes(() => Promise.reject(new Error('no write expected'))))
     vi.stubGlobal('fetch', fetchMock)
     renderReversible([transaction({ id: 37, reversible: true })])
@@ -505,7 +529,7 @@ describe('TransactionList reversal (ADR-042)', () => {
     await openForm()
     await userEvent.click(screen.getByRole('button', { name: text.reverseCancel }))
 
-    expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument())
     expect(writesOf(fetchMock)).toEqual([])
   })
 

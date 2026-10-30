@@ -100,9 +100,23 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
    * idiom as select.tsx's SelectValue placeholder: this file stays a
    * generic primitive with no copy of its own. */
   closeLabel: string
+  /** The dialog posts a ledger entry (ADR-046): a tap outside it does
+   * nothing, so a stray backdrop touch cannot dismiss the one thing this app
+   * must not get wrong. The X, Escape and its own buttons still close it. A
+   * dialog that posts nothing leaves this off and keeps outside-tap dismissal. */
+  posts?: boolean
 }
 
-function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  closeLabel,
+  posts = false,
+  style,
+  onOpenAutoFocus,
+  onInteractOutside,
+  ...props
+}: DialogContentProps) {
   const { inset, height } = useKeyboardInset()
   // The visible area's bottom edge sits `inset` above the layout viewport's;
   // its centre is half the visible height above that. Only mounted while
@@ -123,6 +137,10 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
           className,
         )}
         style={keyboardStyle ? { ...style, ...keyboardStyle } : style}
+        onInteractOutside={(event) => {
+          onInteractOutside?.(event)
+          if (posts) event.preventDefault()
+        }}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event)
           if (event.defaultPrevented) return

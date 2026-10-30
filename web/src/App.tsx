@@ -20,7 +20,6 @@ import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
 import Reimbursements from '@/screens/History/Reimbursements'
-import SettleClaim from '@/screens/Reimbursements/Settle'
 import CorrectClaim from '@/screens/Reimbursements/Correct'
 import type { TalanganState } from '@/screens/Reimbursements/helpers'
 import Reconciliations from '@/screens/History/Reconciliations'
@@ -271,10 +270,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const parsedTier = rawTier === null || rawTier.trim() === '' ? NaN : Number(rawTier)
   const tierId = Number.isInteger(parsedTier) && parsedTier > 0 ? parsedTier : null
 
-  // /reimbursements/settle?id=<id> and /reimbursements/correct?id=<id> are
-  // one claim's screens, reached from Talangan's row only - parsed like
-  // ?tier= above. Without a usable id there is nothing to show, so they
-  // redirect to the tab.
+  // /reimbursements/correct?id=<id> is one claim's screen, reached from
+  // Talangan's row only - parsed like ?tier= above. Without a usable id there
+  // is nothing to show, so it redirects to the tab. /reimbursements/settle?id=
+  // redirects to the tab's settle dialog (ADR-046).
   const rawClaim = searchParams.get('id')
   const parsedClaim = rawClaim === null || rawClaim.trim() === '' ? NaN : Number(rawClaim)
   const claimId = Number.isInteger(parsedClaim) && parsedClaim > 0 ? parsedClaim : null
@@ -420,21 +419,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
       <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
       {/* #368, ADR-032: recording a claim is Catat's Keluar with "Pengeluaran
           ini ditalangi" ticked, so its own former address redirects there
-          (same precedent as /dues/payment below). Settle and correct are
-          screens: cancel and success both return to the tab, and success
+          (same precedent as /dues/payment below). Correct is a
+          screen: cancel and success both return to the tab, and success
           hands its confirmation back through router state. */}
       <Route path="/reimbursements/new" element={<Navigate to="/record?fronted=1" replace />} />
+      {/* ADR-046: settling is a dialog on the tab, so the screen's old address
+          is a redirect to it, the dialog open - a bookmark or an old link
+          still lands on the claim. Without a usable id, the tab alone. */}
       <Route
         path="/reimbursements/settle"
-        element={
-          claimId === null ? (
-            <Navigate to="/history/reimbursements" replace />
-          ) : (
-            <Shell title={title} onLoggedOut={onLoggedOut}>
-              <SettleClaim claimId={claimId} onDone={() => talanganDone('settled')} onCancel={backToTalangan} />
-            </Shell>
-          )
-        }
+        element={<Navigate to={claimId === null ? '/history/reimbursements' : `/history/reimbursements?edit=settle:${claimId}`} replace />}
       />
       <Route
         path="/reimbursements/correct"

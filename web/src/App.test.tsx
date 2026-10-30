@@ -588,6 +588,22 @@ describe('App (Riwayat)', () => {
     window.history.pushState({}, '', '/')
   })
 
+  // ADR-046: settling is a dialog on the Talangan tab; the screen's old address
+  // redirects to it, so a bookmark still lands on the claim.
+  it.each([
+    ['/reimbursements/settle?id=3', '/history/reimbursements', '?edit=settle:3'],
+    ['/reimbursements/settle', '/history/reimbursements', ''],
+    ['/reimbursements/settle?id=abc', '/history/reimbursements', ''],
+  ])('redirects %s to the Talangan tab', async (from, pathname, search) => {
+    window.history.pushState({}, '', from)
+    vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
+    render(<App />)
+
+    await waitFor(() => expect(window.location.pathname).toBe(pathname))
+    expect(decodeURIComponent(window.location.search)).toBe(search)
+    window.history.pushState({}, '', '/')
+  })
+
   // The status matrix is its own screen at /dues, outside Riwayat's tab strip
   // - it never shares a page with the payment history.
   it('renders the dues status matrix on its own screen at /dues', async () => {
