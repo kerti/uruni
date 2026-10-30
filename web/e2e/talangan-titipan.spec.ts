@@ -82,10 +82,15 @@ async function chooseHapus(card: Locator, page: Page) {
   })
 }
 
-// Hapus from the menu, then the confirmation's own Hapus.
+// The delete dialog (ADR-046), once Hapus has been chosen from the menu.
+function deleteDialog(page: Page) {
+  return page.getByRole('dialog', { name: copy.reimbursements.delete.dialogTitle })
+}
+
+// Hapus from the menu, then the dialog's own "Ya, hapus".
 async function removeClaim(card: Locator, page: Page) {
   await chooseHapus(card, page)
-  await card.getByRole('button', { name: copy.reimbursements.actions.delete, exact: true }).click()
+  await deleteDialog(page).getByRole('button', { name: copy.reimbursements.delete.confirm, exact: true }).click()
 }
 
 // Catat -> Masuk or Keluar -> Pos -> amount -> Simpan; lands on Beranda.
@@ -207,7 +212,9 @@ test.describe('talangan and titipan', () => {
     // Hapus while the photo is still on it: refused, with the fix named, and
     // the claim stays.
     await removeClaim(card, page)
-    await expect(page.getByRole('alert')).toContainText(copy.reimbursements.errors.referenced_by_other_records)
+    await expect(deleteDialog(page).getByRole('alert')).toContainText(copy.reimbursements.errors.referenced_by_other_records)
+    await deleteDialog(page).getByRole('button', { name: copy.common.close, exact: true }).first().click()
+    await expect(deleteDialog(page)).toHaveCount(0)
     await expect(card).toBeVisible()
 
     // Delete the photo behind its own confirm.
@@ -231,7 +238,8 @@ test.describe('talangan and titipan', () => {
 
     // Cancelled, the claim stays.
     await chooseHapus(card, page)
-    await card.getByRole('button', { name: copy.common.close }).click()
+    await deleteDialog(page).getByRole('button', { name: copy.common.close, exact: true }).first().click()
+    await expect(deleteDialog(page)).toHaveCount(0)
     await expect(card).toBeVisible()
 
     await removeClaim(card, page)

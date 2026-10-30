@@ -1,10 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Correct from '@/screens/Reimbursements/Correct'
-import Settle from '@/screens/Reimbursements/Settle'
+import SettleDialog from '@/screens/Reimbursements/SettleDialog'
 import { chooseOption, selectedOptionName, selectOptionNames } from '@/test/select'
 import { copy } from '@/copy/id'
 import type { Purpose } from '@/lib/purposes'
@@ -115,7 +115,7 @@ function renderScreen(element: React.ReactNode) {
   )
 }
 
-describe('Settle', () => {
+describe('SettleDialog', () => {
   const settle: Handler = {
     match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
     handle: () =>
@@ -152,13 +152,13 @@ describe('Settle', () => {
     window.localStorage.setItem('uruni:record:last-account-id', '2')
     const fetchMock = routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)])
     vi.stubGlobal('fetch', fetchMock)
-    const onDone = vi.fn()
-    const { unmount } = renderScreen(<Settle claimId={1} onDone={onDone} onCancel={vi.fn()} />)
+    const onSettled = vi.fn()
+    const { unmount } = renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={onSettled} onUnusable={vi.fn()} />)
 
     await screen.findByRole('heading', { name: text.settle.heading })
     expect(selectedOptionName(text.settle.accountLabel)).toBe('Bank Uji Coba')
     await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
-    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    await waitFor(() => expect(onSettled).toHaveBeenCalled())
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 2 })
     expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('2')
@@ -166,14 +166,14 @@ describe('Settle', () => {
 
     window.localStorage.setItem('uruni:record:last-account-id', '99')
     vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)]))
-    renderScreen(<Settle claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={vi.fn()} onUnusable={vi.fn()} />)
     await screen.findByRole('heading', { name: text.settle.heading })
     expect(selectedOptionName(text.settle.accountLabel)).toBe('Tunai')
   })
 
   it('says whose claim it is and what for before she pays it', async () => {
     vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...lookups]))
-    renderScreen(<Settle claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={vi.fn()} onUnusable={vi.fn()} />)
 
     await screen.findByRole('heading', { name: text.settle.heading })
     const summary = screen.getAllByRole('definition')[0].closest('dl')!
@@ -184,19 +184,19 @@ describe('Settle', () => {
     expect(summary).toHaveTextContent(`${text.record.amountLabel}Rp15.000`)
   })
 
-  it('settles the claim and calls onDone', async () => {
+  it('settles the claim and calls onSettled', async () => {
     vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...lookups]))
-    const onDone = vi.fn()
-    renderScreen(<Settle claimId={1} onDone={onDone} onCancel={vi.fn()} />)
+    const onSettled = vi.fn()
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={onSettled} onUnusable={vi.fn()} />)
 
     expect(await screen.findByRole('heading', { name: text.settle.heading })).toBeInTheDocument()
     await chooseOption(text.settle.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
 
-    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    await waitFor(() => expect(onSettled).toHaveBeenCalled())
   })
 
-  it('a named 409 says why, from copy, and keeps the screen', async () => {
+  it('a named 409 says why, from copy, and keeps the dialog', async () => {
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -209,15 +209,15 @@ describe('Settle', () => {
         ...lookups,
       ]),
     )
-    const onDone = vi.fn()
-    renderScreen(<Settle claimId={1} onDone={onDone} onCancel={vi.fn()} />)
+    const onSettled = vi.fn()
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={onSettled} onUnusable={vi.fn()} />)
 
     await screen.findByRole('heading', { name: text.settle.heading })
     await chooseOption(text.settle.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.reimbursement_already_settled))
-    expect(onDone).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: text.settle.heading })).toBeInTheDocument()
   })
 
@@ -225,10 +225,32 @@ describe('Settle', () => {
     ['an unknown claim', getClaim(notFound, 404)],
     ['an already settled claim', getClaim(claim({ settled: true }))],
     ['a waived claim', getClaim(claim({ waived_on: '2026-09-05' }))],
-  ])('redirects to the tab for %s', async (_label, handler) => {
+  ])('never opens for %s, and asks the caller to strip the param', async (_label, handler) => {
     vi.stubGlobal('fetch', routedFetch([handler, ...lookups]))
-    renderScreen(<Settle claimId={1} onDone={vi.fn()} onCancel={vi.fn()} />)
-    expect(await screen.findByTestId('tab')).toBeInTheDocument()
+    const onUnusable = vi.fn()
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={vi.fn()} onUnusable={onUnusable} />)
+
+    await waitFor(() => expect(onUnusable).toHaveBeenCalled())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('has no cancel button, ignores a tap outside, and closes from the X', async () => {
+    vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...lookups]))
+    const onClose = vi.fn()
+    renderScreen(<SettleDialog claimId={1} onClose={onClose} onSettled={vi.fn()} onUnusable={vi.fn()} />)
+
+    const dialog = await screen.findByRole('dialog', { name: text.settle.heading })
+    expect(within(dialog).queryByRole('button', { name: copy.common.back })).not.toBeInTheDocument()
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]')!
+    fireEvent.pointerDown(overlay)
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+    expect(onClose).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.common.close }))
+    expect(onClose).toHaveBeenCalled()
   })
 })
 

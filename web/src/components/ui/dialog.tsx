@@ -100,9 +100,23 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
    * idiom as select.tsx's SelectValue placeholder: this file stays a
    * generic primitive with no copy of its own. */
   closeLabel: string
+  /** The dialog posts a ledger entry (ADR-046): a tap outside it does
+   * nothing, so a stray backdrop touch cannot dismiss the one thing this app
+   * must not get wrong. The X, Escape and its own buttons still close it. A
+   * dialog that posts nothing leaves this off and keeps outside-tap dismissal. */
+  posts?: boolean
 }
 
-function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  closeLabel,
+  posts = false,
+  style,
+  onOpenAutoFocus,
+  onInteractOutside,
+  ...props
+}: DialogContentProps) {
   const { inset, height } = useKeyboardInset()
   // The visible area's bottom edge sits `inset` above the layout viewport's;
   // its centre is half the visible height above that. Only mounted while
@@ -123,6 +137,10 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
           className,
         )}
         style={keyboardStyle ? { ...style, ...keyboardStyle } : style}
+        onInteractOutside={(event) => {
+          onInteractOutside?.(event)
+          if (posts) event.preventDefault()
+        }}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event)
           if (event.defaultPrevented) return
@@ -133,8 +151,12 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
         {/* The scroller is an inner box, not the Content itself: the close
          * button is a sibling of it, so it stays put while the form scrolls,
          * and the sticky DialogHeader pins the title beside it. The box
-         * carries the padding, so a focused field's ring is never clipped. */}
-        <div data-slot="dialog-body" className="grid min-h-0 gap-4 overflow-y-auto p-4">
+         * carries the padding, so a focused field's ring is never clipped.
+         * grid-cols-1 (minmax(0, 1fr)), not the implicit auto column: an auto
+         * track grows to its widest content, so one long pos or location name
+         * in a picker, or a long title, widened the whole form past the
+         * dialog's edge instead of wrapping or truncating inside it. */}
+        <div data-slot="dialog-body" className="grid min-h-0 grid-cols-1 gap-4 overflow-y-auto p-4">
           {children}
         </div>
         <DialogPrimitive.Close

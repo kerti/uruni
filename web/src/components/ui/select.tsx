@@ -45,7 +45,10 @@ function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>)
 function SelectValue({ placeholder, children }: { placeholder?: string; children?: React.ReactNode }) {
   const empty = children === undefined || children === null || children === ''
   return (
-    <span data-slot="select-value" className={cn('truncate', empty && 'text-muted-foreground')}>
+    // min-w-0: a flex item will not shrink below its text without it, so a
+    // long choice (a pos or location name) would set the trigger's minimum
+    // width and push a dialog wider than the screen instead of truncating.
+    <span data-slot="select-value" className={cn('min-w-0 truncate', empty && 'text-muted-foreground')}>
       {empty ? placeholder : children}
     </span>
   )
@@ -56,7 +59,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground md:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0',
+        'flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground md:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0',
         className,
       )}
       {...props}

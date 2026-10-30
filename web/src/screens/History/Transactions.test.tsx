@@ -414,7 +414,11 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
     const user = userEvent.setup()
     renderAt('/history/transactions?edit=purpose-correction:6')
 
-    await screen.findByText(copy.purposeCorrection.heading)
+    const dialog = await screen.findByRole('dialog', { name: copy.purposeCorrection.heading })
+    // The row it corrects (ADR-046), its note among the facts.
+    expect(within(dialog).getAllByRole('definition')[0].closest('dl')).toHaveTextContent(
+      `${copy.transactionDetail.noteLabel}Setoran seragam`,
+    )
     const before = requests.length
 
     await chooseOption(copy.purposeCorrection.pickerLabel, 'Titipan')

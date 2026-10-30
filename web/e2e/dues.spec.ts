@@ -140,7 +140,8 @@ test.describe('dues status', () => {
     await card.getByRole('button', { name: copy.dues.history.title }).click()
 
     await card.getByRole('button', { name: copy.dues.history.reverse }).first().click()
-    await card.getByRole('button', { name: copy.dues.history.confirm }).click()
+    // The reversal is a dialog (ADR-046), so its buttons are not inside the card.
+    await page.getByRole('dialog', { name: copy.dues.history.reverse }).getByRole('button', { name: copy.dues.history.confirm }).click()
 
     // The reversal is its own row - the payment is still listed, now marked as
     // undone, and never offers the action a second time. The roster above

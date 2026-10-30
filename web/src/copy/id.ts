@@ -287,7 +287,7 @@ export const copy = {
       // orphaned.
       purpose_correction_opening: 'Pos saldo awal tidak bisa diperbaiki.',
       purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
-      purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
+      purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — ubah lewat catatan talangannya.',
       purpose_correction_transfer: 'Pos hasil pindah tidak bisa diperbaiki lagi.',
       // The refusal now covers every reversal, not only a dues one (ADR-042).
       purpose_correction_reversal: 'Pos pembatalan tidak bisa diperbaiki.',
@@ -1379,10 +1379,16 @@ export const copy = {
     receiptCountAria: (count: number) => `${count} foto nota`,
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
+    // memberLabel, periodLabel and amountLabel label TransactionSummary, the
+    // record a confirm dialog acts on (ADR-046); the detail itself shows the
+    // amount as its headline instead.
+    memberLabel: 'Anggota',
     purposeLabel: 'Pos',
+    periodLabel: 'Periode',
     noteLabel: 'Catatan',
     locationLabel: 'Lokasi',
     dateLabel: 'Tanggal',
+    amountLabel: 'Jumlah',
     recordedAtLabel: 'Dicatat pada',
     receiptsLabel: 'Foto nota',
   },
@@ -1444,12 +1450,12 @@ export const copy = {
     },
     actions: {
       settle: 'Bayar',
-      // The row's "more" menu holding Perbaiki, Putihkan and Hapus - named like
+      // The row's "more" menu holding Ubah, Putihkan and Hapus - named like
       // the receipt viewer's menu (receipts.photoMenuAria).
       menuAria: 'Pilihan talangan',
       waive: 'Putihkan',
       unwaive: 'Batalkan pemutihan',
-      correct: 'Perbaiki',
+      correct: 'Ubah',
       delete: 'Hapus',
       deleting: 'Menghapus…',
     },
@@ -1464,14 +1470,19 @@ export const copy = {
     unwaive: {
       success: 'Pemutihan dibatalkan. Talangan kembali ditagih.',
     },
+    // Hapus talangan is a dialog (ADR-046). It never posted: deleting a claim
+    // moves no money, which is what the body says.
     delete: {
+      dialogTitle: 'Hapus talangan ini?',
+      body: 'Talangan ini akan dihapus. Belum ada uang yang keluar dari kas.',
+      confirm: 'Ya, hapus',
       success: 'Talangan dihapus.',
     },
     correct: {
-      heading: 'Perbaiki talangan',
+      heading: 'Ubah talangan',
       submit: 'Simpan',
       submitting: 'Menyimpan…',
-      success: 'Talangan berhasil diperbaiki.',
+      success: 'Talangan sudah diubah.',
     },
     errors: {
       reimbursement_already_settled: 'Talangan ini sudah dibayar.',
@@ -1520,6 +1531,9 @@ export const copy = {
     },
     close: {
       heading: 'Tutup amplop',
+      // The envelope the dialog closes, named above its fields (ADR-046);
+      // its leftover reads with detail.remainingLabel.
+      envelopeLabel: 'Amplop',
       // The close moves money between pos inside one location, so the field
       // is just "Lokasi" (#737). Still direction-neutral (ADR-031): leftover
       // out to Kas Utama, or a shortfall covered from it - a label naming one

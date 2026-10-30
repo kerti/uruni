@@ -2,21 +2,16 @@ import { Camera, PenLine } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
-import ReversalDateLine from '@/components/ReversalDateLine'
+import ReversalDialog from '@/components/ReversalDialog'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
 import { transferHeadline, transferKind } from '@/components/rowLabel'
 import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
-import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { noteForDisplay, reverseTransaction } from '@/lib/transactions'
-import { useApi } from '@/lib/useApi'
+import { noteForDisplay } from '@/lib/transactions'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
 import { useDialogParam } from '@/lib/useDialogParam'
@@ -25,16 +20,6 @@ import type { Purpose } from '@/lib/purposes'
 import type { Transaction } from '@/lib/transactions'
 
 const reverseText = copy.history.transactions
-
-/** Wire error code -> Indonesian copy, scoped first to this list's wording
- * (transaction_already_reversed reads as "iuran" in the shared map, ADR-042)
- * then falling back to it, as Incidentals.tsx's errorText does. */
-function reversalErrorText(err: ApiError): string {
-  const specific = reverseText.errors[err.code as keyof typeof reverseText.errors]
-  if (specific) return specific
-  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
-  return common ?? copy.common.unknownError
-}
 
 /**
  * One transaction row's markup, shared by Home and Riwayat's Transaksi tab
@@ -59,7 +44,7 @@ export default function TransactionList({
    * same row offers the same buttons on Beranda, in an envelope and in Riwayat
    * (#739); which of them a given row shows is per row (canCorrectPurpose, the
    * server's `reversible`, a nota or none). This component owns the correction
-   * dialog (ADR-033), the reversal form (ADR-042), the receipt viewer and the
+   * dialog (ADR-033), the reversal dialog (ADR-042, ADR-046), the receipt viewer and the
    * "done" lines, and holds no list state, so the caller only refetches. Omit it
    * and the rows are read-only. */
   onRefresh?: () => Promise<void> | void
@@ -97,9 +82,12 @@ export default function TransactionList({
     }
   }, [wantsSelectable, selectable])
   const toast = useToast()
-  // The row whose reversal form is open under it (ADR-042), if any - one at a
-  // time, so the reason always belongs to a single row.
-  const [reversingId, setReversingId] = useState<number | null>(null)
+  // The reversal dialog, `?edit=reverse:<id>` (ADR-042, ADR-046): opened by
+  // the entry detail's Batalkan once the detail is gone.
+  const reversal = useDialogParam()
+  const reversalTarget = parseDialogTarget('reverse', reversal.value)
+  const reversalKind = reversalTarget.kind
+  const reversalId = reversalTarget.kind === 'edit' ? reversalTarget.id : null
   // What the entry detail handed off to when it closed (Batalkan, Perbaiki pos,
   // Nota). Run from the dialog's own onCloseAutoFocus, i.e. once it is gone, so
   // two modal dialogs are never open at once: the correction dialog is a URL
@@ -119,12 +107,23 @@ export default function TransactionList({
     clearCorrection()
   }, [correctionKind, knowsCorrectionRow, clearCorrection])
 
+  // The same strip for `reverse:`: a value naming a row this list does not
+  // hold (or malformed) is cleared, a neighbour's value is left alone.
+  const { clear: clearReversal } = reversal
+  const knowsReversalRow = reversalId !== null && transactions.some((t) => t.id === reversalId)
+  useEffect(() => {
+    if (reversalKind === 'foreign' || reversalKind === 'new') return
+    if (knowsReversalRow) return
+    clearReversal()
+  }, [reversalKind, knowsReversalRow, clearReversal])
+
   if (transactions.length === 0) {
     return <p className="text-muted-foreground">{emptyMessage}</p>
   }
 
   const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
   const correcting = transactions.find((t) => t.id === correctionId) ?? null
+  const reversing = transactions.find((t) => t.id === reversalId) ?? null
   const detailTransaction = entry.value === null ? null : (transactions.find((t) => String(t.id) === entry.value) ?? null)
 
   // The correction dialog names a row's current pos too, which may be one this
@@ -204,21 +203,6 @@ export default function TransactionList({
                   )}
                 </span>
               </div>
-              {/* The reversal form (ADR-042), opened from the entry detail and shown under its row. */}
-              {onRefresh && reversingId === transaction.id && (
-                <div className="pointer-events-none relative [&_button]:pointer-events-auto [&_input]:pointer-events-auto [&_label]:pointer-events-auto">
-                  <ReversalForm
-                    transaction={transaction}
-                    onCancel={() => setReversingId(null)}
-                    onReversed={() => {
-                      setReversingId(null)
-                      toast.success(reverseText.reverseSuccess)
-                      void onRefresh()
-                    }}
-                    refresh={onRefresh}
-                  />
-                </div>
-              )}
             </li>
           )
         })}
@@ -231,7 +215,6 @@ export default function TransactionList({
               ? (transaction) => {
                   handoff.current = { kind: 'reverse', transaction }
                   entry.close()
-                  setReversingId(transaction.id)
                 }
               : undefined
           }
@@ -262,12 +245,7 @@ export default function TransactionList({
             } else if (next.kind === 'receipts') {
               setReceiptsForId(next.transaction.id)
             } else {
-              // Focus and scroll only once the dialog is gone: a scroll while it
-              // is still closing is undone, and leaves the form's buttons under
-              // the bottom nav.
-              const form = document.getElementById(reversalFormId(next.transaction.id))
-              form?.focus({ preventScroll: true })
-              form?.scrollIntoView?.({ block: 'nearest' })
+              reversal.open(`reverse:${next.transaction.id}`)
             }
           }}
         />
@@ -279,6 +257,20 @@ export default function TransactionList({
             open={receiptsForTransaction !== null}
             onClose={() => setReceiptsForId(null)}
             onChanged={onRefresh}
+          />
+        )}
+        {onRefresh && (
+          <ReversalDialog
+            transaction={reversing}
+            purposeName={reversing ? purposeNames.get(reversing.effective_purpose_id ?? reversing.purpose_id) : undefined}
+            open={reversing !== null}
+            onClose={reversal.close}
+            onReversed={() => {
+              reversal.close()
+              toast.success(reverseText.reverseSuccess)
+              void onRefresh()
+            }}
+            refresh={onRefresh}
           />
         )}
         {onRefresh && (
@@ -329,90 +321,5 @@ function PurposeLine({ transaction, purposeNames }: { transaction: Transaction; 
         </>
       )}
     </span>
-  )
-}
-
-/**
- * The inline form an ordinary transaction is reversed from (ADR-042, ADR-032),
- * opened under the row by the detail dialog's button. Reason (optional) and a
- * yes/no; the date line states when the entry will be dated, and it asks no date.
- * Its own component: the note, busy state and error belong to the one open row.
- */
-function reversalFormId(transactionId: number): string {
-  return `reversal-form-${transactionId}`
-}
-
-function ReversalForm({
-  transaction,
-  onCancel,
-  onReversed,
-  refresh,
-}: {
-  transaction: Transaction
-  onCancel: () => void
-  onReversed: () => void
-  refresh?: () => Promise<void> | void
-}) {
-  const [note, setNote] = useState('')
-  const [state, run] = useApi<Transaction>()
-
-  const busy = state.status === 'loading'
-
-  function handleSubmit() {
-    void run(
-      async () => {
-        const trimmed = note.trim()
-        const result = await reverseTransaction(transaction.id, trimmed === '' ? null : trimmed)
-        onReversed()
-        return result
-      },
-      { settle: refresh },
-    )
-  }
-
-  return (
-    // scroll-mb matches Shell's main padding, so scrolling it into view brings
-    // the buttons above the fixed bottom nav, not under it.
-    <div
-      id={reversalFormId(transaction.id)}
-      tabIndex={-1}
-      className="animate-reveal flex scroll-mb-[calc(env(safe-area-inset-bottom)+6rem)] flex-col gap-2 rounded-lg bg-muted/40 p-3 outline-none"
-    >
-      <div className="flex flex-col gap-1">
-        <p className="font-medium">{reverseText.reverse}</p>
-        <p className="text-sm text-muted-foreground">{reverseText.reverseExplainer}</p>
-        <ReversalDateLine transaction={transaction} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`reversal-note-${transaction.id}`}>{reverseText.reverseNoteLabel}</Label>
-        <Input
-          id={`reversal-note-${transaction.id}`}
-          type="text"
-          className="h-11"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          disabled={busy}
-        />
-      </div>
-
-      {/* reversalErrorText, not ErrorState.tsx directly (#333): the shared
-          fallback chain reads transaction_already_reversed as "iuran",
-          which is the wrong noun on this list - see this file's own
-          reversalErrorText. */}
-      {state.status === 'error' && state.error && (
-        <p role="alert" className="text-sm text-attention-text">
-          {reversalErrorText(state.error)}
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onCancel}>
-          {reverseText.reverseCancel}
-        </Button>
-        <Button type="button" size="lg" disabled={busy} onClick={handleSubmit}>
-          {busy ? reverseText.reverseSubmitting : reverseText.reverseConfirm}
-        </Button>
-      </div>
-    </div>
   )
 }
