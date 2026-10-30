@@ -1,3 +1,4 @@
+import { Plus, X } from 'lucide-react'
 import { useId } from 'react'
 
 import { Label } from '@/components/ui/label'
@@ -117,14 +118,15 @@ export function OptionalMemberPicker({
 }
 
 /**
- * Zero-or-more members an envelope is *for* (ADR-034's recipients): a plain
- * checklist, since the themed Select has no multi-select shape. Each row is a
- * native checkbox with its label wrapping it, so the whole row is the 44px
- * touch target.
+ * Zero-or-more members an envelope is *for* (ADR-034's recipients): only the
+ * chosen ones are listed, each with an X that takes it off the list, and a
+ * member picker below adds one more (#768). A checklist of the whole roster
+ * put an unbounded list inside a dialog (ADR-032) and pushed the dialog's
+ * button far below a real roster; an envelope is for one or two people, and
+ * the roster stays in the picker, where every member field keeps it.
  *
  * Active members only, as every member-choosing control here - though one
- * already saved as a recipient stays listed. The set is small and
- * rarely-changed, so no retired-row handling as in AccountPicker.
+ * already saved as a recipient stays listed until she removes it.
  */
 export function MemberMultiPicker({
   label,
@@ -138,47 +140,71 @@ export function MemberMultiPicker({
   members: Member[]
   value: number[]
   onChange: (memberIds: number[]) => void
-  /** Shown in place of the list when the fund has no member this control could
-   * offer (never members.length === 0 alone - a saved recipient who has since
-   * gone inactive still counts as something to show). */
+  /** Shown in place of the picker when the fund has no member this control
+   * could offer and none is chosen. */
   emptyMessage: string
   disabled?: boolean
 }) {
   const groupId = useId()
-  const selectable = members.filter((member) => member.inactive_on === null || value.includes(member.id))
-
-  function toggle(memberId: number) {
-    if (value.includes(memberId)) {
-      onChange(value.filter((id) => id !== memberId))
-    } else {
-      onChange([...value, memberId])
-    }
-  }
+  const pickerId = useId()
+  const text = copy.incidentals.open
+  const chosen = value.map((id) => members.find((member) => member.id === id)).filter((member): member is Member => member !== undefined)
+  const addable = members.filter((member) => member.inactive_on === null && !value.includes(member.id))
 
   return (
-    <fieldset className="flex flex-col gap-1.5">
+    // min-w-0: a fieldset defaults to min-inline-size: min-content, so one
+    // long name would push the list and its X past the dialog's edge.
+    <fieldset className="flex min-w-0 flex-col gap-1.5">
       <legend id={groupId} className="px-0 text-sm font-medium">
         {label}
       </legend>
-      {selectable.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-      ) : (
-        <ul aria-labelledby={groupId} className="flex flex-col gap-1 rounded-lg ring-1 ring-foreground/10">
-          {selectable.map((member) => (
-            <li key={member.id}>
-              <label className="flex min-h-11 w-full items-center gap-2 px-3 py-2 select-none">
-                <input
-                  type="checkbox"
-                  className="size-4 shrink-0"
-                  checked={value.includes(member.id)}
-                  onChange={() => toggle(member.id)}
-                  disabled={disabled}
-                />
-                <span className="truncate">{member.name}</span>
-              </label>
+      {chosen.length > 0 && (
+        <ul aria-labelledby={groupId} className="flex flex-col rounded-lg ring-1 ring-foreground/10">
+          {chosen.map((member) => (
+            <li
+              key={member.id}
+              className="flex min-h-11 items-center justify-between gap-2 border-t border-foreground/10 pl-3 first:border-t-0"
+            >
+              <span className="min-w-0 truncate">{member.name}</span>
+              <button
+                type="button"
+                aria-label={text.recipientRemoveAria(member.name)}
+                disabled={disabled}
+                onClick={() => onChange(value.filter((id) => id !== member.id))}
+                className="flex size-11 shrink-0 items-center justify-center text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
             </li>
           ))}
         </ul>
+      )}
+      {addable.length > 0 ? (
+        // Always empty: picking a member adds it to the list above and the
+        // picker is ready for the next one.
+        <Select
+          value=""
+          onValueChange={(next) => {
+            if (next !== '') onChange([...value, Number(next)])
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger id={pickerId} aria-label={`${label} ${text.recipientsAdd}`}>
+            <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+              <Plus aria-hidden="true" className="size-4 shrink-0" />
+              <span className="truncate">{text.recipientsAdd}</span>
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {addable.map((member) => (
+              <SelectItem key={member.id} value={String(member.id)}>
+                {member.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        chosen.length === 0 && <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       )}
     </fieldset>
   )

@@ -1080,7 +1080,7 @@ describe('Incidentals', () => {
     await userEvent.click(screen.getByRole('button', { name: text.actions.rename }))
     const dialog = await screen.findByRole('dialog', { name: text.rename.heading })
     await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.minimumLabel), '25000')
-    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Budi' }))
+    await chooseOption(`${copy.incidentals.open.recipientsLabel} ${copy.incidentals.open.recipientsAdd}`, 'Budi', within(dialog))
     await userEvent.click(within(dialog).getByRole('button', { name: text.rename.save }))
 
     await waitFor(() => expect(patched).not.toBeNull())

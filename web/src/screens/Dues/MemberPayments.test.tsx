@@ -125,7 +125,7 @@ describe('MemberPayments', () => {
     renderPayments()
 
     await userEvent.click(await screen.findByRole('button', { name: text.reverse }))
-    const dialog = await screen.findByRole('dialog', { name: text.reverse })
+    const dialog = await screen.findByRole('dialog', { name: copy.history.transactions.reverse })
     // The payment it reverses (ADR-046): the month, the date and the amount.
     const summary = within(dialog).getAllByRole('definition')[0].closest('dl')!
     expect(summary).toHaveTextContent(`${copy.transactionDetail.periodLabel}Januari 2026`)
@@ -137,7 +137,7 @@ describe('MemberPayments', () => {
     fireEvent.pointerDown(overlay)
     fireEvent.pointerUp(overlay)
     fireEvent.click(overlay)
-    expect(screen.getByRole('dialog', { name: text.reverse })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: copy.history.transactions.reverse })).toBeInTheDocument()
 
     await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import { copy } from '@/copy/id'
+import { formatIsoDate } from '@/lib/dates'
 import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
 import type { RestoreInspectResult } from '@/lib/restore'
 
@@ -76,8 +77,8 @@ describe('RestoreDialog', () => {
     await chooseFile(fetchMock)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/restore/inspect', expect.objectContaining({ method: 'POST' })))
-    expect(await screen.findByText(confirmText.dateLabel('2026-09-28'))).toBeInTheDocument()
-    expect(screen.getByText(confirmText.fundKeptWithCutoff('Kas RT 05', 12, '2026-09-26'))).toBeInTheDocument()
+    expect(await screen.findByText(formatIsoDate('2026-09-28'))).toBeInTheDocument()
+    expect(screen.getByText(confirmText.fundKeptWithCutoff('Kas RT 05', 12, formatIsoDate('2026-09-26')))).toBeInTheDocument()
     expect(screen.getByText(confirmText.fundRemoved('Kas Lama'))).toBeInTheDocument()
     expect(screen.getByText(confirmText.fundAdded('Kas Baru'))).toBeInTheDocument()
   })
@@ -148,7 +149,7 @@ describe('RestoreDialog', () => {
         expect.objectContaining({ method: 'POST' }),
       ),
     )
-    expect(await screen.findByText(confirmText.dateLabel('2026-09-28'))).toBeInTheDocument()
+    expect(await screen.findByText(formatIsoDate('2026-09-28'))).toBeInTheDocument()
   })
 
   // A stored backup can be pruned by retention between the list loading and

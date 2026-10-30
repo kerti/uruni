@@ -170,7 +170,8 @@ test.describe('amplop in depth', () => {
     await minimum.fill('')
     await minimum.fill('60000')
     // Warga Satu is who the amplop is for: no longer expected to give.
-    await dialog.getByRole('checkbox', { name: 'Warga Satu' }).check()
+    await chooseOption(page, dialog.getByRole('combobox', { name: `${t.open.recipientsLabel} ${t.open.recipientsAdd}` }), 'Warga Satu')
+    await expect(dialog.getByRole('button', { name: t.open.recipientRemoveAria('Warga Satu') })).toBeVisible()
     await dialog.getByRole('button', { name: t.rename.save }).click()
     await expect(page.getByText(t.rename.success)).toBeVisible()
 

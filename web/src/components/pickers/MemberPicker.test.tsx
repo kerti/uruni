@@ -85,29 +85,40 @@ describe('OptionalMemberPicker (ADR-034, #211)', () => {
 })
 
 describe("MemberMultiPicker (ADR-034, #211: an envelope's recipients)", () => {
-  it('lists every active member as a checkbox, none checked when value is empty', () => {
+  const addName = `Untuk siapa? ${copy.incidentals.open.recipientsAdd}`
+
+  it('lists only the chosen members, and offers the other active ones in a picker (#768)', async () => {
     render(
-      <MemberMultiPicker label="Untuk siapa?" members={members} value={[]} onChange={vi.fn()} emptyMessage="Belum ada anggota aktif." />,
+      <MemberMultiPicker label="Untuk siapa?" members={members} value={[1]} onChange={vi.fn()} emptyMessage="Belum ada anggota aktif." />,
     )
 
-    expect(screen.getByRole('checkbox', { name: 'Jane' })).not.toBeChecked()
-    expect(screen.getByRole('checkbox', { name: 'Sri' })).not.toBeChecked()
-    expect(screen.queryByRole('checkbox', { name: 'John' })).not.toBeInTheDocument()
+    expect(screen.getByRole('list')).toHaveTextContent('Jane')
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    // Neither the chosen one nor an inactive one is offered again.
+    expect(await selectOptionNames(addName)).toEqual(['Sri'])
   })
 
-  it('adds a member id on check, and removes it on uncheck', async () => {
+  it('adds a member from the picker, and removes one with its X', async () => {
     const onChange = vi.fn()
     render(
       <MemberMultiPicker label="Untuk siapa?" members={members} value={[1]} onChange={onChange} emptyMessage="Belum ada anggota aktif." />,
     )
 
-    expect(screen.getByRole('checkbox', { name: 'Jane' })).toBeChecked()
-
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Sri' }))
+    await chooseOption(addName, 'Sri')
     expect(onChange).toHaveBeenCalledWith([1, 3])
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Jane' }))
+    await userEvent.click(screen.getByRole('button', { name: copy.incidentals.open.recipientRemoveAria('Jane') }))
     expect(onChange).toHaveBeenCalledWith([])
+  })
+
+  it('shows no list and no empty message when nothing is chosen yet, only the picker', () => {
+    render(
+      <MemberMultiPicker label="Untuk siapa?" members={members} value={[]} onChange={vi.fn()} emptyMessage="Belum ada anggota aktif." />,
+    )
+
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.queryByText('Belum ada anggota aktif.')).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: addName })).toBeInTheDocument()
   })
 
   it('shows the empty message when the fund has no active member to offer', () => {

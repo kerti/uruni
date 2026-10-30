@@ -221,7 +221,13 @@ export default function ReceiptDialog({
 
               {replacingId === id ? (
                 <div className="flex flex-col gap-2">
-                  <ReceiptPicker id={`receipt-replace-${id}`} value={replacementFile} onChange={setReplacementFile} disabled={busy} />
+                  <ReceiptPicker
+                    id={`receipt-replace-${id}`}
+                    value={replacementFile}
+                    onChange={setReplacementFile}
+                    disabled={busy}
+                    asAction
+                  />
                   {/* The footer order every dialog uses (#742): the way back on
                       the left, the action on the right, half the row each. */}
                   <div className="grid grid-cols-2 gap-2">
@@ -264,7 +270,7 @@ export default function ReceiptDialog({
               never shows two open file pickers at once. */}
           {replacingId === null && (
             <div className="flex flex-col gap-2">
-              <ReceiptPicker id="receipt-add" value={newFile} onChange={setNewFile} disabled={busy} />
+              <ReceiptPicker id="receipt-add" value={newFile} onChange={setNewFile} disabled={busy} asAction />
               {newFile && (
                 <Button type="button" size="lg" disabled={busy} onClick={handleAdd}>
                   {busy ? text.uploading : text.addFromRow}

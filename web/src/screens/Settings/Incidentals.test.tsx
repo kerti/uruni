@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { copy } from '@/copy/id'
+import { chooseOption } from '@/test/select'
 import type { Incidental } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 import { cardName } from '@/test/card'
@@ -193,7 +194,8 @@ describe('Settings incidentals', () => {
     const dialog = screen.getByRole('dialog', { name: copy.incidentals.open.heading })
     await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.occasionLabel), 'Kerja bakti')
     await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.minimumLabel), '25000')
-    await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Budi' }))
+    await within(dialog).findByRole('combobox', { name: `${copy.incidentals.open.recipientsLabel} ${copy.incidentals.open.recipientsAdd}` })
+    await chooseOption(`${copy.incidentals.open.recipientsLabel} ${copy.incidentals.open.recipientsAdd}`, 'Budi', within(dialog))
     await userEvent.click(within(dialog).getByRole('button', { name: copy.incidentals.open.submit }))
 
     await waitFor(() => expect(calls).toHaveLength(1))

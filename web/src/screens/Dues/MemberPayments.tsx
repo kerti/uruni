@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { Undo2 } from 'lucide-react'
 
 import ReversalDialog from '@/components/ReversalDialog'
-import { duesReversalCopy, sharedErrorText } from '@/components/reversalCopy'
+import { sharedErrorText } from '@/components/reversalCopy'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
@@ -145,7 +145,6 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
         onClose={reversal.close}
         onReversed={handleReversed}
         refresh={() => run(loadRows, { silent: true })}
-        words={duesReversalCopy}
         errorText={sharedErrorText}
       />
     </>
