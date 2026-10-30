@@ -72,27 +72,25 @@ test.describe('dues status', () => {
 
     // Each amount arrives pre-filled with the period's rate and is edited down:
     // paying part of a month is a real path, and it leaves the reversal spec a
-    // partial status to read. Derived from the copy (ADR-014): the label is
-    // "<prefix><month>", so the prefix with an empty month is what every
-    // period's amount field starts with.
-    const amountPrefix = copy.dues.payment.amountLabel('')
-    const amounts = page.getByLabel(new RegExp(`^${amountPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
-
+    // partial status to read. The field opens from the ticked row's edit
+    // button (#741), named "<editAmount><month>" then the visible amount.
+    //
     // Emptied before it is filled, never filled straight over the pre-filled
     // rate: this field renders "Rp50.000" when blurred and the bare digits when
     // focused (AmountInput), and one fill() over that lands as the two runs of
     // digits concatenated - 50000 then 12345 posted as Rp5.000.012.345.
-    // Clearing first matches the empty state golden-path.spec.ts fills.
-    // nth below: each amount field is addressed by its period's position.
+    const editButtons = page.getByRole('button', { name: new RegExp(`^${copy.dues.payment.editAmount('')}`) })
     for (const [index, value] of [
       [0, '20000'],
       [1, '30000'],
     ] as const) {
-      await amounts.nth(index).fill('')
-      await amounts.nth(index).fill(value)
+      await editButtons.nth(index).click()
+      const field = page.getByLabel(new RegExp(`^${copy.dues.payment.amountLabel('')}`)).nth(index)
+      await field.fill('')
+      await field.fill(value)
       // Still focused, so the field shows the bare digits it holds - proof the
       // value is what this spec asked for, not a concatenation.
-      await expect(amounts.nth(index)).toHaveValue(value)
+      await expect(field).toHaveValue(value)
     }
 
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()

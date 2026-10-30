@@ -856,12 +856,18 @@ export const copy = {
       // Paying ahead: each tap adds the next month to the list, named outright
       // so she knows which month she is adding.
       addMonth: (period: string) => `Tambah ${period}`,
-      // Shown on a period paid in part, so the pre-filled amount is the sisa
-      // (the rest), not the whole month's rate.
-      remainingLabel: 'Sisa',
-      // One amount field per period, so each label names its month, as
+      // The hidden label of the on-demand amount field under a ticked month
+      // (paying part of it), so it names its month, as
       // reconciliation.actualLabel does per location.
-      amountLabel: (period: string) => `Jumlah — ${period}`,
+      amountLabel: (period: string) => `Jumlah ${period}`,
+      // Spoken name of the button on a ticked month's amount that opens that
+      // field; the visible amount follows it in the button's name.
+      editAmount: (period: string) => `Ubah jumlah ${period}`,
+      // Ticks every owed month before the current one (the tunggakan).
+      selectAllArrears: 'Pilih semua tunggakan',
+      // A nudge, never a block: a later month is ticked while an older owed one
+      // is not. Paying for a chosen month stays allowed; this only says so.
+      skippedArrears: (months: number) => `Masih ada ${months} bulan tunggakan yang lebih lama belum dipilih.`,
       totalLabel: 'Total dibayar',
       locationLabel: 'Lokasi',
       dateLabel: 'Tanggal',

@@ -88,7 +88,16 @@ function SelectContent({ className, children, position = 'popper', ...props }: R
   )
 }
 
-function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
+function SelectItem({
+  className,
+  children,
+  aside,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+  /** Muted text on the right of the option, outside ItemText, so the trigger
+   * shows only the option's own label. */
+  aside?: React.ReactNode
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -101,6 +110,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
       {...props}
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {aside && <span className="ml-auto pl-2 text-sm text-muted-foreground">{aside}</span>}
       <span className="absolute right-3 flex items-center">
         <SelectPrimitive.ItemIndicator>
           <Check aria-hidden="true" className="size-4 text-primary" />

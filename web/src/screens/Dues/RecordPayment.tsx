@@ -1,3 +1,4 @@
+import { PenLine } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
@@ -105,6 +106,8 @@ export default function RecordDuesPayment({
   // numbers and editable per period; `selected` is which this submit carries.
   const [amounts, setAmounts] = useState<Record<string, number>>({})
   const [selected, setSelected] = useState<string[]>([])
+  // Which ticked months have their amount editor open; unticking closes it.
+  const [editing, setEditing] = useState<string[]>([])
   // How many months past the current one the period list reaches - 0 is "what
   // is owed up to now", each tap of the add-month button one more.
   const [monthsAhead, setMonthsAhead] = useState(0)
@@ -196,6 +199,18 @@ export default function RecordDuesPayment({
 
   function togglePeriod(period: string, checked: boolean) {
     setSelected((current) => (checked ? [...current, period] : current.filter((p) => p !== period)))
+    if (!checked) setEditing((current) => current.filter((p) => p !== period))
+  }
+
+  // The tunggakan: owed periods strictly before the current month (CONTEXT.md,
+  // ADR-032). Added to whatever is ticked, never the current or a later month.
+  const arrearsPeriods = periods.filter((p) => p.period < currentPeriod()).map((p) => p.period)
+  // Owed months passed over: older than something ticked, not ticked
+  // themselves. Oldest first is the usual way to collect, so the form says so
+  // quietly - it never blocks Simpan.
+  const skippedArrears = arrearsPeriods.filter((p) => !selected.includes(p) && selected.some((s) => s > p))
+  function selectAllArrears() {
+    setSelected((current) => [...current, ...arrearsPeriods.filter((p) => !current.includes(p))])
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -264,6 +279,7 @@ export default function RecordDuesPayment({
             // with the old member's window.
             tickThrough.current = null
             setSelected([])
+            setEditing([])
             setAmounts({})
             setMonthsAhead(0)
             setMemberId(Number(next))
@@ -277,7 +293,11 @@ export default function RecordDuesPayment({
           </SelectTrigger>
           <SelectContent>
             {selectableMembers.map((member) => (
-              <SelectItem key={member.id} value={String(member.id)}>
+              <SelectItem
+                key={member.id}
+                value={String(member.id)}
+                aside={member.arrears_months > 0 ? copy.members.roster.arrearsBadge(member.arrears_months) : undefined}
+              >
                 {member.name}
               </SelectItem>
             ))}
@@ -303,44 +323,87 @@ export default function RecordDuesPayment({
           (periods.length === 0 ? (
             <p className="text-muted-foreground">{text.noOutstanding}</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {periods.map((period) => {
-                const checked = selected.includes(period.period)
-                return (
-                  <li
-                    key={period.period}
-                    className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                  >
-                    <label className="flex items-center gap-2 font-medium">
-                      <input
-                        type="checkbox"
-                        className="size-4 rounded border-input"
-                        checked={checked}
-                        onChange={(event) => togglePeriod(period.period, event.target.checked)}
-                        disabled={submitting}
-                      />
-                      {formatPeriod(period.period)}
-                    </label>
-
-                    {period.status === 'partial' && (
-                      <p className="tabular text-sm text-muted-foreground">
-                        {copy.dues.paidLabel}: {formatIDR(period.paid_amount)} {'\u00b7'} {text.remainingLabel}:{' '}
-                        {formatIDR(remainingOf(period))}
-                      </p>
-                    )}
-
-                    <AmountInput
-                      id={`dues-payment-amount-${period.period}`}
-                      label={text.amountLabel(formatPeriod(period.period))}
-                      value={amounts[period.period] ?? 0}
-                      onChange={(amount) => setAmounts((current) => ({ ...current, [period.period]: amount }))}
-                      disabled={submitting || !checked}
-                    />
-                  </li>
-                )
-              })}
-            </ul>
+            <div className="flex flex-col gap-1">
+              {arrearsPeriods.length > 0 && (
+                <Button type="button" variant="link" size="sm" className="self-start px-0" onClick={selectAllArrears} disabled={submitting}>
+                  {text.selectAllArrears}
+                </Button>
+              )}
+              <ul className="flex flex-col divide-y divide-foreground/10 rounded-lg bg-card shadow-card ring-1 ring-foreground/10">
+                {periods.map((period) => {
+                  const checked = selected.includes(period.period)
+                  const name = formatPeriod(period.period)
+                  const open = checked && editing.includes(period.period)
+                  return (
+                    <li key={period.period} className="flex flex-col px-4">
+                      <div className="flex min-h-11 items-center gap-2">
+                        <label className="flex min-h-11 flex-1 items-center gap-2 font-medium">
+                          <input
+                            type="checkbox"
+                            className="size-4 rounded border-input"
+                            checked={checked}
+                            onChange={(event) => togglePeriod(period.period, event.target.checked)}
+                            disabled={submitting}
+                            // Named by the month alone; a partial month's paid/sisa
+                            // line is its description, not part of its name.
+                            aria-labelledby={`dues-period-${period.period}`}
+                            aria-describedby={period.status === 'partial' ? `dues-period-${period.period}-partial` : undefined}
+                          />
+                          <span className="flex flex-col">
+                            <span id={`dues-period-${period.period}`}>{name}</span>
+                            {period.status === 'partial' && (
+                              <span
+                                id={`dues-period-${period.period}-partial`}
+                                className="tabular text-sm font-normal text-muted-foreground"
+                              >
+                                {/* The amount on the right is already the sisa. */}
+                                {copy.dues.paidLabel}: {formatIDR(period.paid_amount)}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                        {checked ? (
+                          <button
+                            type="button"
+                            className="tabular flex min-h-11 items-center gap-1.5 text-foreground"
+                            onClick={() =>
+                              setEditing((current) => (current.includes(period.period) ? current : [...current, period.period]))
+                            }
+                            disabled={submitting}
+                          >
+                            <span className="sr-only">{text.editAmount(name)}</span> {formatIDR(amounts[period.period] ?? 0)}
+                            <PenLine aria-hidden="true" className="size-4" />
+                          </button>
+                        ) : (
+                          <span className="tabular text-muted-foreground">{formatIDR(amounts[period.period] ?? 0)}</span>
+                        )}
+                      </div>
+                      {open && (
+                        <div className="pb-3">
+                          <AmountInput
+                            id={`dues-payment-amount-${period.period}`}
+                            label={text.amountLabel(name)}
+                            labelHidden
+                            autoFocus
+                            selectOnFocus
+                            value={amounts[period.period] ?? 0}
+                            onChange={(amount) => setAmounts((current) => ({ ...current, [period.period]: amount }))}
+                            disabled={submitting}
+                          />
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           ))}
+
+        {outstandingState.status === 'success' && skippedArrears.length > 0 && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {text.skippedArrears(skippedArrears.length)}
+          </p>
+        )}
 
         {/* Paying ahead (#357): offered even when nothing is owed yet,
             because a square member is exactly the one who pays ahead. */}
