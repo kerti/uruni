@@ -9,7 +9,7 @@ import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { useToast } from '@/components/toast/useToast'
 import { copy } from '@/copy/id'
-import { formatIsoDate } from '@/lib/dates'
+import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { noteForDisplay } from '@/lib/transactions'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -32,6 +32,7 @@ export default function TransactionList({
   purposeNames,
   emptyMessage,
   onRefresh,
+  monthHeaders = false,
 }: {
   transactions: Transaction[]
   /** transaction.purpose_id -> its name - a row carries only the id, and
@@ -48,6 +49,10 @@ export default function TransactionList({
    * "done" lines, and holds no list state, so the caller only refetches. Omit it
    * and the rows are read-only. */
   onRefresh?: () => Promise<void> | void
+  /** Splits the rows under a heading per month (#751), for a list that runs
+   * across months: Riwayat with no month filter. The rows arrive newest
+   * first, so each month is one run. */
+  monthHeaders?: boolean
 }) {
   // The row whose photo dialog is open, by id rather than by object, so the
   // dialog reads fresh receipt_ids off the current `transactions` prop the
@@ -130,167 +135,174 @@ export default function TransactionList({
   // list's own rows never mention (an envelope's activity knows only itself).
   const dialogNames = new Map([...(selectable ?? []).map((p): [number, string] => [p.id, p.name]), ...purposeNames])
 
+  const groups = monthHeaders ? groupByMonth(transactions) : [{ month: null, rows: transactions }]
+
   return (
     <>
-      <ul className="flex flex-col gap-2">
-        {transactions.map((transaction) => {
-          const note = noteForDisplay(transaction)
-          const kind = transferKind(transaction)
-          const receiptCount = transaction.receipt_ids?.length ?? 0
-          return (
-            <li
-              key={transaction.id}
-              className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-            >
-              {/* The whole card opens the entry in full (#359, #739), and it is
-                the row's only control: every action (Perbaiki pos, Nota,
-                Batalkan) lives in that detail, because controls nested in a
-                dense card were easy to mis-tap. A full-card button
-                *underneath* the content; the content above ignores pointer
-                events, so a tap anywhere on the card falls through to it. The
-                receipt count rides in the accessible name, since the glyph
-                beside the amount is hidden from screen readers. */}
-              <button
-                type="button"
-                aria-label={
-                  copy.transactionDetail.openAria(
-                    transferHeadline(transaction) ?? purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
-                    formatIDR(transaction.amount),
-                    formatIsoDate(transaction.occurred_on),
-                  ) + (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
-                }
-                onClick={() => entry.open(String(transaction.id))}
-                className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
-              />
-              <div className="pointer-events-none relative flex items-start justify-between gap-3">
-                <span className="flex min-w-0 items-start gap-2">
-                  <TransactionGlyph transaction={transaction} />
-                  <span className="flex min-w-0 flex-col">
-                    {/* The purpose tag is what an entry *was*; a row the app
-                      created explains itself on the next line (#257 - a
-                      label, built from the row's own facts, never stored
-                      text); her own note, when she typed one, comes after
-                      that (for a settlement, the settled claim's own note -
-                      see noteForDisplay). Date is always last, so the row
-                      still answers "what is this?" at a glance. */}
-                    {/* A transfer is one row for its two legs (#738), and every
-                      kind of it reads the same: neutral, its glyph its
-                      label's, its kind word where a pos would lead (the leg's
-                      pos is not the movement's), from -> to under it. */}
-                    {kind !== null ? (
-                      <span className="truncate">{kind}</span>
-                    ) : (
-                      <PurposeLine transaction={transaction} purposeNames={purposeNames} />
-                    )}
-                    <TransactionRowLabel transaction={transaction} bare={kind !== null} kindShown={kind !== null} />
-                    {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
-                    <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
-                    {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
-                  </span>
-                </span>
-                {/* Amount first and alone on its line, so every row's figure
-                  sits flush right whether or not it carries a photo; the
-                  camera and count stack underneath as read-only status
-                  (#154, #739), shown only once a nota exists. Adding one is
-                  the detail's Nota button. */}
-                <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
-                  {receiptCount > 0 && (
-                    <span aria-hidden="true" className="flex items-center gap-1 text-primary">
-                      <Camera className="size-4" />
-                      <span className="tabular text-sm font-medium">{receiptCount}</span>
+      {groups.map((group) => (
+        <section key={group.month ?? 'all'} className="flex flex-col gap-2">
+          {group.month !== null && <h3 className="pt-2 text-sm font-semibold text-muted-foreground">{formatPeriod(group.month)}</h3>}
+          <ul className="flex flex-col gap-2">
+            {group.rows.map((transaction) => {
+              const note = noteForDisplay(transaction)
+              const kind = transferKind(transaction)
+              const receiptCount = transaction.receipt_ids?.length ?? 0
+              return (
+                <li
+                  key={transaction.id}
+                  className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                >
+                  {/* The whole card opens the entry in full (#359, #739), and it is
+                    the row's only control: every action (Perbaiki pos, Nota,
+                    Batalkan) lives in that detail, because controls nested in a
+                    dense card were easy to mis-tap. A full-card button
+                    *underneath* the content; the content above ignores pointer
+                    events, so a tap anywhere on the card falls through to it. The
+                    receipt count rides in the accessible name, since the glyph
+                    beside the amount is hidden from screen readers. */}
+                  <button
+                    type="button"
+                    aria-label={
+                      copy.transactionDetail.openAria(
+                        transferHeadline(transaction) ?? purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
+                        formatIDR(transaction.amount),
+                        formatIsoDate(transaction.occurred_on),
+                      ) + (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
+                    }
+                    onClick={() => entry.open(String(transaction.id))}
+                    className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+                  />
+                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 items-start gap-2">
+                      <TransactionGlyph transaction={transaction} />
+                      <span className="flex min-w-0 flex-col">
+                        {/* The purpose tag is what an entry *was*; a row the app
+                          created explains itself on the next line (#257 - a
+                          label, built from the row's own facts, never stored
+                          text); her own note, when she typed one, comes after
+                          that (for a settlement, the settled claim's own note -
+                          see noteForDisplay). Date is always last, so the row
+                          still answers "what is this?" at a glance. */}
+                        {/* A transfer is one row for its two legs (#738), and every
+                          kind of it reads the same: neutral, its glyph its
+                          label's, its kind word where a pos would lead (the leg's
+                          pos is not the movement's), from -> to under it. */}
+                        {kind !== null ? (
+                          <span className="truncate">{kind}</span>
+                        ) : (
+                          <PurposeLine transaction={transaction} purposeNames={purposeNames} />
+                        )}
+                        <TransactionRowLabel transaction={transaction} bare={kind !== null} kindShown={kind !== null} />
+                        {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
+                        <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
+                        {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
+                      </span>
                     </span>
-                  )}
-                </span>
-              </div>
-            </li>
-          )
-        })}
-        <TransactionDetailDialog
-          transaction={detailTransaction}
-          purposeNames={purposeNames}
-          onClose={entry.close}
-          onReverse={
-            onRefresh
-              ? (transaction) => {
-                  handoff.current = { kind: 'reverse', transaction }
-                  entry.close()
-                }
-              : undefined
+                    {/* Amount first and alone on its line, so every row's figure
+                      sits flush right whether or not it carries a photo; the
+                      camera and count stack underneath as read-only status
+                      (#154, #739), shown only once a nota exists. Adding one is
+                      the detail's Nota button. */}
+                    <span className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
+                      {receiptCount > 0 && (
+                        <span aria-hidden="true" className="flex items-center gap-1 text-primary">
+                          <Camera className="size-4" />
+                          <span className="tabular text-sm font-medium">{receiptCount}</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+      <TransactionDetailDialog
+        transaction={detailTransaction}
+        purposeNames={purposeNames}
+        onClose={entry.close}
+        onReverse={
+          onRefresh
+            ? (transaction) => {
+                handoff.current = { kind: 'reverse', transaction }
+                entry.close()
+              }
+            : undefined
+        }
+        onCorrectPurpose={
+          onRefresh
+            ? (transaction) => {
+                handoff.current = { kind: 'correct', transaction }
+                entry.close()
+              }
+            : undefined
+        }
+        onViewReceipts={
+          onRefresh
+            ? (transaction) => {
+                handoff.current = { kind: 'receipts', transaction }
+                entry.close()
+              }
+            : undefined
+        }
+        onReceiptsChanged={onRefresh}
+        onCloseAutoFocus={(event) => {
+          const next = handoff.current
+          if (next === null) return
+          handoff.current = null
+          event.preventDefault()
+          if (next.kind === 'correct') {
+            correction.open(`purpose-correction:${next.transaction.id}`)
+          } else if (next.kind === 'receipts') {
+            setReceiptsForId(next.transaction.id)
+          } else {
+            reversal.open(`reverse:${next.transaction.id}`)
           }
-          onCorrectPurpose={
-            onRefresh
-              ? (transaction) => {
-                  handoff.current = { kind: 'correct', transaction }
-                  entry.close()
-                }
-              : undefined
-          }
-          onViewReceipts={
-            onRefresh
-              ? (transaction) => {
-                  handoff.current = { kind: 'receipts', transaction }
-                  entry.close()
-                }
-              : undefined
-          }
-          onReceiptsChanged={onRefresh}
-          onCloseAutoFocus={(event) => {
-            const next = handoff.current
-            if (next === null) return
-            handoff.current = null
-            event.preventDefault()
-            if (next.kind === 'correct') {
-              correction.open(`purpose-correction:${next.transaction.id}`)
-            } else if (next.kind === 'receipts') {
-              setReceiptsForId(next.transaction.id)
-            } else {
-              reversal.open(`reverse:${next.transaction.id}`)
-            }
+        }}
+      />
+      {onRefresh && (
+        <ReceiptDialog
+          kind="transactions"
+          parentId={receiptsForTransaction?.id ?? null}
+          receiptIds={receiptsForTransaction?.receipt_ids ?? []}
+          open={receiptsForTransaction !== null}
+          onClose={() => setReceiptsForId(null)}
+          onChanged={onRefresh}
+        />
+      )}
+      {onRefresh && (
+        <ReversalDialog
+          transaction={reversing}
+          purposeName={reversing ? purposeNames.get(reversing.effective_purpose_id ?? reversing.purpose_id) : undefined}
+          open={reversing !== null}
+          onClose={reversal.close}
+          onReversed={() => {
+            reversal.close()
+            toast.success(reverseText.reverseSuccess)
+            void onRefresh()
+          }}
+          refresh={onRefresh}
+        />
+      )}
+      {onRefresh && (
+        <CorrectPurposeDialog
+          transaction={correcting}
+          purposes={selectable ?? []}
+          purposeNames={dialogNames}
+          open={correcting !== null}
+          onClose={correction.close}
+          onCorrected={() => {
+            correction.close()
+            toast.success(copy.purposeCorrection.success)
+            void onRefresh()
+          }}
+          refresh={async () => {
+            await onRefresh()
           }}
         />
-        {onRefresh && (
-          <ReceiptDialog
-            kind="transactions"
-            parentId={receiptsForTransaction?.id ?? null}
-            receiptIds={receiptsForTransaction?.receipt_ids ?? []}
-            open={receiptsForTransaction !== null}
-            onClose={() => setReceiptsForId(null)}
-            onChanged={onRefresh}
-          />
-        )}
-        {onRefresh && (
-          <ReversalDialog
-            transaction={reversing}
-            purposeName={reversing ? purposeNames.get(reversing.effective_purpose_id ?? reversing.purpose_id) : undefined}
-            open={reversing !== null}
-            onClose={reversal.close}
-            onReversed={() => {
-              reversal.close()
-              toast.success(reverseText.reverseSuccess)
-              void onRefresh()
-            }}
-            refresh={onRefresh}
-          />
-        )}
-        {onRefresh && (
-          <CorrectPurposeDialog
-            transaction={correcting}
-            purposes={selectable ?? []}
-            purposeNames={dialogNames}
-            open={correcting !== null}
-            onClose={correction.close}
-            onCorrected={() => {
-              correction.close()
-              toast.success(copy.purposeCorrection.success)
-              void onRefresh()
-            }}
-            refresh={async () => {
-              await onRefresh()
-            }}
-          />
-        )}
-      </ul>
+      )}
     </>
   )
 }
@@ -322,4 +334,16 @@ function PurposeLine({ transaction, purposeNames }: { transaction: Transaction; 
       )}
     </span>
   )
+}
+
+/** Consecutive rows by their month ("YYYY-MM"), in the order given. */
+function groupByMonth(transactions: Transaction[]): { month: string | null; rows: Transaction[] }[] {
+  const groups: { month: string | null; rows: Transaction[] }[] = []
+  for (const transaction of transactions) {
+    const month = transaction.occurred_on.slice(0, 7)
+    const last = groups[groups.length - 1]
+    if (last && last.month === month) last.rows.push(transaction)
+    else groups.push({ month, rows: [transaction] })
+  }
+  return groups
 }

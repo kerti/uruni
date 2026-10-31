@@ -94,6 +94,36 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
   )
 }
 
+/** GET /api/transactions/summary's body (#751): the public report's walk
+ * for one month under Riwayat's filters (ADR-038). `full` says the balances
+ * apply - the whole fund or one pos; under a member or direction filter only
+ * `in` and `out` mean anything, and the dates are null. Every figure is the
+ * server's: nothing here is summed from rows. */
+export interface TransactionSummary {
+  full: boolean
+  start_on: string | null
+  end_on: string | null
+  start: number
+  openings: number
+  in: number
+  out: number
+  adjustments: number
+  moved: number
+  end: number
+}
+
+/** GET /api/transactions/summary - the month summary for Riwayat's filters;
+ * `month` is required. */
+export function getTransactionSummary(
+  input: Pick<ListTransactionsInput, 'purposeId' | 'memberId' | 'direction'> & { month: string },
+): Promise<TransactionSummary> {
+  const params = new URLSearchParams({ month: input.month })
+  if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
+  if (input.purposeId !== undefined) params.set('purpose_id', String(input.purposeId))
+  if (input.direction) params.set('direction', input.direction)
+  return apiFetch<TransactionSummary>(`/api/transactions/summary?${params.toString()}`)
+}
+
 /**
  * The text a row's note line shows. A settlement's (kind='reimbursement')
  * Note is always nil server-side - nothing generated is ever stored - so its

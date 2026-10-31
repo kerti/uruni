@@ -153,6 +153,27 @@ test.describe('report and backup', () => {
     await expect(txn(page, 'Sumbangan bulan lalu')).toHaveCount(1)
   })
 
+  test("Riwayat's month summary reads the report's walk, for the fund and for one pos (#751)", async ({ page }) => {
+    await logIn(page)
+    const main = await byName(page.context().request, '/api/purposes', 'purposes', 'Kas Utama')
+    // Each line as label and figure, in order.
+    const pairs = (list: Locator) =>
+      list
+        .locator(':scope > div')
+        .evaluateAll((lines) => lines.map((line) => [line.querySelector('dt')?.textContent, line.querySelector('dd')?.textContent]))
+
+    for (const filter of ['', `&purpose=${main}`]) {
+      await page.goto(`${reportPath}?month=${prevMonth}${filter}`)
+      const report = await pairs(page.locator('dl.totals'))
+      expect(report.length).toBeGreaterThanOrEqual(4)
+
+      await page.goto(`/history/transactions?month=${prevMonth}${filter}`)
+      const summary = page.getByRole('main').locator('dl').first()
+      await expect(summary).toContainText(copy.history.transactions.summaryIn)
+      expect(await pairs(summary)).toEqual(report)
+    }
+  })
+
   test('filters this month by pos, anggota and status iuran', async ({ page }) => {
     await page.goto(`${reportPath}?month=${thisMonth}`)
     const transactions = page.locator('#transactions')

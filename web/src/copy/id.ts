@@ -73,6 +73,14 @@ export const copy = {
       filterApply: 'Tampilkan',
       filterReset: 'Hapus semua filter',
       monthFilterLabel: (month: string) => `Bulan: ${month}`,
+      // The month summary over a month-filtered list (#751), word for word the
+      // public report's walk (internal/report): date is a long date.
+      summaryBalance: (date: string) => `Saldo ${date}`,
+      summaryOpenings: 'Saldo awal',
+      summaryIn: 'Total masuk',
+      summaryOut: 'Total keluar',
+      summaryAdjustments: 'Penyesuaian',
+      summaryMoved: 'Dipindah',
       memberFilterLabel: (name: string) => `Anggota: ${name}`,
       filterClear: (label: string) => `Hapus filter ${label}`,
       filterEmpty: 'Tidak ada transaksi yang cocok dengan filter ini.',

@@ -314,6 +314,114 @@ func validDuesPeriod(s string) bool {
 	return err == nil && t.Format(duesPeriodLayout) == s
 }
 
+// transactionFilters are Riwayat -> Transaksi's four filters (#424), the
+// public report's: read once for the list and once for its month summary.
+type transactionFilters struct {
+	memberID  *int64
+	purposeID *int64
+	month     string
+	direction string
+}
+
+// parseTransactionFilters reads ?member_id=, ?purpose_id=, ?month= and
+// ?direction=, writing the 400 itself on a malformed one.
+func parseTransactionFilters(w http.ResponseWriter, r *http.Request) (transactionFilters, bool) {
+	var f transactionFilters
+	if raw := r.URL.Query().Get("member_id"); raw != "" {
+		memberID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "member_id", "The member_id filter is not a valid number.")
+			return f, false
+		}
+		f.memberID = &memberID
+	}
+
+	// An id that is not a positive integer is a malformed request, not an empty
+	// result: a filter the treasurer cannot see is one she cannot correct.
+	if raw := r.URL.Query().Get("purpose_id"); raw != "" {
+		purposeID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || purposeID <= 0 {
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "purpose_id", "The purpose_id filter is not a valid number.")
+			return f, false
+		}
+		f.purposeID = &purposeID
+	}
+
+	if month := r.URL.Query().Get("month"); month != "" {
+		if !validDuesPeriod(month) {
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "month", "The month filter is not a valid \"YYYY-MM\" month.")
+			return f, false
+		}
+		f.month = month
+	}
+
+	if direction := r.URL.Query().Get("direction"); direction != "" {
+		if direction != string(ledger.DirectionIn) && direction != string(ledger.DirectionOut) {
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "direction", "The direction filter must be \"in\" or \"out\".")
+			return f, false
+		}
+		f.direction = direction
+	}
+	return f, true
+}
+
+// transactionSummaryResponse is GET /api/transactions/summary's body: the
+// public report's walk for one month (ADR-038). full says whether the
+// balances apply (the whole fund, or one pos); under a member or direction
+// filter only in and out mean anything, and the rest are zero with no dates.
+type transactionSummaryResponse struct {
+	Full        bool    `json:"full"`
+	StartOn     *string `json:"start_on"`
+	EndOn       *string `json:"end_on"`
+	Start       int64   `json:"start"`
+	Openings    int64   `json:"openings"`
+	In          int64   `json:"in"`
+	Out         int64   `json:"out"`
+	Adjustments int64   `json:"adjustments"`
+	Moved       int64   `json:"moved"`
+	End         int64   `json:"end"`
+}
+
+// transactionSummary is GET /api/transactions/summary (#751): Riwayat's
+// month summary, Ledger.MonthWalk under the list's filters - the same
+// derivation the public report prints, so the two never disagree. ?month= is
+// required: a summary of "every month" would be the whole ledger, which
+// Beranda already shows.
+func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+	filters, ok := parseTransactionFilters(w, r)
+	if !ok {
+		return
+	}
+	if filters.month == "" {
+		writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "month", "The summary needs a \"YYYY-MM\" month.")
+		return
+	}
+
+	walk, err := a.ledger.MonthWalk(r.Context(), ledger.ReportParams{
+		FundID:    fund.ID,
+		Month:     filters.month,
+		PurposeID: filters.purposeID,
+		MemberID:  filters.memberID,
+		Direction: ledger.Direction(filters.direction),
+	})
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+	resp := transactionSummaryResponse{
+		Full: walk.Full, Start: walk.Start.Int64(), Openings: walk.Openings.Int64(), In: walk.In.Int64(), Out: walk.Out.Int64(),
+		Adjustments: walk.Adjustments.Int64(), Moved: walk.Moved.Int64(), End: walk.End.Int64(),
+	}
+	if walk.Full {
+		resp.StartOn, resp.EndOn = &walk.StartOn, &walk.EndOn
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // listTransactions is GET /api/transactions (#225, ADR-032): newest-first,
 // keyset-paged on (occurred_on DESC, id DESC), never LIMIT/OFFSET, because
 // occurred_on is backdatable (PRD section 7.2) and an offset would skip or
@@ -373,13 +481,23 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if raw := r.URL.Query().Get("member_id"); raw != "" {
-		memberID, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "member_id", "The member_id filter is not a valid number.")
-			return
-		}
-		params.MemberID = memberID
+	filters, ok := parseTransactionFilters(w, r)
+	if !ok {
+		return
+	}
+	if filters.memberID != nil {
+		params.MemberID = *filters.memberID
+	}
+	if filters.purposeID != nil {
+		params.PurposeID = *filters.purposeID
+	}
+	// Set only when given: these params are untyped (sqlc's nullable
+	// arguments), and an empty string is a filter, where nil is none.
+	if filters.month != "" {
+		params.Month = filters.month
+	}
+	if filters.direction != "" {
+		params.Direction = filters.direction
 	}
 
 	if duesPeriod := r.URL.Query().Get("dues_period"); duesPeriod != "" {
@@ -388,33 +506,6 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.DuesPeriod = duesPeriod
-	}
-
-	// An id that is not a positive integer is a malformed request, not an empty
-	// result: a filter the treasurer cannot see is one she cannot correct.
-	if raw := r.URL.Query().Get("purpose_id"); raw != "" {
-		purposeID, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || purposeID <= 0 {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "purpose_id", "The purpose_id filter is not a valid number.")
-			return
-		}
-		params.PurposeID = purposeID
-	}
-
-	if month := r.URL.Query().Get("month"); month != "" {
-		if !validDuesPeriod(month) {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "month", "The month filter is not a valid \"YYYY-MM\" month.")
-			return
-		}
-		params.Month = month
-	}
-
-	if direction := r.URL.Query().Get("direction"); direction != "" {
-		if direction != string(ledger.DirectionIn) && direction != string(ledger.DirectionOut) {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "direction", "The direction filter must be \"in\" or \"out\".")
-			return
-		}
-		params.Direction = direction
 	}
 
 	rows, err := a.queries.ListTransactionsPage(r.Context(), params)

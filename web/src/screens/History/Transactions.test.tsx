@@ -4,11 +4,13 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { copy } from '@/copy/id'
+import { formatIDR } from '@/lib/money'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
 import type { Purpose } from '@/lib/purposes'
 import type { Member, Transaction } from '@/lib/setup'
+import type { TransactionSummary } from '@/lib/transactions'
 import type { Transfer } from '@/lib/transfers'
 
 afterEach(() => {
@@ -78,12 +80,26 @@ const members = [
   },
 ] satisfies Member[]
 
+/** A month's walk as GET /api/transactions/summary sends it (#751). */
+const monthSummary = {
+  full: true,
+  start_on: '2026-08-31',
+  end_on: '2026-09-30',
+  start: 100_000,
+  openings: 0,
+  in: 80_000,
+  out: 20_000,
+  adjustments: 0,
+  moved: 5_000,
+  end: 165_000,
+} satisfies TransactionSummary
+
 /** Stubs fetch: purposes and members always answer, GET /api/transactions
  * answers whatever pageFor returns for the request's URL (throwing from
  * pageFor simulates fetch failing). Returns every transactions URL requested,
  * in order, so a test can assert on what reached the server; `everything`
  * holds every request, path and query. Correction POSTs go to `posted`. */
-function stubApi(pageFor: (url: URL) => Page, everything: string[] = []) {
+function stubApi(pageFor: (url: URL) => Page, everything: string[] = [], summary: TransactionSummary = monthSummary) {
   const requests: URL[] = []
   vi.stubGlobal(
     'fetch',
@@ -101,6 +117,7 @@ function stubApi(pageFor: (url: URL) => Page, everything: string[] = []) {
         requests.push(url)
         return jsonResponse(pageFor(url))
       }
+      if (url.pathname === '/api/transactions/summary') return jsonResponse(summary)
       return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
     }),
   )
@@ -386,6 +403,80 @@ describe('Transactions tab: filters (#424)', () => {
     renderAt('/history/transactions?purpose=11&dir=out')
 
     expect(await screen.findByText(text.filterEmpty)).toBeInTheDocument()
+  })
+})
+
+describe('Transactions tab: the month summary and month headers (#751)', () => {
+  /** The summary's figure on the line its label names. */
+  function summaryLine(label: string) {
+    return screen.getByText(label, { selector: 'dt' }).closest('div')!
+  }
+
+  it("shows the server's walk over a month-filtered list, under the same filters", async () => {
+    const everything: string[] = []
+    stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }), everything)
+    renderAt('/history/transactions?month=2026-09&purpose=11')
+    await screen.findByText('Setoran')
+
+    expect(everything).toContain('GET /api/transactions/summary?month=2026-09&purpose_id=11')
+    expect(summaryLine(text.summaryBalance('31 Agustus 2026'))).toHaveTextContent(formatIDR(100_000))
+    expect(summaryLine(text.summaryIn)).toHaveTextContent(formatIDR(80_000))
+    expect(summaryLine(text.summaryOut)).toHaveTextContent(formatIDR(20_000))
+    expect(summaryLine(text.summaryMoved)).toHaveTextContent(formatIDR(5_000))
+    expect(summaryLine(text.summaryBalance('30 September 2026'))).toHaveTextContent(formatIDR(165_000))
+    // Zero lines stay out, as on the report.
+    expect(screen.queryByText(text.summaryOpenings)).not.toBeInTheDocument()
+    expect(screen.queryByText(text.summaryAdjustments)).not.toBeInTheDocument()
+    // One month: no month heading over its rows.
+    expect(screen.queryByRole('heading', { name: 'September 2026' })).not.toBeInTheDocument()
+  })
+
+  it('shows only the two totals under a member filter, where a balance means nothing', async () => {
+    stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }), [], {
+      ...monthSummary,
+      full: false,
+      start_on: null,
+      end_on: null,
+      start: 0,
+      moved: 0,
+      end: 0,
+    })
+    renderAt('/history/transactions?month=2026-09&member=21')
+    await screen.findByText('Setoran')
+
+    expect(summaryLine(text.summaryIn)).toHaveTextContent(formatIDR(80_000))
+    expect(summaryLine(text.summaryOut)).toHaveTextContent(formatIDR(20_000))
+    expect(screen.queryByText(/^Saldo /)).not.toBeInTheDocument()
+  })
+
+  it('asks for no summary without a month, or inside a search', async () => {
+    const everything: string[] = []
+    stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }), everything)
+    renderAt('/history/transactions?month=2026-09&q=setor')
+    await screen.findByText('Setoran')
+    renderAt('/history/transactions')
+    await waitFor(() => expect(screen.getAllByText('Setoran')).toHaveLength(2))
+
+    expect(everything.some((r) => r.startsWith('GET /api/transactions/summary'))).toBe(false)
+  })
+
+  it('heads each month in the unfiltered list, newest first', async () => {
+    stubApi(() => ({
+      transactions: [
+        { ...row(3, 'Oktober satu'), occurred_on: '2026-10-02' },
+        { ...row(2, 'September dua'), occurred_on: '2026-09-20' },
+        { ...row(1, 'September satu'), occurred_on: '2026-09-01' },
+      ],
+      next_cursor: null,
+    }))
+    renderAt('/history/transactions')
+    await screen.findByText('Oktober satu')
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+    expect(headings).toEqual(['Oktober 2026', 'September 2026'])
+    const september = screen.getByRole('heading', { name: 'September 2026' }).closest('section')!
+    expect(within(september).getByText('September dua')).toBeInTheDocument()
+    expect(within(september).queryByText('Oktober satu')).not.toBeInTheDocument()
   })
 })
 

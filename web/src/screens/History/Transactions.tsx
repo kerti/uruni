@@ -10,17 +10,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { formatPeriod } from '@/lib/dates'
+import { formatIsoDate, formatPeriod } from '@/lib/dates'
+import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { activeFilterCount, readFilters, writeFilters, type TransactionFilters } from '@/lib/transactionFilters'
-import { listTransactions } from '@/lib/transactions'
+import { getTransactionSummary, listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import TransactionFilterDialog from '@/screens/History/TransactionFilterDialog'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
-import type { TransactionsPage } from '@/lib/transactions'
+import type { TransactionSummary, TransactionsPage } from '@/lib/transactions'
 
 const text = copy.history.transactions
 
@@ -41,6 +42,9 @@ interface Lookups {
 interface FirstPage {
   page: TransactionsPage
   lookups: Lookups
+  /** The month's walk (#751), read only under a month filter and no search:
+   * a summary of a month says nothing about the rows a search kept. */
+  summary: TransactionSummary | null
 }
 
 /** The list request for the URL's search and filters; `cursor` asks for the page after it. */
@@ -133,8 +137,20 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
 
   const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
     const input = pageInput(q, { purposeId, memberId, month, direction })
-    const [page, loaded] = await Promise.all([listTransactions(input), loadLookups()])
-    return { page, lookups: loaded }
+    const summarised = month !== null && !q
+    const [page, loaded, summary] = await Promise.all([
+      listTransactions(input),
+      loadLookups(),
+      summarised
+        ? getTransactionSummary({
+            month,
+            purposeId: purposeId ?? undefined,
+            memberId: memberId ?? undefined,
+            direction: direction ?? undefined,
+          })
+        : Promise.resolve(null),
+    ])
+    return { page, lookups: loaded, summary }
   }, [q, purposeId, memberId, month, direction, loadLookups])
 
   useEffect(() => {
@@ -220,7 +236,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
       return state.error ? <ErrorState error={state.error} onRetry={() => void run(loadFirstPage)} /> : null
     }
 
-    const { page, lookups: loaded } = state.data
+    const { page, lookups: loaded, summary } = state.data
     const purposeNames = new Map(loaded.purposes.map((purpose) => [purpose.id, purpose.name]))
     const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
     const nextCursor = more ? more.nextCursor : page.nextCursor
@@ -271,10 +287,13 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             ))}
           </div>
         )}
+        {summary && <MonthSummary summary={summary} />}
         <TransactionList
           transactions={transactions}
           purposeNames={purposeNames}
           emptyMessage={emptyMessage}
+          // One month is already its own heading; across months, each gets one.
+          monthHeaders={month === null}
           onRefresh={() => run(loadFirstPage, { silent: true })}
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
@@ -337,5 +356,36 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
         onClose={closeDialog}
       />
     </div>
+  )
+}
+
+/** The month as the public report reads it (#751, ADR-038): the balance it
+ * started on, what came in and went out, and the balance it ended on, every
+ * figure the server's. Saldo awal, Penyesuaian and Dipindah only when not
+ * zero, as on the report. Under a member or direction filter a balance means
+ * nothing, so only the two totals show. */
+function MonthSummary({ summary }: { summary: TransactionSummary }) {
+  const lines: { label: string; amount: number; last?: boolean }[] = []
+  if (summary.full && summary.start_on) lines.push({ label: text.summaryBalance(formatIsoDate(summary.start_on)), amount: summary.start })
+  if (summary.full && summary.openings !== 0) lines.push({ label: text.summaryOpenings, amount: summary.openings })
+  lines.push({ label: text.summaryIn, amount: summary.in })
+  lines.push({ label: text.summaryOut, amount: summary.out })
+  if (summary.full && summary.adjustments !== 0) lines.push({ label: text.summaryAdjustments, amount: summary.adjustments })
+  if (summary.full && summary.moved !== 0) lines.push({ label: text.summaryMoved, amount: summary.moved })
+  if (summary.full && summary.end_on)
+    lines.push({ label: text.summaryBalance(formatIsoDate(summary.end_on)), amount: summary.end, last: true })
+
+  return (
+    <dl className="flex flex-col gap-1.5 rounded-lg bg-card px-4 py-3 text-sm shadow-card ring-1 ring-foreground/10">
+      {lines.map((line) => (
+        <div
+          key={line.label}
+          className={`flex items-baseline justify-between gap-3 ${line.last ? 'mt-1 border-t border-border pt-2 font-semibold' : ''}`}
+        >
+          <dt className={line.last ? '' : 'text-muted-foreground'}>{line.label}</dt>
+          <dd className="tabular font-medium">{formatIDR(line.amount)}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

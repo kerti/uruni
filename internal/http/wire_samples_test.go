@@ -92,6 +92,7 @@ func TestWireSamples(t *testing.T) {
 		{"/api/members", "members-page"},
 		{"/api/dues-tiers", "dues-tiers"},
 		{"/api/transactions", "transactions-page"},
+		{"/api/transactions/summary?month=2026-09", "transaction-summary"},
 		{"/api/dues-payments", "dues-payments-page"},
 		{"/api/dues-status?period=2026-09", "dues-status"},
 		{"/api/dues-status/grid", "dues-status-grid"},
