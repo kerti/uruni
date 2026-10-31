@@ -1,4 +1,4 @@
-import { Camera, ImagePlus } from 'lucide-react'
+import { Camera, ImageSquare } from '@phosphor-icons/react'
 
 import { copy } from '@/copy/id'
 import { cn } from '@/lib/utils'
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
  * Plain ink, no chrome - as the row marks its other tappable thing, the
  * dotted-underline purpose name. A row with a nota shows a Forest `Camera`
  * plus the count (always shown, even at 1); a row with none shows a muted
- * `ImagePlus`, barely there, since most entries never get a photo. Colour and
+ * `ImageSquare`, barely there, since most entries never get a photo. Colour and
  * glyph carry the difference, not a filled box.
  *
  * The 44px hit area (Design-System.md's minimum) is an invisible `after:`
@@ -46,7 +46,7 @@ export default function ReceiptRowButton({
           <span className="tabular text-sm font-medium">{count}</span>
         </>
       ) : (
-        <ImagePlus aria-hidden="true" className="size-4" />
+        <ImageSquare aria-hidden="true" className="size-4" />
       )}
     </button>
   )

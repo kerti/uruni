@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import type { Icon } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,7 @@ export interface DetailAction {
   /** Always takes a full row: for a label too long for half of one
    * (Batalkan transaksi, Batalkan pemutihan) that has no short form. */
   wide?: boolean
-  icon?: LucideIcon
+  icon?: Icon
   onClick: () => void
   disabled?: boolean
   /** `destructive`: undoes or removes (Hapus, Batalkan transaksi) - in the

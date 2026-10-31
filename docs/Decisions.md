@@ -140,7 +140,7 @@ The docs/tooling/CI skeleton was reviewed before its first commit. Most of it st
 
 ### Third-party attribution — open, due at M1 (2026-08-09)
 
-Uruni goes **out** under AGPL-3.0; the question is what comes **in**. Everything the stack calls for is permissive — Go stdlib (BSD-3), `modernc.org/sqlite` (BSD-3), goose (MIT), React / Vite / Tailwind / Radix / shadcn-ui / lucide (MIT) — so there is no inbound-vs-outbound licence conflict to resolve, and no copyleft dependency forcing anything. M7 adds `go-pdf/fpdf` (MIT) and a subset of Noto Sans (OFL-1.1) embedded for the report PDF ([#378](https://github.com/kerti/uruni/issues/378)); OFL travels as `internal/report/fonts/OFL.txt` beside the font, inside the binary. **Confirm this at M1 rather than assuming it**, since it is the moment `go.mod` and `package-lock.json` first exist.
+Uruni goes **out** under AGPL-3.0; the question is what comes **in**. Everything the stack calls for is permissive — Go stdlib (BSD-3), `modernc.org/sqlite` (BSD-3), goose (MIT), React / Vite / Tailwind / Radix / shadcn-ui / Phosphor (MIT) — so there is no inbound-vs-outbound licence conflict to resolve, and no copyleft dependency forcing anything. M7 adds `go-pdf/fpdf` (MIT) and a subset of Noto Sans (OFL-1.1) embedded for the report PDF ([#378](https://github.com/kerti/uruni/issues/378)); OFL travels as `internal/report/fonts/OFL.txt` beside the font, inside the binary. **Confirm this at M1 rather than assuming it**, since it is the moment `go.mod` and `package-lock.json` first exist.
 
 What *is* an unmet obligation: MIT and BSD both require their copyright notice to travel with redistributions, and the release artifact is a single binary that **embeds the built SPA** — so shipping the image redistributes bundled MIT-licensed JavaScript with no notice attached. This is unresolved, not decided:
 
@@ -454,3 +454,8 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 ## Words any group would recognise (decided 2026-10-29)
 
 [#725](https://github.com/kerti/uruni/issues/725). **The maintainer dropped the vocabulary of the fund Uruni grew out of.** A member tier is a **kategori** (*Kategori iuran*, *Tanpa kategori*), its price a **nominal** (*Nominal iuran*): never *golongan*, a pay-grade word, and never plain *iuran*, which is the payment. *Kas bidang* is gone as the titipan example; the demo's titipan is *Titipan Seragam*. Identifiers (`member_tier`, `dues_rate`) are unchanged.
+
+## Phosphor duotone icons, and glass light on the hero and Catat (decided 2026-10-31)
+
+**The maintainer replaced lucide with Phosphor's duotone weight**, compared on a sheet against Phosphor regular, Tabler, Hugeicons and Streamline Flex (balances-landing's set, whose free tier lacks the plus, history, arrows and trash Uruni needs, and needs a credit). Triangles stay over chevrons and the shade stays on light surfaces; it drops only on dark fills and the dialog's round close. **The hero and Catat lost their faux-3D bevel for glass light**: solid Forest kept, an iOS-style rim bright at two opposite corners, and the hero rounded to 24px, the one exception to the cards' 14px.
+

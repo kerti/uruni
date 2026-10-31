@@ -1,4 +1,4 @@
-import { PenLine } from 'lucide-react'
+import { PencilLine } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
@@ -378,7 +378,7 @@ export default function RecordDuesPayment({
                             disabled={submitting}
                           >
                             <span className="sr-only">{text.editAmount(name)}</span> {amountText}
-                            <PenLine aria-hidden="true" className="size-4" />
+                            <PencilLine aria-hidden="true" className="size-4" />
                           </button>
                         ) : (
                           <span className="tabular text-muted-foreground">{amountText}</span>

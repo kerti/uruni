@@ -1,4 +1,4 @@
-import { Camera, PenLine } from 'lucide-react'
+import { Camera, PencilLine } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
@@ -315,7 +315,7 @@ export default function TransactionList({
  * The stored pos is what renders, never the effective one, even after a
  * correction has moved the money: the ledger sums stored tags, so showing the
  * effective tag would put the screen out of step with the balances
- * (ADR-033). The PenLine glyph says a correction exists - the same glyph its
+ * (ADR-033). The PencilLine glyph says a correction exists - the same glyph its
  * Perbaikan pos row carries a few rows down, which ties them together - and is hidden from
  * screen readers, with the sentence beside it in sr-only text.
  */
@@ -328,7 +328,7 @@ function PurposeLine({ transaction, purposeNames }: { transaction: Transaction; 
       <span className="truncate">{name}</span>
       {corrected && (
         <>
-          <PenLine aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <PencilLine aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <span className="sr-only">{copy.purposeCorrection.corrected}</span>
         </>
       )}

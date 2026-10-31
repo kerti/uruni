@@ -1,4 +1,4 @@
-import { CirclePause, CirclePlay, Search, Trash2 } from 'lucide-react'
+import { MagnifyingGlass, PauseCircle, PlayCircle, Trash } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -248,7 +248,10 @@ export default function Roster() {
         <Label htmlFor="member-search" className="sr-only">
           {text.searchLabel}
         </Label>
-        <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlass
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           id="member-search"
           type="search"
@@ -587,13 +590,13 @@ function EditMemberDialog({
                   inactive
                     ? {
                         key: 'reinstate',
-                        icon: CirclePlay,
+                        icon: PlayCircle,
                         label: busy ? text.reinstating : text.reinstate,
                         disabled: busy,
                         onClick: () => void submit(() => updateMember(shown.id, { inactiveOn: null }), text.reactivated),
                       }
-                    : { key: 'deactivate', label: text.deactivate, icon: CirclePause, onClick: () => setConfirming('deactivate') },
-                  { key: 'delete', label: text.delete, icon: Trash2, tone: 'destructive', onClick: () => setConfirming('delete') },
+                    : { key: 'deactivate', label: text.deactivate, icon: PauseCircle, onClick: () => setConfirming('deactivate') },
+                  { key: 'delete', label: text.delete, icon: Trash, tone: 'destructive', onClick: () => setConfirming('delete') },
                 ]}
               />
             </div>

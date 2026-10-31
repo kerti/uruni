@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Camera, X } from 'lucide-react'
+import { Camera, X } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'

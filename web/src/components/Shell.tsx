@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
-import { History, Home, LogOut, Plus, Settings, Users } from 'lucide-react'
+import { ClockCounterClockwise, GearSix, House, Plus, SignOut, Users } from '@phosphor-icons/react'
 import { Link, NavLink } from 'react-router-dom'
 
 import AppVersion from '@/components/AppVersion'
@@ -16,12 +16,12 @@ import { useApi } from '@/lib/useApi'
  * raised slot. Riwayat's icon is a clock, not a money glyph: Design-System.md
  * rules those out as imagery. */
 const navItems = [
-  { to: '/', icon: Home, label: copy.shell.nav.home, end: true, primary: false },
-  { to: '/history', icon: History, label: copy.shell.nav.history, end: false, primary: false },
+  { to: '/', icon: House, label: copy.shell.nav.home, end: true, primary: false },
+  { to: '/history', icon: ClockCounterClockwise, label: copy.shell.nav.history, end: false, primary: false },
   // Plus, not CirclePlus: the circle is already drawn around it.
   { to: '/record', icon: Plus, label: copy.shell.nav.record, end: false, primary: true },
   { to: '/members', icon: Users, label: copy.shell.nav.members, end: false, primary: false },
-  { to: '/settings', icon: Settings, label: copy.shell.nav.settings, end: false, primary: false },
+  { to: '/settings', icon: GearSix, label: copy.shell.nav.settings, end: false, primary: false },
 ] as const
 
 /**
@@ -125,7 +125,7 @@ export default function Shell({
             disabled={loggingOut}
             aria-label={loggingOut ? copy.shell.loggingOut : copy.shell.logout}
           >
-            <LogOut aria-hidden="true" className="size-5" />
+            <SignOut aria-hidden="true" className="size-5" />
           </Button>
         </div>
       </header>

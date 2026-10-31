@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck, Shuffle } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ArrowsDownUp, ArrowsLeftRight, CalendarCheck, Shuffle } from '@phosphor-icons/react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
@@ -529,7 +529,7 @@ export default function RecordTransaction({
             className={segmentedStackedItemClass(!duesChosen && direction === 'transfer')}
             onClick={() => chooseDirection('transfer')}
           >
-            <ArrowLeftRight aria-hidden="true" />
+            <ArrowsLeftRight aria-hidden="true" />
             {text.captionLocation}
           </Button>
           {/* Its counterpart (ADR-036, #383): money that stays where it is
@@ -634,7 +634,7 @@ export default function RecordTransaction({
                     setToPurposeId(fromPurposeId)
                   }}
                 >
-                  <ArrowUpDown aria-hidden="true" />
+                  <ArrowsDownUp aria-hidden="true" />
                   {text.swapPurposes}
                 </Button>
 
@@ -712,7 +712,7 @@ export default function RecordTransaction({
                   setToAccountId(accountId)
                 }}
               >
-                <ArrowUpDown aria-hidden="true" />
+                <ArrowsDownUp aria-hidden="true" />
                 {text.swapLocations}
               </Button>
 

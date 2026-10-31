@@ -150,7 +150,10 @@ test.describe('moves and corrections', () => {
       .filter({ hasText: copy.rowLabels.transferPurposeCorrection.text('Kas Utama', envelope) })
     for (const movement of [location, allocation, correction]) {
       await expect(movement).toHaveCount(1)
-      await expect(movement.locator('.lucide-arrow-down-left, .lucide-arrow-up-right')).toHaveCount(0)
+      // No money-in or money-out glyph: those alone are drawn in success or
+      // terracotta (TransactionGlyph); a movement's is muted.
+      await expect(movement.locator('svg.text-success, svg.text-attention')).toHaveCount(0)
+      await expect(movement.locator('svg.text-muted-foreground')).not.toHaveCount(0)
     }
 
     // The detail reads the movement, not a direction, and cannot be reversed.

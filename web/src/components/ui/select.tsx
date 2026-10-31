@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Select as SelectPrimitive } from 'radix-ui'
-import { Check, ChevronDown } from 'lucide-react'
+import { CaretDown, Check } from '@phosphor-icons/react'
 
 import { cn } from '@/lib/utils'
 
@@ -66,7 +66,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground" />
+        <CaretDown aria-hidden="true" className="size-4 text-muted-foreground" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )

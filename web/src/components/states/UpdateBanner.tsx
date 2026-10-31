@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react'
+import { ArrowsClockwise } from '@phosphor-icons/react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ export default function UpdateBanner() {
   return (
     <div role="status" className="flex items-center justify-between gap-3 bg-secondary px-4 py-2 text-sm text-secondary-foreground">
       <span className="flex items-center gap-2">
-        <RefreshCw aria-hidden="true" className="size-4 shrink-0" />
+        <ArrowsClockwise aria-hidden="true" className="size-4 shrink-0" />
         {copy.common.updateAvailable}
       </span>
       <Button variant="secondary" size="lg" onClick={() => void updateServiceWorker(true)}>

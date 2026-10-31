@@ -1,5 +1,16 @@
-import { ArrowLeftRight, CalendarCheck, Flag, HandCoins, HandHelping, Mail, Shuffle, SlidersHorizontal, PenLine, Undo2 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import {
+  ArrowUUpLeft,
+  ArrowsLeftRight,
+  CalendarCheck,
+  Envelope,
+  Flag,
+  HandCoins,
+  HandHeart,
+  PencilLine,
+  Shuffle,
+  SlidersHorizontal,
+} from '@phosphor-icons/react'
+import type { Icon } from '@phosphor-icons/react'
 
 import { copy } from '@/copy/id'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
@@ -23,7 +34,7 @@ import type { Transaction } from '@/lib/transactions'
  * cek kas fix or a standalone adjustment (ADR-024) - is Penyesuaian, the
  * report's word for it (ADR-038).
  */
-export function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: string | null; text: string; wraps?: boolean } | null {
+export function rowLabelFor(transaction: Transaction): { Icon: Icon; srWord: string | null; text: string; wraps?: boolean } | null {
   switch (transaction.kind) {
     case 'dues':
       return {
@@ -39,7 +50,7 @@ export function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWor
       }
     case 'reimbursement':
       return {
-        Icon: HandHelping,
+        Icon: HandHeart,
         srWord: copy.rowLabels.settlement.kind,
         text: copy.rowLabels.settlement.text(transaction.member_name ?? ''),
       }
@@ -55,18 +66,18 @@ export function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWor
         const to = transaction.transfer_to_name ?? ''
         if (transaction.transfer_corrects_transaction_id != null) {
           const label = copy.rowLabels.transferPurposeCorrection
-          return { Icon: PenLine, srWord: label.kind, text: label.text(from, to) }
+          return { Icon: PencilLine, srWord: label.kind, text: label.text(from, to) }
         }
         if (transaction.transfer_reason === 'allocation') {
           const label = copy.rowLabels.transferPurposeMove
           return { Icon: Shuffle, srWord: label.kind, text: label.text(from, to) }
         }
         const label = copy.rowLabels.transferPurpose
-        return { Icon: Mail, srWord: label.kind, text: label.text(from, to) }
+        return { Icon: Envelope, srWord: label.kind, text: label.text(from, to) }
       }
       if (transaction.transfer_kind === 'between_accounts') {
         return {
-          Icon: ArrowLeftRight,
+          Icon: ArrowsLeftRight,
           srWord: copy.rowLabels.transferLocation.kind,
           text: copy.rowLabels.transferLocation.text(transaction.transfer_from_name ?? '', transaction.transfer_to_name ?? ''),
         }
@@ -90,7 +101,7 @@ export function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWor
         }
         // Wraps even in a list: an unnamed reversal ends in the date that
         // says which row it undoes, the part truncation would cut at 390px.
-        return { Icon: Undo2, srWord: null, text: reversalText, wraps: true }
+        return { Icon: ArrowUUpLeft, srWord: null, text: reversalText, wraps: true }
       }
       // Every other adjustment - a cek kas fix, or one she posted herself
       // (ADR-024) - is named for the line of the month's walk it sums into

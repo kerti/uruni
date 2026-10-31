@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Camera, PenLine, Undo2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowUUpLeft, ArrowUpRight, Camera, PencilLine } from '@phosphor-icons/react'
 import { useRef } from 'react'
 
 import DetailActions from '@/components/DetailActions'
@@ -201,7 +201,7 @@ function Detail({
       <DetailActions
         actions={[
           ...(canCorrect
-            ? [{ key: 'correct', label: copy.purposeCorrection.heading, icon: PenLine, onClick: () => onCorrectPurpose?.(transaction) }]
+            ? [{ key: 'correct', label: copy.purposeCorrection.heading, icon: PencilLine, onClick: () => onCorrectPurpose?.(transaction) }]
             : []),
           ...(onReceiptsChanged
             ? [
@@ -225,7 +225,7 @@ function Detail({
                   key: 'reverse',
                   label: copy.history.transactions.reverse,
                   wide: true,
-                  icon: Undo2,
+                  icon: ArrowUUpLeft,
                   tone: 'destructive' as const,
                   onClick: () => onReverse?.(transaction),
                 },

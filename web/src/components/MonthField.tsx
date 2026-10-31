@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDots, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Popover } from 'radix-ui'
 
@@ -59,7 +59,7 @@ export default function MonthField({
     >
       <Popover.Trigger id={id} className={pickerTrigger} disabled={disabled}>
         <span className="truncate">{value ? formatPeriod(value) : emptyLabel}</span>
-        <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <CalendarDots aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} collisionPadding={16} className={cn(pickerPopover, 'w-72')}>
@@ -71,7 +71,7 @@ export default function MonthField({
               onClick={() => setYear((y) => y - 1)}
               disabled={year <= minYear}
             >
-              <ChevronLeft aria-hidden="true" className="size-5" />
+              <CaretLeft aria-hidden="true" className="size-5" />
             </button>
             <span className="tabular font-semibold" aria-live="polite">
               {year}
@@ -83,7 +83,7 @@ export default function MonthField({
               onClick={() => setYear((y) => y + 1)}
               disabled={year >= maxYear}
             >
-              <ChevronRight aria-hidden="true" className="size-5" />
+              <CaretRight aria-hidden="true" className="size-5" />
             </button>
           </div>
           <div className="grid grid-cols-4 gap-1">

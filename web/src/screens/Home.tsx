@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react'
+import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
 import ReconciliationBanner from '@/components/ReconciliationBanner'
@@ -179,7 +179,7 @@ export default function Home({
           the reconciliation banner directly beneath it. */}
       <section
         aria-label={copy.home.balanceHeading}
-        className="relative flex flex-col items-center gap-2 rounded-2xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
+        className="relative flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
       >
         <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
         <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
@@ -245,7 +245,7 @@ export default function Home({
                       directly above. */}
                   <span className="flex items-center gap-2">
                     <PurposeAmount balance={purpose.balance} />
-                    <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                    <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
                   </span>
                 </button>
               </li>
@@ -266,7 +266,7 @@ export default function Home({
           <span>{copy.home.owedToMembers}</span>
           <span className="flex items-center gap-2">
             <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
-            <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+            <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
           </span>
         </button>
       )}

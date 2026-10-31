@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react'
+import { ArrowSquareOut, Check, Copy, DownloadSimple, ShareNetwork } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
@@ -142,7 +142,7 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
         </Button>
         {canShare && (
           <Button type="button" variant="outline" size="lg" className="flex-1 justify-center gap-2" onClick={() => void handleShare()}>
-            <Share2 aria-hidden="true" className="size-4" />
+            <ShareNetwork aria-hidden="true" className="size-4" />
             {text.share}
           </Button>
         )}
@@ -150,7 +150,7 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
 
       <Button asChild variant="outline" size="lg" className="w-full justify-center gap-2">
         <a href={url} target="_blank" rel="noopener noreferrer">
-          <ExternalLink aria-hidden="true" className="size-4" />
+          <ArrowSquareOut aria-hidden="true" className="size-4" />
           {text.open}
         </a>
       </Button>
@@ -200,7 +200,7 @@ function PdfButton({ reportUrl }: { reportUrl: string }) {
         disabled={busy}
         onClick={() => void handleTap()}
       >
-        <Download aria-hidden="true" className="size-4" />
+        <DownloadSimple aria-hidden="true" className="size-4" />
         {text.downloadPdf}
       </Button>
       {error && <ErrorState error={error} />}

@@ -1,4 +1,4 @@
-import { Funnel, Search, X } from 'lucide-react'
+import { Funnel, MagnifyingGlass, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -320,7 +320,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
           <Label htmlFor="transaction-search" className="sr-only">
             {text.searchLabel}
           </Label>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
           />

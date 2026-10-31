@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { Undo2 } from 'lucide-react'
+import { ArrowUUpLeft } from '@phosphor-icons/react'
 
 import ReversalDialog from '@/components/ReversalDialog'
 import { sharedErrorText } from '@/components/reversalCopy'
@@ -131,7 +131,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
                 control that undoes money is the last place to shave it. */}
               {!isReversal && !reversed && (
                 <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => reversal.open(`reverse:${row.id}`)}>
-                  <Undo2 aria-hidden="true" />
+                  <ArrowUUpLeft aria-hidden="true" />
                   {text.reverse}
                 </Button>
               )}

@@ -1,4 +1,4 @@
-import { WifiOff } from 'lucide-react'
+import { WifiSlash } from '@phosphor-icons/react'
 
 import { copy } from '@/copy/id'
 import { useConnectivity } from '@/components/states/useConnectivity'
@@ -15,7 +15,7 @@ export default function OfflineBanner() {
 
   return (
     <div role="status" className="flex items-center gap-2 bg-attention-soft px-4 py-2 text-sm text-attention-text">
-      <WifiOff aria-hidden="true" className="size-4 shrink-0" />
+      <WifiSlash aria-hidden="true" className="size-4 shrink-0" />
       {copy.common.offlineBanner}
     </div>
   )
