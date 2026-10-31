@@ -222,6 +222,12 @@ func TestGetIncidentalParticipationStates(t *testing.T) {
 			t.Errorf("member %d State = %q, want %q", memberID, got.State, want)
 		}
 	}
+
+	// Kurang counts as given, only Belum does not (#746): three of four, the
+	// report's and Pengaturan's progress alike.
+	if got := participation.GivenCount(); got != 3 {
+		t.Errorf("GivenCount() = %d, want 3 of %d", got, len(participation.Expected))
+	}
 }
 
 // TestGetIncidentalParticipationNoMinimumMeansAnyGiftIsSudah: with no

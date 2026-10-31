@@ -232,7 +232,7 @@ describe('Incidentals', () => {
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
     // Called with no member: the top action row records without one prefilled
     // - only the participation table's per-row action names a member.
-    expect(onRecordFor).toHaveBeenCalledWith(1, undefined)
+    expect(onRecordFor).toHaveBeenCalledWith(1, undefined, undefined)
   })
 
   it('closes an envelope with a zero rollover, shown honestly rather than hidden', async () => {
@@ -643,7 +643,7 @@ describe('Incidentals', () => {
 
     // Catat: no member, so the form opens on its Keluar default.
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
-    expect(onRecordFor).toHaveBeenCalledWith(1, undefined)
+    expect(onRecordFor).toHaveBeenCalledWith(1, undefined, undefined)
   })
 
   // A closed envelope is off Beranda (ADR-032), so this link is its only route
@@ -1304,7 +1304,86 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: participationText.recordAria('Budi') }))
 
-    expect(onRecordFor).toHaveBeenCalledWith(1, 7)
+    expect(onRecordFor).toHaveBeenCalledWith(1, 7, undefined)
+  })
+
+  it('opens Catat sumbangan with what each member still owes toward the minimum (#746)', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 70_000,
+      disbursed_amount: 0,
+      balance_amount: 70_000,
+      minimum_per_member: 25_000,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, {
+      expected: [
+        { member: participant({ id: 1, name: 'Budi' }), contributed_amount: 0, state: 'belum' },
+        { member: participant({ id: 2, name: 'Sri' }), contributed_amount: 10_000, state: 'kurang' },
+        { member: participant({ id: 3, name: 'Ani' }), contributed_amount: 60_000, state: 'sudah' },
+      ],
+      unexpected: [],
+    })
+
+    const onRecordFor = vi.fn()
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: participationText.recordAria('Budi') }))
+    expect(onRecordFor).toHaveBeenLastCalledWith(1, 1, 25_000)
+    await userEvent.click(screen.getByRole('button', { name: participationText.recordAria('Sri') }))
+    expect(onRecordFor).toHaveBeenLastCalledWith(1, 2, 15_000)
+    // Already at the minimum: nothing to suggest, Jumlah starts empty.
+    await userEvent.click(screen.getByRole('button', { name: participationText.recordAria('Ani') }))
+    expect(onRecordFor).toHaveBeenLastCalledWith(1, 3, undefined)
+  })
+
+  it('narrows to who has given nothing with the shared checkbox (#746)', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 30_000,
+      disbursed_amount: 0,
+      balance_amount: 30_000,
+      minimum_per_member: 25_000,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, {
+      expected: [
+        { member: participant({ id: 1, name: 'Budi' }), contributed_amount: 0, state: 'belum' },
+        { member: participant({ id: 2, name: 'Sri' }), contributed_amount: 10_000, state: 'kurang' },
+        { member: participant({ id: 3, name: 'Ani' }), contributed_amount: 20_000, state: 'sudah' },
+      ],
+      unexpected: [],
+    })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await screen.findByText('Budi')
+    const filter = screen.getByRole('checkbox', { name: participationText.notGivenFilterLabel })
+    expect(filter).not.toBeChecked()
+
+    await userEvent.click(filter)
+    expect(screen.getByText('Budi')).toBeInTheDocument()
+    expect(screen.queryByText('Sri')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ani')).not.toBeInTheDocument()
+  })
+
+  it('says everyone has given when the narrowed list is empty (#746)', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 20_000,
+      disbursed_amount: 0,
+      balance_amount: 20_000,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, {
+      expected: [{ member: participant({ id: 3, name: 'Ani' }), contributed_amount: 20_000, state: 'sudah' }],
+      unexpected: [],
+    })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await userEvent.click(await screen.findByRole('checkbox', { name: participationText.notGivenFilterLabel }))
+
+    expect(screen.getByText(participationText.emptyFiltered)).toBeInTheDocument()
+    expect(screen.queryByText('Ani')).not.toBeInTheDocument()
   })
 
   it('offers no reminder, share or message action anywhere on this screen (PRD sections 4 and 7.5)', async () => {

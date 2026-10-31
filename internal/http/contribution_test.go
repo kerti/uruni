@@ -276,6 +276,52 @@ func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
 	}
 }
 
+// TestGetIncidentalsCarriesProgressOnOpenEnvelopes: the list's participation
+// is GivenCount over the expected members while an envelope is open (#746),
+// and null once it is closed.
+func TestGetIncidentalsCarriesProgressOnOpenEnvelopes(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	gave := createMemberFor(t, r, "Gave")
+	createMemberFor(t, r, "Not Yet")
+	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
+	toClose := openIncidentalFor(t, r, "Takziah", "2026-08-02")
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &gave.ID,
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if rec := postCloseIncidental(t, r, toClose.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	rec := getIncidentals(t, r, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/incidentals = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var items []incidentalListItemResponse
+	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
+		t.Fatalf("decoding list: %v", err)
+	}
+	byID := map[int64]incidentalListItemResponse{}
+	for _, item := range items {
+		byID[item.PurposeID] = item
+	}
+
+	open := byID[envelope.PurposeID].Participation
+	if open == nil || open.Given != 1 || open.Expected != 2 {
+		t.Errorf("open envelope participation = %+v, want 1 of 2", open)
+	}
+	if closed := byID[toClose.PurposeID].Participation; closed != nil {
+		t.Errorf("closed envelope participation = %+v, want null", closed)
+	}
+}
+
 // TestPostDuesPaymentReversalAcceptsANamedContribution: the reversal route
 // ADR-029 built also accepts a named contribution's transaction id (ADR-034):
 // no new route or request shape.

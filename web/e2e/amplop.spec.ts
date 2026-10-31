@@ -63,7 +63,11 @@ async function finishRecord(page: Page, direction: 'in' | 'out', amount: number,
     page.getByRole('heading', { name: new RegExp(`^(${copy.record.headingOut}|${copy.record.headingDonation})$`) }),
   ).toBeVisible()
   await page.getByRole('button', { name: direction === 'in' ? copy.record.directionIn : copy.record.directionOut }).click()
-  await page.getByLabel(copy.record.amountLabel).fill(String(amount))
+  // A tap first, as she would: a prefilled Jumlah (#746) selects itself on
+  // focus, a frame later, and fill() alone would type before that lands.
+  const amountField = page.getByLabel(copy.record.amountLabel)
+  await amountField.click()
+  await amountField.fill(String(amount))
   await page.getByLabel(copy.record.noteLabel).fill(note)
   await page.getByRole('button', { name: copy.record.submit }).click()
   await expect(page.getByText(direction === 'in' ? copy.record.successIn : copy.record.successOut)).toBeVisible()
@@ -95,6 +99,10 @@ test.describe('amplop in depth', () => {
     await expectTotals(page, { target: 100_000, collected: 0, disbursed: 0, balance: 0 })
     await expect(participant(page, 'Warga Satu')).toContainText(t.participation.states.notGiven)
     await expect(participant(page, 'Warga Dua')).toContainText(t.participation.states.notGiven)
+
+    // Its card in Pengaturan counts the same way the report does (#746).
+    await page.goto('/settings')
+    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(0, 2))
   })
 
   test('named contributions: one in full, one under the minimum', async ({ page }) => {
@@ -105,6 +113,8 @@ test.describe('amplop in depth', () => {
     await openFromBeranda(page, occasion)
     await page.getByRole('button', { name: t.participation.recordAria('Warga Satu') }).click()
     await expect(page.getByRole('combobox', { name: copy.record.contributorLabel })).toContainText('Warga Satu')
+    // Jumlah opens on the minimum she has not yet given (#746).
+    await expect(page.getByLabel(copy.record.amountLabel)).toHaveValue(formatIDR(30_000))
     await finishRecord(page, 'in', 50_000, 'Sumbangan Warga Satu')
 
     // Through Catat, naming the giver in "Dari siapa?".
@@ -120,6 +130,13 @@ test.describe('amplop in depth', () => {
     await expect(participant(page, 'Warga Satu')).toContainText(formatIDR(50_000))
     await expect(participant(page, 'Warga Dua')).toContainText(t.participation.states.underMinimum)
     await expect(participant(page, 'Warga Dua')).toContainText(formatIDR(20_000))
+
+    // Under the minimum still counts as given: nobody is left on "belum
+    // menyumbang saja", and the card says two of two (#746).
+    await page.getByRole('checkbox', { name: t.participation.notGivenFilterLabel }).check()
+    await expect(page.getByText(t.participation.emptyFiltered)).toBeVisible()
+    await page.goto('/settings')
+    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(2, 2))
   })
 
   test('pay out of the amplop: Terpakai rises and Sisa falls', async ({ page }) => {

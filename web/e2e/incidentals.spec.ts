@@ -58,14 +58,12 @@ test.describe('incidentals', () => {
     await expect(page.getByText(copy.settings.incidentals.opened)).toBeVisible()
 
     // Opening lands on the new envelope itself (#745), whose way back is
-    // Pengaturan - where it is now a card, open status shown. Anchored to the
-    // card: "Berjalan" is not unique once a second envelope opens.
+    // Pengaturan - where it is now a card.
     await expect(page.getByRole('heading', { level: 1, name: occasion })).toBeVisible()
     await expect(page).toHaveURL(/\/incidentals\?purpose=\d+$/)
     await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
     const card = page.getByRole('button', { name: new RegExp(occasion) })
     await expect(card).toBeVisible()
-    await expect(card).toContainText(copy.incidentals.status.open)
 
     // Beranda keeps its own entry point too (the ADR's point): a fresh visit to
     // home renders the same envelope as its own row.

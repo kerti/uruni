@@ -752,6 +752,22 @@ describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
 
     await waitFor(() => expect(selectedOptionName(text.contributorLabel)).toBe('Budi'))
   })
+
+  it("opens Jumlah on initialAmount, what the member still owes toward the envelope's minimum (#746)", async () => {
+    vi.stubGlobal('fetch', stubWithMembers())
+    render(
+      <RecordTransaction
+        onRecorded={vi.fn()}
+        onCancel={vi.fn()}
+        onDuesRecorded={vi.fn()}
+        initialPurposeId={12}
+        initialMemberId={7}
+        initialAmount={25_000}
+      />,
+    )
+
+    expect(await screen.findByLabelText(text.amountLabel)).toHaveValue('Rp25.000')
+  })
 })
 
 describe('RecordTransaction: the kind selector (#383)', () => {

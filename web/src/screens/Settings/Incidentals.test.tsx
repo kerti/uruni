@@ -7,7 +7,7 @@ import { ToastProvider } from '@/components/toast/ToastProvider'
 import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
-import type { Incidental } from '@/lib/incidentals'
+import type { IncidentalListItem, ParticipationProgress } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 import { cardName } from '@/test/card'
 
@@ -21,7 +21,12 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function envelope(purposeId: number, occasion: string, closedOn: string | null = null): Incidental {
+function envelope(
+  purposeId: number,
+  occasion: string,
+  closedOn: string | null = null,
+  participation: ParticipationProgress | null = null,
+): IncidentalListItem {
   return {
     purpose_id: purposeId,
     occasion,
@@ -30,6 +35,7 @@ function envelope(purposeId: number, occasion: string, closedOn: string | null =
     closed_on: closedOn,
     created_at: purposeId,
     minimum_per_member: null,
+    participation,
   }
 }
 
@@ -38,7 +44,7 @@ function envelope(purposeId: number, occasion: string, closedOn: string | null =
  * recorded so a test can assert what was sent. `members` answers the
  * recipients picker's roster (ADR-034) - empty by default, since most of this
  * suite is not about that field. */
-function stubIncidentals(initial: Incidental[], writeResponse?: () => Response, members: Member[] = []) {
+function stubIncidentals(initial: IncidentalListItem[], writeResponse?: () => Response, members: Member[] = []) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -124,13 +130,26 @@ describe('Settings incidentals', () => {
     renderAt()
 
     expect(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Halal bihalal RT') })).toBeInTheDocument()
-    expect(screen.getByText(copy.incidentals.status.open)).toBeInTheDocument()
+    // Every card here is open, so none says so (#746).
+    expect(screen.queryByText(copy.incidentals.status.open)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: cardName(text.cardVerb, '17 Agustus') })).not.toBeInTheDocument()
 
     const closedRow = screen.getByRole('button', { name: new RegExp(text.closedRow) })
     expect(within(closedRow).getByText('2')).toBeInTheDocument()
     await userEvent.click(closedRow)
     expect(currentLocation()).toBe('/incidentals/closed')
+  })
+
+  it("shows an open envelope's progress, the report's own line, and nothing when nobody is expected (#746)", async () => {
+    const { fetchMock } = stubIncidentals([envelope(1, 'Halal bihalal RT', null, { given: 9, expected: 10 }), envelope(2, 'Takziah')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    const card = await screen.findByRole('button', { name: cardName(text.cardVerb, 'Halal bihalal RT') })
+    expect(within(card).getByText(copy.incidentals.participation.progress(9, 10))).toBeInTheDocument()
+    expect(copy.incidentals.participation.progress(9, 10)).toBe('9 dari 10 sudah menyumbang')
+    const quiet = screen.getByRole('button', { name: cardName(text.cardVerb, 'Takziah') })
+    expect(within(quiet).queryByText(/sudah menyumbang/)).not.toBeInTheDocument()
   })
 
   it('shows no closed row while every envelope is still open', async () => {

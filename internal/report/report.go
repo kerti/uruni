@@ -579,7 +579,7 @@ func NewPage(r ledger.Report, empty bool) Page {
 		given := 0
 		for _, p := range e.Expected {
 			person := Person{Name: p.MemberName, Class: string(p.State), Status: Text.participationStatus(p.State)}
-			if p.State != ledger.ParticipationBelum {
+			if p.State.HasGiven() {
 				given++
 				person.Amount = money.FormatIDR(p.Amount)
 			}

@@ -97,8 +97,9 @@ export default function Incidentals({
   backLabel?: string
   /** Navigates to Catat, this envelope's purpose pre-chosen - and, when given,
    * a member pre-chosen too (ADR-034: one action per row, record a
-   * contribution with the member already filled in). */
-  onRecordFor: (purposeId: number, memberId?: number) => void
+   * contribution with the member already filled in) - and an amount, what
+   * that member still owes toward the minimum (#746). */
+  onRecordFor: (purposeId: number, memberId?: number, amount?: number) => void
   onViewTransactionsFor: (purposeId: number) => void
   purposeId: number
 }) {
@@ -232,7 +233,7 @@ export default function Incidentals({
         participationState={participationState}
         feedback={feedback}
         submitting={submitting}
-        onRecord={(memberId) => onRecordFor(purposeId, memberId)}
+        onRecord={(memberId, amount) => onRecordFor(purposeId, memberId, amount)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
         onActivityChanged={refreshDetail}
         onShowClose={() => {
@@ -295,7 +296,7 @@ function DetailView({
   participationState: ReturnType<typeof useApi<IncidentalParticipation>>[0]
   feedback: Feedback | null
   submitting: boolean
-  onRecord: (memberId?: number) => void
+  onRecord: (memberId?: number, amount?: number) => void
   onViewTransactions: () => void
   onActivityChanged: () => Promise<void>
   onShowClose: () => void
@@ -423,7 +424,13 @@ function DetailView({
       {/* Who has given and how much (ADR-034, #211) - its own section,
           separated by a hairline the same way the activity list below it is. */}
       <SectionDivider />
-      <ParticipationSection recipients={envelope.recipients ?? []} state={participationState} onRecord={onRecord} onRetry={onRetry} />
+      <ParticipationSection
+        recipients={envelope.recipients ?? []}
+        minimum={envelope.minimum_per_member}
+        state={participationState}
+        onRecord={onRecord}
+        onRetry={onRetry}
+      />
 
       {/* The envelope and what can be done with it above; what has moved
           through it below - two sections, one hairline (#319). */}
@@ -608,16 +615,24 @@ function participationStateText(state: ParticipationStateKind): { label: string;
  */
 function ParticipationSection({
   recipients,
+  minimum,
   state,
   onRecord,
   onRetry,
 }: {
   recipients: IncidentalDetail['recipients']
+  minimum: number | null
   state: ReturnType<typeof useApi<IncidentalParticipation>>[0]
-  onRecord: (memberId?: number) => void
+  onRecord: (memberId?: number, amount?: number) => void
   onRetry: () => void
 }) {
   const text = copy.incidentals.participation
+  // Status iuran's "belum bayar saja" (#746): the same list, narrowed to who
+  // has given nothing. Unticked by default - the whole roster is the answer to
+  // "who has given?".
+  const [notGivenOnly, setNotGivenOnly] = useState(false)
+  const expected = state.data?.expected ?? []
+  const visibleExpected = notGivenOnly ? expected.filter((row) => row.state === 'belum') : expected
 
   return (
     <section className="flex flex-col gap-2">
@@ -633,40 +648,55 @@ function ParticipationSection({
         state.error && <ErrorState error={state.error} onRetry={onRetry} />
       ) : (
         <>
-          {state.data.expected.length === 0 ? (
+          {expected.length === 0 ? (
             <p className="text-muted-foreground">{text.noneExpected}</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {state.data.expected.map((row) => {
-                const { label, showAmount } = participationStateText(row.state)
-                return (
-                  <li
-                    key={row.member.id}
-                    className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate font-medium">{row.member.name}</span>
-                      {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
-                    </div>
-                    {/* Plain ink under the amount (#154), not a button per
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 rounded border-input"
+                  checked={notGivenOnly}
+                  onChange={(event) => setNotGivenOnly(event.target.checked)}
+                />
+                {text.notGivenFilterLabel}
+              </label>
+              {visibleExpected.length === 0 ? (
+                <p className="text-muted-foreground">{text.emptyFiltered}</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {visibleExpected.map((row) => {
+                    const { label, showAmount } = participationStateText(row.state)
+                    return (
+                      <li
+                        key={row.member.id}
+                        className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                          {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
+                        </div>
+                        {/* Plain ink under the amount (#154), not a button per
                         row: a 30-member roster stays a list, not a column
                         of buttons. The invisible after: box is the 44px
                         target Design-System.md sets. */}
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-muted-foreground">{label}</span>
-                      <button
-                        type="button"
-                        className="relative shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
-                        aria-label={text.recordAria(row.member.name)}
-                        onClick={() => onRecord(row.member.id)}
-                      >
-                        {text.record}
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-muted-foreground">{label}</span>
+                          <button
+                            type="button"
+                            className="relative shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+                            aria-label={text.recordAria(row.member.name)}
+                            onClick={() => onRecord(row.member.id, stillDue(minimum, row.contributed_amount))}
+                          >
+                            {text.record}
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </>
           )}
 
           {state.data.unexpected.length > 0 && (
@@ -689,6 +719,15 @@ function ParticipationSection({
       )}
     </section>
   )
+}
+
+/** What Catat sumbangan opens with for one member (#746): the minimum, less
+ * whatever they have given already - so "belum" gets the minimum and "kurang"
+ * the rest of it. Undefined when there is no minimum or nothing is left, and
+ * Jumlah starts empty as before. */
+function stillDue(minimum: number | null, contributed: number): number | undefined {
+  if (minimum === null || contributed >= minimum) return undefined
+  return minimum - contributed
 }
 
 /** Two arrays are the same set of ids, order ignored - the "did recipients
