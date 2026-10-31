@@ -434,25 +434,8 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if r.Rows, r.Walk, err = l.reportRows(ctx, p, monthStart, r.Running); err != nil {
 		return Report{}, err
 	}
-	// The ends of the walk are ledger sums, and only the whole fund or one pos
-	// has them. A purpose that did not exist yet sums to nothing.
-	if r.Walk.Full {
-		dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
-		r.Walk.StartOn, r.Walk.EndOn = dayBefore, r.AsOf
-		if p.PurposeID == nil {
-			start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
-			if err != nil {
-				return Report{}, fmt.Errorf("report start balance: %w", err)
-			}
-			r.Walk.Start, r.Walk.End = money.FromDB(start), r.Balance
-		} else {
-			if r.Walk.Start, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, reportBound{through: &dayBefore}); err != nil {
-				return Report{}, err
-			}
-			if r.Walk.End, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, b); err != nil {
-				return Report{}, err
-			}
-		}
+	if err := l.walkEnds(ctx, p, monthStart, b, r.AsOf, &r.Walk); err != nil {
+		return Report{}, err
 	}
 
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
@@ -467,6 +450,74 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	}
 
 	return r, nil
+}
+
+// walkEnds sets the walk's two balances and their dates. The ends are ledger
+// sums, and only the whole fund or one pos has them (Full). A purpose that did
+// not exist yet sums to nothing.
+func (l *Ledger) walkEnds(ctx context.Context, p ReportParams, monthStart time.Time, b reportBound, asOf string, walk *ReportWalk) error {
+	if !walk.Full {
+		return nil
+	}
+	dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
+	walk.StartOn, walk.EndOn = dayBefore, asOf
+	if p.PurposeID == nil {
+		start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
+		if err != nil {
+			return fmt.Errorf("report start balance: %w", err)
+		}
+		end, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: b.through})
+		if err != nil {
+			return fmt.Errorf("report end balance: %w", err)
+		}
+		walk.Start, walk.End = money.FromDB(start), money.FromDB(end)
+		return nil
+	}
+	var err error
+	if walk.Start, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, reportBound{through: &dayBefore}); err != nil {
+		return err
+	}
+	if walk.End, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, b); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MonthWalk is the report's walk alone (ADR-038) for one month under the
+// report's filters: Riwayat's month summary (#751) reads the same figures the
+// public report prints, from the same derivation, so the two can never
+// disagree. Month is required here; an empty or malformed one is
+// ErrInvalidArgument.
+func (l *Ledger) MonthWalk(ctx context.Context, p ReportParams) (ReportWalk, error) {
+	monthStart, err := parseReportMonth(p.Month)
+	if err != nil {
+		return ReportWalk{}, err
+	}
+	fund, err := l.q.GetFund(ctx, p.FundID)
+	if err != nil {
+		return ReportWalk{}, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return ReportWalk{}, err
+	}
+	today := l.now().In(loc)
+	running := p.Month >= today.Format(reportMonthLayout)
+	asOf := today.Format(reportDayLayout)
+	b := reportBound{}
+	if !running {
+		b = boundAtMonthEnd(monthStart, loc)
+		asOf = *b.through
+	}
+
+	_, walk, err := l.reportRows(ctx, p, monthStart, running)
+	if err != nil {
+		return ReportWalk{}, err
+	}
+	if err := l.walkEnds(ctx, p, monthStart, b, asOf, &walk); err != nil {
+		return ReportWalk{}, err
+	}
+	return walk, nil
 }
 
 // reportBound is where a past month's figures stop (ADR-037): through is its

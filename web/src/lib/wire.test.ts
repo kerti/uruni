@@ -21,6 +21,7 @@ import reconciliationsSample from '@/test/wire/reconciliations-page.json'
 import reimbursementsSample from '@/test/wire/reimbursements-page.json'
 import sessionSample from '@/test/wire/session.json'
 import setupSample from '@/test/wire/setup.json'
+import transactionSummarySample from '@/test/wire/transaction-summary.json'
 import transactionsSample from '@/test/wire/transactions-page.json'
 import transferSample from '@/test/wire/transfer.json'
 import userSample from '@/test/wire/user.json'
@@ -30,6 +31,7 @@ import { listReconciliations } from '@/lib/reconciliations'
 import { listReimbursements } from '@/lib/reimbursements'
 import { listMembersPage } from '@/lib/setup'
 import { listTransactions } from '@/lib/transactions'
+import type { TransactionSummary } from '@/lib/transactions'
 import type { AuthUser, SessionStatus } from '@/lib/auth'
 import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
 import type { DuesGrid, DuesGridMember, DuesPaymentHistoryRow, DuesStatusRow, OutstandingDuesPeriod } from '@/lib/dues'
@@ -99,6 +101,18 @@ const fundKeys: Keys<Fund> = {
 }
 const accountKeys: Keys<Account> = { id: true, kind: true, name: true, inactive_on: true, opening_on: true, created_at: true }
 const purposeKeys: Keys<Purpose> = { id: true, kind: true, name: true, created_at: true }
+const transactionSummaryKeys: Keys<TransactionSummary> = {
+  full: true,
+  start_on: true,
+  end_on: true,
+  start: true,
+  openings: true,
+  in: true,
+  out: true,
+  adjustments: true,
+  moved: true,
+  end: true,
+}
 const transactionKeys: Keys<Transaction> = {
   id: true,
   account_id: true,
@@ -231,6 +245,7 @@ void (fundSample satisfies Has<Fund>)
 void (accountsSample satisfies Has<Account>[])
 void (purposesSample satisfies Has<Purpose>[])
 void (transactionsSample.transactions satisfies Has<Transaction>[])
+void (transactionSummarySample satisfies Has<TransactionSummary>)
 void (membersSample.members satisfies Has<Member>[])
 void (duesTiersSample satisfies Has<DuesTierWithRates>[])
 void (duesTiersSample.flatMap((t) => t.rates) satisfies Has<DuesRate>[])
@@ -265,6 +280,7 @@ describe('the wire samples carry no key their interface does not declare', () =>
     ['Account', [...accountsSample, ...setupSample.accounts], accountKeys],
     ['Purpose', purposesSample, purposeKeys],
     ['Transaction', transactionsSample.transactions, transactionKeys],
+    ['TransactionSummary', [transactionSummarySample], transactionSummaryKeys],
     ['Member', [...membersSample.members, ...duesStatusSample.map((row) => row.member)], memberKeys],
     ['DuesTierWithRates', duesTiersSample, duesTierKeys],
     ['DuesRate', duesTiersSample.flatMap((t) => t.rates), duesRateKeys],

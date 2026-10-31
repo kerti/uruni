@@ -70,6 +70,7 @@ Anything not listed falls through to the SPA (outside `/api` and `/report`) or a
 | POST | `/api/setup` | required |
 | GET | `/api/transactions` | required |
 | POST | `/api/transactions` | required |
+| GET | `/api/transactions/summary` | required |
 | POST | `/api/transactions/{id}/purpose-correction` | required |
 | POST | `/api/transactions/{id}/receipts` | required |
 | POST | `/api/transactions/{id}/reversal` | required |

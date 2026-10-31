@@ -194,6 +194,7 @@ func (a *api) routes(r chi.Router) {
 		// Only the immutable routes are keyed (ADR-043).
 		r.With(a.keyed).Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
+		r.Get("/transactions/summary", a.transactionSummary)
 		// Fixing a posted row's peruntukan (ADR-033, #267): a reclass_purpose pair
 		// naming the row it corrects, addressed by that row's id like
 		// /api/incidentals/{purposeID}/close. It wraps Ledger.PostPurposeCorrection,
