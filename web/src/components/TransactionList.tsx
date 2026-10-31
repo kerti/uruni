@@ -141,7 +141,11 @@ export default function TransactionList({
     <>
       {groups.map((group) => (
         <section key={group.month ?? 'all'} className="flex flex-col gap-2">
-          {group.month !== null && <h3 className="pt-2 text-sm font-semibold text-muted-foreground">{formatPeriod(group.month)}</h3>}
+          {group.month !== null && (
+            <h3 className="flex items-center gap-3 pt-2 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border after:content-['']">
+              {formatPeriod(group.month)}
+            </h3>
+          )}
           <ul className="flex flex-col gap-2">
             {group.rows.map((transaction) => {
               const note = noteForDisplay(transaction)

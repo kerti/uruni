@@ -7,6 +7,7 @@ import TransactionList from '@/components/TransactionList'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
+import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
 import { errorCode } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
@@ -186,7 +187,7 @@ export default function Home({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.locationsHeading}</h2>
+        <SectionLabel>{copy.home.locationsHeading}</SectionLabel>
         {/* A plain list of names and figures, not cards (2026-10-03): a
             card reads as a button, and a location row opens nothing -
             Riwayat has no location filter to send it to. */}
@@ -227,7 +228,7 @@ export default function Home({
           always renders; the guard only covers a fund mid-setup. */}
       {purposeRows.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.purposeBreakdownHeading}</h2>
+          <SectionLabel>{copy.home.purposeBreakdownHeading}</SectionLabel>
           <ul className="flex flex-col gap-2">
             {purposeRows.map((purpose: PurposeBalance) => (
               // Every row opens something, so every row is a button with a
@@ -282,7 +283,7 @@ export default function Home({
           what happened this month, then the rows it happened in. Plain ink -
           a month is not a verdict. */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.cashflowHeading}</h2>
+        <SectionLabel>{copy.home.cashflowHeading}</SectionLabel>
         <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
           {/* Two columns while both figures are short; one under the other when
               either is wide enough to crowd its half (a whole figure to its
@@ -304,7 +305,7 @@ export default function Home({
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
+          <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
           {/* 44px to the thumb, not to the layout (#319): an invisible hit area
               centred on the link - ReceiptRowButton's technique - so the row
               is only as tall as its small heading, rather than min-h-11

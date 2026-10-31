@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
+import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
@@ -636,7 +637,7 @@ function ParticipationSection({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-muted-foreground">{text.heading}</h2>
+      <SectionLabel>{text.heading}</SectionLabel>
 
       {recipients.length > 0 && (
         <p className="text-sm text-muted-foreground">{text.recipientsLine(recipients.map((r) => r.member_name).join(', '))}</p>
@@ -933,7 +934,7 @@ function EnvelopeActivity({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
+        <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
         {/* The same invisible 44px hit area as Beranda's own "Lihat semua"
             (#319), so the row stays as tall as its small heading. */}
         <Button
