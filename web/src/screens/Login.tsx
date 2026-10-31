@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { WarningCircle } from '@phosphor-icons/react'
 
 import AuthChrome from '@/components/AuthChrome'
 import { Button } from '@/components/ui/button'
@@ -82,13 +82,13 @@ export default function Login({ onLoggedIn, demo = null }: { onLoggedIn: (user: 
             </div>
             {code === 'invalid_credentials' && (
               <p role="alert" className="flex items-center gap-2 text-attention-text">
-                <CircleAlert aria-hidden="true" />
+                <WarningCircle aria-hidden="true" />
                 {text.invalidCredentials}
               </p>
             )}
             {code === 'too_many_requests' && (
               <p role="alert" className="flex items-center gap-2 text-attention-text">
-                <CircleAlert aria-hidden="true" />
+                <WarningCircle aria-hidden="true" />
                 {text.tooManyRequests}
               </p>
             )}

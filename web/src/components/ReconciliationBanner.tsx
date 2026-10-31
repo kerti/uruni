@@ -1,4 +1,4 @@
-import { ChevronRight, CircleCheck, CircleHelp, Search } from 'lucide-react'
+import { CaretRight, CheckCircle, MagnifyingGlass, Question } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 
 import { copy } from '@/copy/id'
@@ -52,7 +52,7 @@ export default function ReconciliationBanner({
   if (!everReconciled) {
     return (
       <Wrapper onClick={onClick} className="text-foreground" ring="ring-foreground/10">
-        <CircleHelp aria-hidden="true" className="shrink-0 text-muted-foreground" />
+        <Question aria-hidden="true" className="shrink-0 text-muted-foreground" />
         {copy.reconciliation.neverChecked}
       </Wrapper>
     )
@@ -61,7 +61,7 @@ export default function ReconciliationBanner({
   if (openLines.length === 0) {
     return (
       <Wrapper onClick={onClick} className="text-foreground" ring="ring-success/50">
-        <CircleCheck aria-hidden="true" className="shrink-0 text-success" />
+        <CheckCircle aria-hidden="true" className="shrink-0 text-success" />
         {copy.reconciliation.matched}
       </Wrapper>
     )
@@ -71,7 +71,7 @@ export default function ReconciliationBanner({
 
   return (
     <Wrapper onClick={onClick} className="text-attention-text" ring="ring-attention/50">
-      <Search aria-hidden="true" className="shrink-0" />
+      <MagnifyingGlass aria-hidden="true" className="shrink-0" />
       {/* The question on its own line, so the amount reads first. */}
       <span className="flex flex-col">
         <span>{copy.reconciliation.discrepancy(formatIDR(totalDifference))}</span>
@@ -116,7 +116,7 @@ function Wrapper({
         onClick={onClick}
       >
         <span className="flex items-center gap-2">{children}</span>
-        <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+        <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
       </button>
     )
   }

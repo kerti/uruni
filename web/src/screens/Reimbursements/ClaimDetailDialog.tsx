@@ -1,4 +1,4 @@
-import { Camera, Eraser, HandCoins, Pencil, Trash2, Undo2 } from 'lucide-react'
+import { ArrowUUpLeft, Camera, Eraser, HandCoins, Pencil, Trash } from '@phosphor-icons/react'
 import { useRef } from 'react'
 
 import DetailActions from '@/components/DetailActions'
@@ -155,7 +155,16 @@ function Detail({
               ]
             : []),
           ...(waived
-            ? [{ key: 'unwaive', label: text.actions.unwaive, wide: true, icon: Undo2, disabled: busy, onClick: () => onUnwaive(claim) }]
+            ? [
+                {
+                  key: 'unwaive',
+                  label: text.actions.unwaive,
+                  wide: true,
+                  icon: ArrowUUpLeft,
+                  disabled: busy,
+                  onClick: () => onUnwaive(claim),
+                },
+              ]
             : []),
           receiptIds.length > 0
             ? { key: 'receipts', label: copy.receipts.viewReceipt, icon: Camera, onClick: () => onViewReceipts(claim) }
@@ -172,7 +181,7 @@ function Detail({
                 {
                   key: 'delete',
                   label: text.actions.delete,
-                  icon: Trash2,
+                  icon: Trash,
                   tone: 'destructive' as const,
                   disabled: busy,
                   onClick: () => onDelete(claim),

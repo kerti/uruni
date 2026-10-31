@@ -12,8 +12,8 @@ describe('ReceiptRowButton (#154 follow-up)', () => {
     const { container } = render(<ReceiptRowButton receiptIds={[]} onClick={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: text.addFromRow })).toBeInTheDocument()
-    expect(container.querySelector('.lucide-image-plus')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-camera')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ImageSquare"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Camera"]')).not.toBeInTheDocument()
   })
 
   it('renders the Forest Camera icon and the count for a row with photos', () => {
@@ -21,8 +21,8 @@ describe('ReceiptRowButton (#154 follow-up)', () => {
 
     const button = screen.getByRole('button', { name: text.viewReceipt })
     expect(button).toBeInTheDocument()
-    expect(container.querySelector('.lucide-camera')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-image-plus')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Camera"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ImageSquare"]')).not.toBeInTheDocument()
     expect(button.textContent).toContain('2')
   })
 

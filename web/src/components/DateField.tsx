@@ -1,4 +1,4 @@
-import { CalendarDays } from 'lucide-react'
+import { CalendarDots } from '@phosphor-icons/react'
 import { useState, type CSSProperties } from 'react'
 import { Popover } from 'radix-ui'
 import { DayPicker } from 'react-day-picker'
@@ -65,7 +65,7 @@ export default function DateField({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger id={id} className={pickerTrigger} disabled={disabled}>
         <span className="truncate">{selected ? formatIsoDate(value) : copy.dateField.empty}</span>
-        <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <CalendarDots aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} collisionPadding={16} className={pickerPopover}>

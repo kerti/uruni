@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { WarningCircle } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'
@@ -29,7 +29,7 @@ export default function ErrorState({ error, onRetry }: { error: ApiError; onRetr
   return (
     <div role="alert" className="flex flex-col items-start gap-2 text-attention-text">
       <p className="flex items-center gap-2">
-        <CircleAlert aria-hidden="true" />
+        <WarningCircle aria-hidden="true" />
         {text}
       </p>
       {/* Forest and full width (#313): retrying is the only way forward from

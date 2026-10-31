@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, RotateCcw } from 'lucide-react'
+import { ArrowCounterClockwise, DownloadSimple } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
@@ -49,7 +49,7 @@ export default function Backup() {
         disabled={busy}
         onClick={() => void run(downloadBackup)}
       >
-        <Download aria-hidden="true" className="size-4" />
+        <DownloadSimple aria-hidden="true" className="size-4" />
         {busy ? text.downloading : text.download}
       </Button>
 
@@ -149,7 +149,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
                     onClick={() => onRestore(item.name)}
                     className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                   >
-                    <RotateCcw aria-hidden="true" className="size-4" />
+                    <ArrowCounterClockwise aria-hidden="true" className="size-4" />
                   </button>
                 )}
                 <button
@@ -159,7 +159,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
                   onClick={() => void handleDownload(item.name)}
                   className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                 >
-                  <Download aria-hidden="true" className="size-4" />
+                  <DownloadSimple aria-hidden="true" className="size-4" />
                 </button>
               </div>
             </li>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ComponentProps } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeSlash } from '@phosphor-icons/react'
 
 import { Input } from '@/components/ui/input'
 import { copy } from '@/copy/id'
@@ -33,7 +33,7 @@ export default function PasswordInput({ className, disabled, ...props }: Omit<Co
         onClick={() => setVisible((v) => !v)}
         className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
       >
-        {visible ? <EyeOff aria-hidden="true" className="size-5" /> : <Eye aria-hidden="true" className="size-5" />}
+        {visible ? <EyeSlash aria-hidden="true" className="size-5" /> : <Eye aria-hidden="true" className="size-5" />}
       </button>
     </div>
   )

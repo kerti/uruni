@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { CircleAlert } from 'lucide-react'
+import { WarningCircle } from '@phosphor-icons/react'
 
 import ErrorState from '@/components/states/ErrorState'
 import Loading from '@/components/states/Loading'
@@ -260,7 +260,7 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
       {demo && <p className="text-sm text-attention-text">{text.password.demoLocked}</p>}
       {localError && (
         <p role="alert" className="flex items-center gap-2 text-attention-text">
-          <CircleAlert aria-hidden="true" />
+          <WarningCircle aria-hidden="true" />
           {localError === 'short' ? copy.auth.register.passwordTooShort : text.password.mismatch}
         </p>
       )}

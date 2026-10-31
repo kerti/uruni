@@ -1,4 +1,4 @@
-import { CirclePause, CirclePlay, Trash2 } from 'lucide-react'
+import { PauseCircle, PlayCircle, Trash } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DetailActions from '@/components/DetailActions'
@@ -394,13 +394,13 @@ function EditLocationDialog({
                   inactive
                     ? {
                         key: 'reinstate',
-                        icon: CirclePlay,
+                        icon: PlayCircle,
                         label: busy ? text.reinstating : text.reinstate,
                         disabled: busy,
                         onClick: () => void submit(() => setAccountInactiveOn(shown.id, null), text.reactivated),
                       }
-                    : { key: 'deactivate', label: text.deactivate, icon: CirclePause, onClick: () => setConfirming('deactivate') },
-                  { key: 'delete', label: text.delete, icon: Trash2, tone: 'destructive', onClick: () => setConfirming('delete') },
+                    : { key: 'deactivate', label: text.deactivate, icon: PauseCircle, onClick: () => setConfirming('deactivate') },
+                  { key: 'delete', label: text.delete, icon: Trash, tone: 'destructive', onClick: () => setConfirming('delete') },
                 ]}
               />
             </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { CircleAlert, CircleCheck } from 'lucide-react'
+import { CheckCircle, WarningCircle } from '@phosphor-icons/react'
 
 import { SUCCESS_TOAST_MS, ToastContext, type Toasts } from '@/components/toast/useToast'
 import { cn } from '@/lib/utils'
@@ -72,9 +72,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               )}
             >
               {toast.tone === 'success' ? (
-                <CircleCheck aria-hidden="true" className="size-5 shrink-0" />
+                <CheckCircle aria-hidden="true" className="size-5 shrink-0" />
               ) : (
-                <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
+                <WarningCircle aria-hidden="true" className="size-5 shrink-0" />
               )}
               <span>{toast.text}</span>
             </button>

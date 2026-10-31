@@ -24,7 +24,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 ## Stack
 
 - **Backend:** Go — serves the JSON API, server-renders the public report (`html/template`), and serves the React SPA. Single origin. In production the built SPA is embedded via `embed.FS` into one binary.
-- **Frontend:** React + Vite, as a connection-required PWA. Tailwind + shadcn/ui + lucide-react.
+- **Frontend:** React + Vite, as a connection-required PWA. Tailwind + shadcn/ui + Phosphor icons.
 - **Data:** sqlc over SQLite — the only engine through `0.x`, no `DATABASE_URL` (ADR-004). Migrations via goose.
 - **Auth:** local email/password (argon2id) + secure cookie sessions.
 - **License:** AGPL-3.0.

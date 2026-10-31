@@ -87,7 +87,7 @@ describe('TransactionList row labels (#257)', () => {
   it('labels a dues payment: CalendarCheck, "{period} - {anggota}", and Iuran for screen readers', () => {
     const { container } = renderRows([transaction({ kind: 'dues', dues_period: '2026-08', member_id: 5, member_name: 'Budi' })])
 
-    expect(container.querySelector('.lucide-calendar-check')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="CalendarCheck"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.dues.text(formatPeriod('2026-08'), 'Budi'))).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.dues.kind)).toBeInTheDocument()
   })
@@ -104,7 +104,7 @@ describe('TransactionList row labels (#257)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.duesReversal.text(formatPeriod('2026-08'), 'Budi'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
@@ -113,7 +113,7 @@ describe('TransactionList row labels (#257)', () => {
   it("labels a named contribution with HandCoins and the member's name, and Sumbangan for screen readers", () => {
     const { container } = renderRows([transaction({ purpose_id: 2, member_id: 5, member_name: 'Budi' })])
 
-    expect(container.querySelector('.lucide-hand-coins')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="HandCoins"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contribution.text('Budi'))).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contribution.kind)).toHaveClass('sr-only')
   })
@@ -121,7 +121,7 @@ describe('TransactionList row labels (#257)', () => {
   it('labels a contribution into an envelope that names nobody "Tanpa nama", with Sumbangan for screen readers', () => {
     const { container } = renderRows([transaction({ purpose_id: 2, purpose_kind: 'incidental' })])
 
-    expect(container.querySelector('.lucide-hand-coins')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="HandCoins"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contribution.anonymous)).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contribution.kind)).toHaveClass('sr-only')
   })
@@ -132,7 +132,7 @@ describe('TransactionList row labels (#257)', () => {
       transaction({ id: 2, purpose_id: 2, direction: 'out', purpose_kind: 'incidental' }),
     ])
 
-    expect(container.querySelector('.lucide-hand-coins')).toBeNull()
+    expect(container.querySelector('[data-icon="HandCoins"]')).toBeNull()
     expect(screen.queryByText(copy.rowLabels.contribution.anonymous)).not.toBeInTheDocument()
   })
 
@@ -141,7 +141,7 @@ describe('TransactionList row labels (#257)', () => {
       transaction({ kind: 'adjustment', direction: 'out', purpose_id: 2, member_id: 5, member_name: 'Budi', reverses_transaction_id: 10 }),
     ])
 
-    expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contributionReversal.text('Budi'))).toBeInTheDocument()
     expect(document.querySelector('.sr-only')).toBeNull()
   })
@@ -149,7 +149,7 @@ describe('TransactionList row labels (#257)', () => {
   it('labels an opening balance: Flag, "Saldo awal - {lokasi}", with no duplicate screen-reader word', () => {
     const { container } = renderRows([transaction({ kind: 'opening', account_name: 'Bank Jago' })])
 
-    expect(container.querySelector('.lucide-flag')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Flag"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.opening.text('Bank Jago'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
@@ -167,7 +167,7 @@ describe('TransactionList row labels (#257)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-hand-helping')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="HandHeart"]')).toBeInTheDocument()
     // The visible label text is just the member's name - the claim note is
     // not repeated inside it.
     expect(screen.getByText(copy.rowLabels.settlement.text('Jane'))).toBeInTheDocument()
@@ -187,7 +187,7 @@ describe('TransactionList row labels (#257)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-arrow-left-right')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowsLeftRight"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferLocation.text('Tunai', 'Bank'))).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferLocation.kind)).toBeInTheDocument()
   })
@@ -203,7 +203,7 @@ describe('TransactionList row labels (#257)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-mail')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Envelope"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferPurpose.text("Jane's wedding", 'Kas Utama'))).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
   })
@@ -211,7 +211,7 @@ describe('TransactionList row labels (#257)', () => {
   it('labels a reconciliation adjusted fix with SlidersHorizontal and "Penyesuaian - {lokasi}", with no duplicate screen-reader word', () => {
     const { container } = renderRows([transaction({ kind: 'adjustment', direction: 'out', account_name: 'Tunai' })])
 
-    expect(container.querySelector('.lucide-sliders-horizontal')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="SlidersHorizontal"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
@@ -239,13 +239,13 @@ describe('TransactionList row labels (#257)', () => {
 
     // None of the label icons this row could not possibly have rendered.
     for (const cls of [
-      '.lucide-calendar-check',
-      '.lucide-undo-2',
-      '.lucide-flag',
-      '.lucide-hand-helping',
-      '.lucide-arrow-left-right',
-      '.lucide-mail',
-      '.lucide-sliders-horizontal',
+      '[data-icon="CalendarCheck"]',
+      '[data-icon="ArrowUUpLeft"]',
+      '[data-icon="Flag"]',
+      '[data-icon="HandHeart"]',
+      '[data-icon="ArrowsLeftRight"]',
+      '[data-icon="Envelope"]',
+      '[data-icon="SlidersHorizontal"]',
     ]) {
       expect(container.querySelector(cls)).not.toBeInTheDocument()
     }
@@ -258,8 +258,8 @@ describe('TransactionList row labels (#257)', () => {
       transaction({ kind: 'adjustment', direction: 'out', account_name: 'Tunai', note: 'Koreksi salah catat' }),
     ])
 
-    expect(container.querySelector('.lucide-undo-2')).not.toBeInTheDocument()
-    expect(container.querySelector('.lucide-sliders-horizontal')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="SlidersHorizontal"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     expect(screen.getByText('Koreksi salah catat')).toBeInTheDocument()
   })
@@ -281,8 +281,8 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-mail')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="PencilLine"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Envelope"]')).not.toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
   })
@@ -366,14 +366,14 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     const { container } = renderCorrectableRows([transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 })])
 
     expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
-    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="PencilLine"]')).toBeInTheDocument()
     expect(screen.getByText(copy.purposeCorrection.corrected)).toBeInTheDocument()
   })
 
   it('marks nothing on a row whose effective tag is its own', () => {
     const { container } = renderCorrectableRows([transaction({ id: 17, purpose_id: 1, effective_purpose_id: 1 })])
 
-    expect(container.querySelector('.lucide-pen-line')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="PencilLine"]')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
   })
 
@@ -595,7 +595,7 @@ describe('TransactionList the pair read as linked (ADR-042)', () => {
       transaction({ id: 43, kind: 'adjustment', direction: 'out', reverses_transaction_id: 40, reverses_occurred_on: '2026-08-12' }),
     ])
 
-    expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).toBeInTheDocument()
     expect(screen.getByText('Pembatalan \u00b7 transaksi 12 Agustus 2026')).toBeInTheDocument()
   })
 
@@ -729,7 +729,7 @@ describe('TransactionList receipt photos (#154)', () => {
         name: `${copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026')}, ${copy.transactionDetail.receiptCountAria(2)}`,
       }),
     ).toBeInTheDocument()
-    expect(container.querySelectorAll('.lucide-camera')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-icon="Camera"]')).toHaveLength(1)
   })
 
   it('opens the per-photo menu with both Ganti foto and Hapus foto', async () => {
@@ -879,8 +879,8 @@ describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_reason: 'allocation' })])
 
     expect(screen.getByText(copy.rowLabels.transferPurposeMove.text('Kas Utama', 'Amplop Duka'))).toBeInTheDocument()
-    expect(container.querySelector('.lucide-shuffle')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-mail')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Shuffle"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Envelope"]')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
     expect(screen.queryByText(copy.rowLabels.transferPurposeCorrection.kind)).not.toBeInTheDocument()
   })
@@ -890,26 +890,26 @@ describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
 
     expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferPurpose.text('Kas Utama', 'Amplop Duka'))).toBeInTheDocument()
-    expect(container.querySelector('.lucide-mail')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-shuffle')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Envelope"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Shuffle"]')).not.toBeInTheDocument()
   })
 
   it('reads a null reason as a roll: the row predates the column', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_reason: null })])
     expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
-    expect(container.querySelector('.lucide-mail')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Envelope"]')).toBeInTheDocument()
 
     // And a row from an older server, with no field at all, reads the same.
     const { container: older } = renderRows([transaction({ ...pair })])
-    expect(older.querySelector('.lucide-mail')).toBeInTheDocument()
+    expect(older.querySelector('[data-icon="Envelope"]')).toBeInTheDocument()
   })
 
   it('keeps a correction as Perbaikan pos', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_corrects_transaction_id: 4, transfer_reason: null })])
 
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
-    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
-    expect(container.querySelector('.lucide-shuffle')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-icon="PencilLine"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="Shuffle"]')).not.toBeInTheDocument()
   })
 })
 
@@ -936,12 +936,12 @@ describe('TransactionList one row per movement (#738)', () => {
     for (const direction of ['in', 'out'] as const) {
       const { container, unmount } = renderRows([transaction({ ...location, direction })])
 
-      expect(container.querySelector('.lucide-arrow-down-left')).not.toBeInTheDocument()
-      expect(container.querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument()
+      expect(container.querySelector('[data-icon="ArrowDownLeft"]')).not.toBeInTheDocument()
+      expect(container.querySelector('[data-icon="ArrowUpRight"]')).not.toBeInTheDocument()
       expect(container.querySelector('.text-success')).not.toBeInTheDocument()
       expect(container.querySelector('.text-attention')).not.toBeInTheDocument()
       // The movement's own glyph leads, once: the label does not repeat it.
-      expect(container.querySelectorAll('.lucide-arrow-left-right')).toHaveLength(1)
+      expect(container.querySelectorAll('[data-icon="ArrowsLeftRight"]')).toHaveLength(1)
       unmount()
     }
   })
@@ -1009,7 +1009,7 @@ describe('TransactionList one row per movement (#738)', () => {
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.text("Jane's wedding", 'Kas Utama'))).toBeInTheDocument()
     // The original still shows its stored pos (ADR-033); the PenLine glyph is on both rows.
     expect(screen.getByText("Jane's wedding", { selector: 'span.truncate' })).toBeInTheDocument()
-    expect(container.querySelectorAll('.lucide-pen-line')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-icon="PencilLine"]')).toHaveLength(2)
   })
 })
 

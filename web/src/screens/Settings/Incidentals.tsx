@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react'
+import { CaretRight } from '@phosphor-icons/react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -166,7 +166,7 @@ function EnvelopeCards({
               )}
             </span>
             {/* No "Berjalan" badge (#746): every card on this list is open. */}
-            <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            <CaretRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           </button>
         </li>
       ))}
@@ -176,7 +176,7 @@ function EnvelopeCards({
             <span className="min-w-0 truncate font-medium">{text.closedRow}</span>
             <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
               <span className="tabular text-sm">{closedCount}</span>
-              <ChevronRight aria-hidden="true" className="size-4" />
+              <CaretRight aria-hidden="true" className="size-4" />
             </span>
           </button>
         </li>
@@ -352,7 +352,7 @@ export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOp
                   <span className="truncate font-medium">{envelope.occasion}</span>
                   <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>
                 </span>
-                <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                <CaretRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
               </button>
             </li>
           ))}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, Circle, CircleCheck, CircleDashed } from 'lucide-react'
+import { CaretDown, CheckCircle, Circle, CircleDashed } from '@phosphor-icons/react'
 
 import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
@@ -55,8 +55,8 @@ const badgeTone: Record<DuesStatusKind, string> = {
 const badgeIcon: Record<DuesStatusKind, typeof Circle> = {
   unpaid: Circle,
   partial: CircleDashed,
-  paid: CircleCheck,
-  paid_in_advance: CircleCheck,
+  paid: CheckCircle,
+  paid_in_advance: CheckCircle,
 }
 
 function StatusBadge({ status }: { status: DuesStatusKind }) {
@@ -288,7 +288,7 @@ export default function DuesStatus({
                           className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
                           data-open={expandedMemberId === row.member.id}
                         >
-                          <ChevronDown aria-hidden="true" />
+                          <CaretDown aria-hidden="true" />
                         </span>
                       </Button>
 

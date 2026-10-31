@@ -1,4 +1,4 @@
-import { Camera, PenLine } from 'lucide-react'
+import { Camera, PencilLine } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
@@ -141,7 +141,11 @@ export default function TransactionList({
     <>
       {groups.map((group) => (
         <section key={group.month ?? 'all'} className="flex flex-col gap-2">
-          {group.month !== null && <h3 className="pt-2 text-sm font-semibold text-muted-foreground">{formatPeriod(group.month)}</h3>}
+          {group.month !== null && (
+            <h3 className="flex items-center gap-3 pt-2 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border after:content-['']">
+              {formatPeriod(group.month)}
+            </h3>
+          )}
           <ul className="flex flex-col gap-2">
             {group.rows.map((transaction) => {
               const note = noteForDisplay(transaction)
@@ -315,7 +319,7 @@ export default function TransactionList({
  * The stored pos is what renders, never the effective one, even after a
  * correction has moved the money: the ledger sums stored tags, so showing the
  * effective tag would put the screen out of step with the balances
- * (ADR-033). The PenLine glyph says a correction exists - the same glyph its
+ * (ADR-033). The PencilLine glyph says a correction exists - the same glyph its
  * Perbaikan pos row carries a few rows down, which ties them together - and is hidden from
  * screen readers, with the sentence beside it in sr-only text.
  */
@@ -328,7 +332,7 @@ function PurposeLine({ transaction, purposeNames }: { transaction: Transaction; 
       <span className="truncate">{name}</span>
       {corrected && (
         <>
-          <PenLine aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <PencilLine aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <span className="sr-only">{copy.purposeCorrection.corrected}</span>
         </>
       )}

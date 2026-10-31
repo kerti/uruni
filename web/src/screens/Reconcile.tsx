@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, Equal, Search } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, CaretDown, CheckCircle, Equals, MagnifyingGlass } from '@phosphor-icons/react'
 
 import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
@@ -341,7 +341,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
 
       {staleNotice && (
         <p role="status" className="flex items-center gap-2 rounded-lg bg-attention-soft px-4 py-3 text-attention-text">
-          <Search aria-hidden="true" />
+          <MagnifyingGlass aria-hidden="true" />
           {text.staleNotice}
         </p>
       )}
@@ -372,7 +372,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       <details className="group flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-muted-foreground marker:content-none">
           {copy.home.recentActivityHeading}
-          <ChevronDown
+          <CaretDown
             aria-hidden="true"
             className="size-4 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
           />
@@ -487,14 +487,14 @@ function AccountCountRow({
           disabled={disabled}
           onClick={() => onChange({ touched: true, actualAmount: recorded })}
         >
-          <Equal aria-hidden="true" />
+          <Equals aria-hidden="true" />
           {text.fillRecorded}
           <span className="sr-only">, {account.name}</span>
         </Button>
 
         {showMatched && (
           <p className="flex items-center gap-2 text-success">
-            <CircleCheck aria-hidden="true" />
+            <CheckCircle aria-hidden="true" />
             {text.lineMatched}
           </p>
         )}
@@ -502,7 +502,7 @@ function AccountCountRow({
         {showGap && (
           <>
             <p className="flex items-center gap-2 text-attention-text">
-              <Search aria-hidden="true" />
+              <MagnifyingGlass aria-hidden="true" />
               {text.lineDiscrepancy(formatIDR(Math.abs(diff)))}
             </p>
 
@@ -576,13 +576,13 @@ function AccountCountRow({
                 <div role="status" className="flex flex-col gap-1 text-sm">
                   {remaining === 0 ? (
                     <p className="flex items-center gap-2 text-success">
-                      <CircleCheck aria-hidden="true" className="size-4 shrink-0" />
+                      <CheckCircle aria-hidden="true" className="size-4 shrink-0" />
                       {text.remainingNone}
                     </p>
                   ) : (
                     <>
                       <p className="tabular flex items-center gap-2 text-attention-text">
-                        <Search aria-hidden="true" className="size-4 shrink-0" />
+                        <MagnifyingGlass aria-hidden="true" className="size-4 shrink-0" />
                         {text.remainingGap(formatIDR(Math.abs(remaining)))}
                       </p>
                       {line.resolution === 'adjusted' && <p className="text-muted-foreground">{text.adjustedMustMatch}</p>}
@@ -665,7 +665,7 @@ function Confirmation({
         role="status"
         className={`flex items-center gap-2 rounded-lg px-4 py-3 ${hasOpenGap ? 'bg-attention-soft text-attention-text' : 'bg-success-soft text-success'}`}
       >
-        {hasOpenGap ? <Search aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
+        {hasOpenGap ? <MagnifyingGlass aria-hidden="true" /> : <CheckCircle aria-hidden="true" />}
         {hasOpenGap ? (
           <span className="flex flex-col">
             <span>{text.discrepancy(formatIDR(openTotal))}</span>

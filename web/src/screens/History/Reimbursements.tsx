@@ -1,4 +1,4 @@
-import { Camera, Search } from 'lucide-react'
+import { Camera, MagnifyingGlass } from '@phosphor-icons/react'
 import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -443,7 +443,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         <Label htmlFor="reimbursement-search" className="sr-only">
           {searchText.searchLabel}
         </Label>
-        <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlass
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           id="reimbursement-search"
           type="search"

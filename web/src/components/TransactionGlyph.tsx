@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ArrowsLeftRight } from '@phosphor-icons/react'
 
 import { isTransfer, rowLabelFor } from '@/components/rowLabel'
 import type { Transaction } from '@/lib/transactions'
@@ -10,7 +10,7 @@ import type { Transaction } from '@/lib/transactions'
  */
 export default function TransactionGlyph({ transaction, className = 'mt-0.5' }: { transaction: Transaction; className?: string }) {
   if (isTransfer(transaction)) {
-    const Icon = rowLabelFor(transaction)?.Icon ?? ArrowLeftRight
+    const Icon = rowLabelFor(transaction)?.Icon ?? ArrowsLeftRight
     return <Icon aria-hidden="true" className={`shrink-0 text-muted-foreground ${className}`} />
   }
   return transaction.direction === 'in' ? (

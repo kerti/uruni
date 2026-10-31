@@ -894,9 +894,9 @@ describe('Reconcile', () => {
     const rows = screen.getAllByRole('listitem')
     expect(rows).toHaveLength(1)
     expect(rows[0]).toHaveTextContent(copy.rowLabels.transferLocation.text('Tunai', 'Bank'))
-    expect(rows[0].querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument()
+    expect(rows[0].querySelector('[data-icon="ArrowUpRight"]')).not.toBeInTheDocument()
     expect(rows[0].querySelector('.text-attention')).not.toBeInTheDocument()
-    expect(container.querySelector('.lucide-arrow-left-right')).toBeInTheDocument()
+    expect(container.querySelector('[data-icon="ArrowsLeftRight"]')).toBeInTheDocument()
   })
 
   it('shows the calm empty line when nothing has been recorded yet', async () => {

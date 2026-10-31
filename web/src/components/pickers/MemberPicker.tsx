@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { Plus, X } from '@phosphor-icons/react'
 import { useId } from 'react'
 
 import { Label } from '@/components/ui/label'

@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Camera, Search } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Camera, MagnifyingGlass } from '@phosphor-icons/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -180,7 +180,10 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
         <Label htmlFor="dues-payment-search" className="sr-only">
           {text.searchLabel}
         </Label>
-        <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlass
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           id="dues-payment-search"
           type="search"

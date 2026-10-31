@@ -1,4 +1,4 @@
-import { MoreVertical } from 'lucide-react'
+import { DotsThreeVertical } from '@phosphor-icons/react'
 import { useState } from 'react'
 
 import ReceiptPicker from '@/components/ReceiptPicker'
@@ -194,7 +194,7 @@ export default function ReceiptDialog({
                       disabled={busy}
                       className="absolute top-1 right-1 flex size-11 items-center justify-center rounded-full bg-black/50 text-white outline-none transition-colors hover:bg-black/60 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                     >
-                      <MoreVertical aria-hidden="true" />
+                      <DotsThreeVertical aria-hidden="true" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">

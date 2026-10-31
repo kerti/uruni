@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
-import { X } from 'lucide-react'
+import { X } from '@phosphor-icons/react'
 
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import { cn } from '@/lib/utils'
@@ -166,7 +166,7 @@ function DialogContent({
           // down, and 30 - 22 = 8. The visible circle sits inside the target.
           className="group absolute top-2 right-2 z-20 flex size-11 items-center justify-center rounded-full outline-none"
         >
-          <span className="flex size-9 items-center justify-center rounded-full bg-popover text-foreground ring-1 ring-border transition-colors group-hover:bg-muted group-focus-visible:ring-3 group-focus-visible:ring-ring/50">
+          <span className="icon-plain flex size-9 items-center justify-center rounded-full bg-popover text-foreground ring-1 ring-border transition-colors group-hover:bg-muted group-focus-visible:ring-3 group-focus-visible:ring-ring/50">
             <X aria-hidden="true" className="size-5" />
           </span>
         </DialogPrimitive.Close>

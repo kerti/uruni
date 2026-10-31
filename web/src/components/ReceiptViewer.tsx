@@ -1,5 +1,5 @@
 import { Dialog as DialogPrimitive } from 'radix-ui'
-import { X } from 'lucide-react'
+import { X } from '@phosphor-icons/react'
 import { useLayoutEffect, useRef } from 'react'
 
 import { copy } from '@/copy/id'
