@@ -153,6 +153,10 @@ test.describe('a tier change and a rate correction', () => {
     const text = copy.settings.tiers
     const rows = page.getByRole('main').getByRole('listitem')
     const first = rows.filter({ hasText: text.effectiveFrom(formatPeriod('2024-01')) })
+    // Newest first, and only this month's rate is "Berlaku sekarang" (#748).
+    await expect(rows.first()).toContainText(text.effectiveFrom(formatPeriod(jakartaMonth())))
+    await expect(rows.first()).toContainText(text.inForce)
+    await expect(first).not.toContainText(text.inForce)
     await first.getByRole('button', { name: text.editRate }).click()
 
     const editor = rows.filter({ has: page.locator('[id^="rate-amount-"]') })

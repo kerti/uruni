@@ -16,3 +16,13 @@ export function rateSpan(rates: DuesRate[], rate: DuesRate): RateSpan {
   }
   return { from: rate.effective_from, until: next === null ? null : addMonthsToPeriod(next, -1) }
 }
+
+/** The rate that prices `period` (#748): the latest one whose month has
+ * started by then. Null when every rate starts later, or there is none. */
+export function rateInForce(rates: DuesRate[], period: string): DuesRate | null {
+  let inForce: DuesRate | null = null
+  for (const rate of rates) {
+    if (rate.effective_from <= period && (inForce === null || rate.effective_from > inForce.effective_from)) inForce = rate
+  }
+  return inForce
+}

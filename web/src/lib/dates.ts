@@ -211,7 +211,7 @@ export const periodBounds = {
   status(): DateBounds {
     return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 12) }
   },
-  /** A member's tier start month ("Mulai bulan", ADR-040): from the join
+  /** A member's tier start month (ADR-040): from the join
    * month to the later of the current month and the join month. No future
    * start - a pending tier would be shown nowhere. */
   tierStart(joinedOn: string): DateBounds {

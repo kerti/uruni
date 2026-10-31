@@ -457,7 +457,7 @@ function EditMemberDialog({
   const [confirming, setConfirming] = useState<ConfirmKind>(null)
 
   const busy = state.status === 'loading'
-  // "Mulai bulan" belongs to a tier change, so it appears only when the tier
+  // The tier start month belongs to a tier change, so it appears only when the tier
   // differs from the one the member has now. Its bounds read the join date as
   // edited, because the server reads the join month after this same save.
   const tierChanged = shown !== null && tierId !== shown.tier_id

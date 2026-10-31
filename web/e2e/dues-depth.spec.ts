@@ -161,7 +161,7 @@ test.describe('dues in depth', () => {
     await expect(card).toBeVisible()
     await expect(card).not.toContainText(/Tunggakan/)
 
-    // Mulai ikut moves back three months, through the calendar's month and year
+    // Tanggal bergabung moves back three months, through the calendar's month and year
     // dropdowns, to the first of that month.
     const joined = jakartaMonth(-3)
     const [year, month] = joined.split('-').map(Number)

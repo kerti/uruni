@@ -321,7 +321,7 @@ describe('Roster', () => {
   })
 
   // ADR-040: a tier change is stated "from a month".
-  describe('Mulai bulan, for a tier change', () => {
+  describe('the tier start month, for a tier change', () => {
     beforeEach(() => {
       // Only Date is faked; the bounds read the fund's clock (WIB by default).
       vi.useFakeTimers({ toFake: ['Date'] })

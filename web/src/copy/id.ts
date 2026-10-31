@@ -955,10 +955,13 @@ export const copy = {
       // count, never the current period's vocabulary (dues.statuses above).
       // "Tunggakan" is PRD-ID's word, not a coinage.
       arrearsBadge: (months: number) => `Tunggakan ${months} bulan`,
-      joinedOnLabel: 'Mulai ikut',
-      // ADR-040: from which month a changed tier holds. The same two words
-      // as a rate's start month (settings.tiers.effectiveFromLabel).
-      tierFromLabel: 'Mulai bulan',
+      // PRD-ID's own word for joined_on (#748): it sat beside the tier's
+      // "Mulai bulan" as a second "Mulai" meaning something else.
+      joinedOnLabel: 'Tanggal bergabung',
+      // ADR-040: from which month a changed tier holds. Named after the
+      // Kategori field just above it (#748), so it cannot be read as the join
+      // date.
+      tierFromLabel: 'Kategori baru berlaku mulai',
       add: 'Tambah anggota',
       adding: 'Menambahkan…',
       // The whole card is the edit affordance (as settings.locations), so
@@ -1227,6 +1230,9 @@ export const copy = {
       // From effective_from onward, since a rate has no end date - the next
       // one starting is what ends it.
       effectiveFrom: (period: string) => `Mulai ${period}`,
+      // The chip on the one rate pricing this month (#748): the latest whose
+      // month has started. A rate starting later carries only its month.
+      inForce: 'Berlaku sekarang',
     },
     // Where a new envelope is opened (ADR-032 "an incidental is a purpose, so
     // it is opened in Pengaturan"): incidental and pass-through are two kinds
