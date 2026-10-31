@@ -745,6 +745,10 @@ export const copy = {
     // accountName is the location's name (e.g. "Tunai") - the per-field
     // labelling AmountInput's callers do.
     actualLabel: (accountName: string) => `Jumlah sebenarnya di ${accountName}`,
+    // One tap under the count field fills the recorded figure (#747): most
+    // counts match. The figure is already on the card, so this hides nothing,
+    // and nothing saves until Simpan hasil cek.
+    fillRecorded: 'Sama dengan catatan',
     resolutionLabel: 'Bagaimana selisih ini diselesaikan?',
     // Keyed by the schema's resolution string (reconciliation.go's four
     // values) so both the choice buttons and the confirmation list's per-line

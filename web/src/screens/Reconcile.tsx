@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, Search } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, Equal, Search } from 'lucide-react'
 
 import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
@@ -476,6 +476,21 @@ function AccountCountRow({
           onChange={(amount) => onChange({ touched: true, actualAmount: amount })}
           disabled={disabled}
         />
+        {/* A small grey button, not plain ink: as a link it read as a label
+            (#747). The recorded figure is in the header above, and the field
+            stays hers to change. The location rides in the name, since every
+            card has one; the invisible after: box is the 44px target. */}
+        <Button
+          type="button"
+          variant="outline"
+          className="relative h-9 self-start px-3 text-sm after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+          disabled={disabled}
+          onClick={() => onChange({ touched: true, actualAmount: recorded })}
+        >
+          <Equal aria-hidden="true" />
+          {text.fillRecorded}
+          <span className="sr-only">, {account.name}</span>
+        </Button>
 
         {showMatched && (
           <p className="flex items-center gap-2 text-success">
