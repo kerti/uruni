@@ -27,6 +27,26 @@ const (
 	ParticipationKurang ParticipationState = "kurang"
 )
 
+// HasGiven reports whether an expected member counts as having given:
+// anything at all, so Kurang counts and only Belum does not. The one rule
+// behind the public report's "8 dari 12 sudah menyumbang" and Pengaturan's
+// envelope cards (#746).
+func (s ParticipationState) HasGiven() bool {
+	return s != ParticipationBelum
+}
+
+// GivenCount is how many of p.Expected have given (HasGiven), the numerator of
+// the envelope's progress; len(p.Expected) is its denominator.
+func (p IncidentalParticipation) GivenCount() int {
+	given := 0
+	for _, e := range p.Expected {
+		if e.State.HasGiven() {
+			given++
+		}
+	}
+	return given
+}
+
 // MemberParticipation is one expected member's row in an envelope's
 // participation table.
 type MemberParticipation struct {

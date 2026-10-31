@@ -20,7 +20,7 @@ import { useApi } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
-import type { Incidental } from '@/lib/incidentals'
+import type { Incidental, IncidentalListItem } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 
 const text = copy.settings.incidentals
@@ -64,7 +64,7 @@ export interface IncidentalOpenedState {
 
 export default function SettingsIncidentals() {
   const navigate = useNavigate()
-  const [listState, listRun] = useApi<Incidental[]>()
+  const [listState, listRun] = useApi<IncidentalListItem[]>()
   // The recipients picker's roster (ADR-034) - fetched alongside the envelope
   // list, as History/Transactions.tsx does for purposes, so opening the dialog
   // shows a filled picker instead of a spinner.
@@ -143,7 +143,7 @@ function EnvelopeCards({
   onOpen,
   onOpenClosed,
 }: {
-  envelopes: Incidental[]
+  envelopes: IncidentalListItem[]
   onOpen: (purposeId: number) => void
   onOpenClosed: () => void
 }) {
@@ -155,8 +155,18 @@ function EnvelopeCards({
       {openOnes.map((envelope) => (
         <li key={envelope.purpose_id}>
           <button type="button" onClick={() => onOpen(envelope.purpose_id)} className={cardClass}>
-            <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
-            <StatusBadge envelope={envelope} />
+            <span className="sr-only">{text.cardVerb}</span>{' '}
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-medium">{envelope.occasion}</span>
+              {/* Who has given so far (#746), the public report's own line. */}
+              {envelope.participation && (
+                <span className="text-sm text-muted-foreground">
+                  {copy.incidentals.participation.progress(envelope.participation.given, envelope.participation.expected)}
+                </span>
+              )}
+            </span>
+            {/* No "Berjalan" badge (#746): every card on this list is open. */}
+            <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           </button>
         </li>
       ))}
@@ -179,23 +189,6 @@ function EnvelopeCards({
  * screen below share it. */
 const cardClass =
   'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
-
-/** The open/closed badge of Incidentals.tsx's StatusBadge, kept as a small
- * local copy: one component, two call sites, is not worth a shared file. */
-function StatusBadge({ envelope }: { envelope: Incidental }) {
-  if (envelope.closed_on) {
-    return (
-      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        {copy.incidentals.status.closed}
-      </span>
-    )
-  }
-  return (
-    <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
-      {copy.incidentals.status.open}
-    </span>
-  )
-}
 
 /** Opening a new envelope, in the dialog primitive (ADR-032): occasion doubles
  * as the purpose's name, target is optional, and the date defaults to today. */

@@ -36,9 +36,11 @@ import type { DuesGrid, DuesGridMember, DuesPaymentHistoryRow, DuesStatusRow, Ou
 import type {
   Incidental,
   IncidentalDetail,
+  IncidentalListItem,
   IncidentalParticipation,
   IncidentalRecipient,
   Participant,
+  ParticipationProgress,
   ParticipationState,
   UnexpectedContribution,
 } from '@/lib/incidentals'
@@ -154,6 +156,8 @@ const incidentalKeys: Keys<Incidental> = {
   created_at: true,
   minimum_per_member: true,
 }
+const incidentalListItemKeys: Keys<IncidentalListItem> = { ...incidentalKeys, participation: true }
+const progressKeys: Keys<ParticipationProgress> = { given: true, expected: true }
 const incidentalDetailKeys: Keys<IncidentalDetail> = {
   ...incidentalKeys,
   collected_amount: true,
@@ -234,7 +238,7 @@ void (setupSample satisfies Has<SetupResult>)
 void (balancesSample satisfies Has<Balances>)
 void (balancesSample.accounts satisfies Has<AccountBalance>[])
 void (balancesSample.purposes satisfies Has<PurposeBalance>[])
-void (incidentalsSample satisfies Has<Incidental>[])
+void (incidentalsSample satisfies Has<IncidentalListItem>[])
 void (incidentalSample satisfies Has<IncidentalDetail>)
 void (incidentalSample.recipients satisfies Has<IncidentalRecipient>[])
 void (participationSample.expected satisfies Has<ParticipationState>[])
@@ -268,7 +272,8 @@ describe('the wire samples carry no key their interface does not declare', () =>
     ['Balances', [balancesSample], balancesKeys],
     ['AccountBalance', balancesSample.accounts, accountBalanceKeys],
     ['PurposeBalance', balancesSample.purposes, purposeBalanceKeys],
-    ['Incidental', incidentalsSample, incidentalKeys],
+    ['IncidentalListItem', incidentalsSample, incidentalListItemKeys],
+    ['ParticipationProgress', incidentalsSample.flatMap((i) => (i.participation ? [i.participation] : [])), progressKeys],
     ['IncidentalDetail', [incidentalSample], incidentalDetailKeys],
     ['IncidentalRecipient', incidentalSample.recipients, recipientKeys],
     ['IncidentalParticipation', [participationSample], participationKeys],

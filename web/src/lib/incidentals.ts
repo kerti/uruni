@@ -40,13 +40,26 @@ export interface IncidentalDetail extends Incidental {
   recipients: IncidentalRecipient[]
 }
 
+/** How many expected members have given, of how many (#746) - the public
+ * report's "9 dari 10 sudah menyumbang", counted by the server the same way. */
+export interface ParticipationProgress {
+  given: number
+  expected: number
+}
+
+/** One row of GET /api/incidentals: the envelope plus its progress, which is
+ * null on a closed envelope and on an open one nobody is expected to give to. */
+export interface IncidentalListItem extends Incidental {
+  participation: ParticipationProgress | null
+}
+
 /**
  * GET /api/incidentals, optionally ?open=true for only the envelopes still
  * collecting.
  */
-export function listIncidentals(openOnly = false): Promise<Incidental[]> {
+export function listIncidentals(openOnly = false): Promise<IncidentalListItem[]> {
   const query = openOnly ? '?open=true' : ''
-  return apiFetch<Incidental[]>(`/api/incidentals${query}`)
+  return apiFetch<IncidentalListItem[]>(`/api/incidentals${query}`)
 }
 
 /**

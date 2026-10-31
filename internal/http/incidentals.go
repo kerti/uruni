@@ -52,6 +52,23 @@ func toIncidentalResponse(i store.Incidental) incidentalResponse {
 	}
 }
 
+// incidentalListItemResponse is one row of GET /api/incidentals: the envelope
+// plus, while it is open, how many expected members have given (#746) -
+// Pengaturan's card reads it as "9 dari 10 sudah menyumbang", the same count
+// the public report shows. Nil on a closed envelope, whose card is a date, and
+// on an open one nobody is expected to give to.
+type incidentalListItemResponse struct {
+	incidentalResponse
+	Participation *participationProgressResponse `json:"participation"`
+}
+
+// participationProgressResponse is Ledger.GetIncidentalParticipation reduced to
+// its two counts: GivenCount over len(Expected).
+type participationProgressResponse struct {
+	Given    int `json:"given"`
+	Expected int `json:"expected"`
+}
+
 // incidentalDetailResponse is GET /api/incidentals/{purposeID}'s body: the
 // envelope plus the totals PRD section 7.5 shows. Not embedded in
 // incidentalResponse: the totals exist only when a request asks for them, as
@@ -185,9 +202,23 @@ func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]incidentalResponse, 0, len(incidentals))
+	// One participation derivation per open envelope, not one query for all:
+	// the count must be the report's own (Ledger.GetIncidentalParticipation),
+	// and a fund has a handful of envelopes open at once.
+	resp := make([]incidentalListItemResponse, 0, len(incidentals))
 	for _, i := range incidentals {
-		resp = append(resp, toIncidentalResponse(i))
+		item := incidentalListItemResponse{incidentalResponse: toIncidentalResponse(i)}
+		if i.ClosedOn == nil {
+			participation, err := a.ledger.GetIncidentalParticipation(r.Context(), fund.ID, i.PurposeID)
+			if err != nil {
+				mapLedgerError(w, a.log(r), err)
+				return
+			}
+			if len(participation.Expected) > 0 {
+				item.Participation = &participationProgressResponse{Given: participation.GivenCount(), Expected: len(participation.Expected)}
+			}
+		}
+		resp = append(resp, item)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

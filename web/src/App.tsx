@@ -251,6 +251,12 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const rawMember = searchParams.get('member')
   const parsedMember = rawMember === null || rawMember.trim() === '' ? NaN : Number(rawMember)
   const initialMemberId = Number.isInteger(parsedMember) && parsedMember > 0 ? parsedMember : null
+  // /record?amount=<rupiah> (#746): the participation row's Catat sumbangan
+  // opens with what that member still owes toward the envelope's minimum.
+  // Parsed like ?member=; anything but a positive integer leaves Jumlah empty.
+  const rawAmount = searchParams.get('amount')
+  const parsedAmount = rawAmount === null || rawAmount.trim() === '' ? NaN : Number(rawAmount)
+  const initialAmount = Number.isSafeInteger(parsedAmount) && parsedAmount > 0 ? parsedAmount : null
 
   // /dues-tiers?tier=<id> is a tier's screen, reached from the Kategori
   // card in Pengaturan only - parsed like /incidentals?purpose=<id> above.
@@ -342,6 +348,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onCancel={() => navigate(recordReturn ?? '/')}
               initialPurposeId={initialPurposeId}
               initialMemberId={initialMemberId}
+              initialAmount={initialAmount}
               initialDues={recordDues}
               initialDuesPeriod={recordDuesPeriod}
               fronted={recordFronted}
@@ -481,10 +488,13 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               <Incidentals
                 onBack={() => navigate(envelopeFromHome ? '/' : '/settings')}
                 backLabel={envelopeFromHome ? copy.incidentals.detail.backToHome : copy.incidentals.detail.backToSettings}
-                onRecordFor={(purposeId, memberId) =>
-                  navigate(`/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}`, {
-                    state: recordOriginFrom(location),
-                  })
+                onRecordFor={(purposeId, memberId, amount) =>
+                  navigate(
+                    `/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}${amount !== undefined ? `&amount=${amount}` : ''}`,
+                    {
+                      state: recordOriginFrom(location),
+                    },
+                  )
                 }
                 onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
                 purposeId={initialPurposeId}

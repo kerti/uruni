@@ -1637,6 +1637,14 @@ export const copy = {
       // joiner, a recipient who gave anyway) - listed with their amount, never
       // as "belum".
       otherHeading: 'Sumbangan lain',
+      // The same plain checkbox as dues.unpaidFilterLabel (#746): one list
+      // narrowed to who has given nothing yet. "Kurang dari minimal" stays
+      // out - something has come in.
+      notGivenFilterLabel: 'Tampilkan yang belum menyumbang saja',
+      emptyFiltered: 'Semua anggota sudah menyumbang.',
+      // An open envelope's card in Pengaturan (#746), word for word the
+      // public report's line (internal/report EnvelopeGiven).
+      progress: (given: number, expected: number) => `${given} dari ${expected} sudah menyumbang`,
       // The row action (ADR-034: record a contribution with the member already
       // filled in) - navigates to Catat with the envelope's purpose and this
       // member pre-chosen.

@@ -101,6 +101,7 @@ export default function RecordTransaction({
   onCancel,
   initialPurposeId,
   initialMemberId,
+  initialAmount = null,
   initialDues = false,
   initialDuesPeriod = null,
   fronted = false,
@@ -119,6 +120,9 @@ export default function RecordTransaction({
    * `member`) as it reads `purpose`. Absent, the field starts unset - a guest,
    * an anonymous giver, or a form that isn't a contribution at all. */
   initialMemberId?: number | null
+  /** Seeds Jumlah (#746): Catat sumbangan from a participation row opens with
+   * what that member still owes toward the envelope's minimum. */
+  initialAmount?: number | null
   /** Iuran, the toggle's fourth item: a dues payment moves money, so it is
    * recorded here like every other kind (ADR-032). Choosing it swaps the form
    * below for RecordDuesPayment's, with its own success callback (its own
@@ -155,7 +159,7 @@ export default function RecordTransaction({
   // should be for. purposeId above is the ordinary entry's one tag.
   const [fromPurposeId, setFromPurposeId] = useState<number | null>(null)
   const [toPurposeId, setToPurposeId] = useState<number | null>(null)
-  const [amount, setAmount] = useState(0)
+  const [amount, setAmount] = useState(initialAmount ?? 0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -587,7 +591,16 @@ export default function RecordTransaction({
             </label>
           )}
 
-          <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
+          {/* A prefilled amount (#746) is a suggestion: a tap selects it, so
+              typing replaces it rather than landing after it. */}
+          <AmountInput
+            id="record-amount"
+            label={text.amountLabel}
+            value={amount}
+            onChange={setAmount}
+            disabled={submitting}
+            selectOnFocus={initialAmount !== null}
+          />
 
           {/* Pindah pos (ADR-036): where the money is for now, and where
               it should be for - right after the amount, because they are the

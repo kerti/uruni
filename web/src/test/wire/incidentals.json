@@ -5,6 +5,10 @@
     "minimum_per_member": 20000,
     "occasion": "Halal bihalal",
     "opened_on": "2026-09-01",
+    "participation": {
+      "expected": 2,
+      "given": 1
+    },
     "purpose_id": 3,
     "target_amount": 300000
   }
