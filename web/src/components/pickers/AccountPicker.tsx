@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,6 +18,7 @@ import type { Account } from '@/lib/accounts'
 export default function AccountPicker({
   id,
   label,
+  aside,
   accounts,
   value,
   onChange,
@@ -25,6 +26,9 @@ export default function AccountPicker({
 }: {
   id?: string
   label: string
+  /** A short figure on the label's row, right-aligned: the balance of what
+   * is picked (#749), where a line under the field cost a row each. */
+  aside?: ReactNode
   accounts: Account[]
   value: number | null
   onChange: (accountId: number) => void
@@ -38,7 +42,10 @@ export default function AccountPicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={selectId}>{label}</Label>
+      <div className="flex items-baseline justify-between gap-3">
+        <Label htmlFor={selectId}>{label}</Label>
+        {aside && <span className="tabular text-sm text-muted-foreground">{aside}</span>}
+      </div>
       <Select
         value={value === null ? '' : String(value)}
         onValueChange={(next) => {

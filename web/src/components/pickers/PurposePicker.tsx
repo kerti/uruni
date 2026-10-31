@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -14,6 +14,7 @@ import type { Purpose } from '@/lib/purposes'
 export default function PurposePicker({
   id,
   label,
+  aside,
   purposes,
   value,
   onChange,
@@ -21,6 +22,9 @@ export default function PurposePicker({
 }: {
   id?: string
   label: string
+  /** A short figure on the label's row, right-aligned: the balance of what
+   * is picked (#749), where a line under the field cost a row each. */
+  aside?: ReactNode
   purposes: Purpose[]
   value: number | null
   onChange: (purposeId: number) => void
@@ -33,7 +37,10 @@ export default function PurposePicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={selectId}>{label}</Label>
+      <div className="flex items-baseline justify-between gap-3">
+        <Label htmlFor={selectId}>{label}</Label>
+        {aside && <span className="tabular text-sm text-muted-foreground">{aside}</span>}
+      </div>
       {/* Radix's Select, not the native one it replaced (M6.15): the
           browser's own list was the one control in the app that never
           looked like the app. Values cross the boundary as strings, so the

@@ -41,7 +41,7 @@ describe('AmountInput', () => {
     const input = screen.getByLabelText('Jumlah') as HTMLInputElement
     await userEvent.type(input, '999999999999')
 
-    expect(input.value).toBe('999999999999')
+    expect(input.value).toBe('Rp999.999.999.999')
     expect(onChange).toHaveBeenLastCalledWith(999_999_999_999)
   })
 
@@ -52,7 +52,7 @@ describe('AmountInput', () => {
     const input = screen.getByLabelText('Jumlah') as HTMLInputElement
     await userEvent.type(input, '9999999999999')
 
-    expect(input.value).toBe('999999999999')
+    expect(input.value).toBe('Rp999.999.999.999')
     expect(onChange).toHaveBeenLastCalledWith(999_999_999_999)
     expect(onChange.mock.calls.every(([amount]) => amount <= 999_999_999_999)).toBe(true)
   })
@@ -65,24 +65,56 @@ describe('AmountInput', () => {
     await userEvent.type(input, '500')
     await userEvent.paste('1.000.000.000.000')
 
-    expect(input.value).toBe('500')
+    expect(input.value).toBe('Rp500')
     expect(onChange).toHaveBeenLastCalledWith(500)
   })
 
-  it('formats with Indonesian thousands separators on blur, and reverts to plain digits on focus', async () => {
+  it('groups as she types and reads the same focused or not (#749)', async () => {
     const onChange = vi.fn()
     render(<ControlledAmountInput onChange={onChange} />)
 
     const input = screen.getByLabelText('Jumlah') as HTMLInputElement
-    await userEvent.type(input, '1000000')
-    expect(input.value).toBe('1000000')
+    await userEvent.type(input, '4500')
+    expect(input.value).toBe('Rp4.500')
+    await userEvent.type(input, '0')
+    expect(input.value).toBe('Rp45.000')
+    expect(onChange).toHaveBeenLastCalledWith(45_000)
 
     await userEvent.tab()
-    expect(input.value).toContain('Rp')
-    expect(input.value).toContain('1.000.000')
-
+    expect(input.value).toBe('Rp45.000')
     await userEvent.click(input)
-    expect(input.value).toBe('1000000')
+    expect(input.value).toBe('Rp45.000')
+  })
+
+  it('keeps the caret after the same digit when a dot appears or goes (#749)', async () => {
+    const onChange = vi.fn()
+    render(<ControlledAmountInput onChange={onChange} />)
+    const input = screen.getByLabelText('Jumlah') as HTMLInputElement
+    await userEvent.type(input, '45000')
+
+    // A digit typed after the "4" of Rp45.000: Rp415.000, caret after the "1".
+    input.setSelectionRange(3, 3)
+    await userEvent.type(input, '1', { initialSelectionStart: 3, initialSelectionEnd: 3 })
+    expect(input.value).toBe('Rp415.000')
+    expect(input.selectionStart).toBe(4)
+
+    // Backspace there takes the "1" back, and the caret stays after the "4".
+    await userEvent.type(input, '{Backspace}', { initialSelectionStart: 4, initialSelectionEnd: 4 })
+    expect(input.value).toBe('Rp45.000')
+    expect(input.selectionStart).toBe(3)
+    expect(onChange).toHaveBeenLastCalledWith(45_000)
+  })
+
+  it('takes the digit before a dot on backspace, rather than doing nothing (#749)', async () => {
+    const onChange = vi.fn()
+    render(<ControlledAmountInput onChange={onChange} />)
+    const input = screen.getByLabelText('Jumlah') as HTMLInputElement
+    await userEvent.type(input, '45000')
+
+    // Caret just after the dot in Rp45.|000.
+    await userEvent.type(input, '{Backspace}', { initialSelectionStart: 5, initialSelectionEnd: 5 })
+    expect(input.value).toBe('Rp4.000')
+    expect(onChange).toHaveBeenLastCalledWith(4_000)
   })
 
   it('leaves a range selected before its caret frame alone, so a select-then-type replaces the pre-filled amount', () => {
@@ -101,11 +133,11 @@ describe('AmountInput', () => {
       const input = screen.getByLabelText('Jumlah') as HTMLInputElement
 
       fireEvent.focus(input)
-      expect(input.value).toBe('50000')
+      expect(input.value).toBe('Rp50.000')
       input.setSelectionRange(0, input.value.length)
       act(() => frames.forEach((cb) => cb(0)))
 
-      expect([input.selectionStart, input.selectionEnd]).toEqual([0, 5])
+      expect([input.selectionStart, input.selectionEnd]).toEqual([0, 8])
     } finally {
       raf.mockRestore()
     }
@@ -125,7 +157,7 @@ describe('AmountInput', () => {
       input.setSelectionRange(2, 2)
       act(() => frames.forEach((cb) => cb(0)))
 
-      expect([input.selectionStart, input.selectionEnd]).toEqual([5, 5])
+      expect([input.selectionStart, input.selectionEnd]).toEqual([8, 8])
     } finally {
       raf.mockRestore()
     }

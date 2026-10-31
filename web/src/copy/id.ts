@@ -530,13 +530,12 @@ export const copy = {
     // The same location on both sides moves nothing. The ledger refuses it
     // too, but she should read why here rather than meet a rejected submit.
     sameLocationHint: 'Pilih dua lokasi yang berbeda - uang pindah dari satu tempat ke tempat lain.',
-    // Shown under each location while moving money, so she sees what is about
-    // to move against what is there - and so the swap button has a visible
-    // effect. amount is already formatted by the caller.
-    locationBalance: (amount: string) => `Saldo sekarang ${amount}`,
-    // Under each pos picker in Pindah pos: names what the figure is the balance
-    // of, so it never reads as the fund total or a location's.
-    purposeBalance: (amount: string) => `Saldo pos sekarang ${amount}`,
+    // On each picker's label row in Pindah lokasi and Pindah pos, right-aligned
+    // (#749), so she sees what is about to move against what is there - and
+    // so the swap button has a visible effect. One word: beside "Dari lokasi"
+    // or "Ke pos" it can only be that one's balance. amount is formatted by
+    // the caller.
+    balance: (amount: string) => `Saldo ${amount}`,
     // Only ever about the source: receiving money never pushes a balance down.
     // Warns without blocking, as the titipan hint does - every other posting
     // path allows an out larger than the balance, and a real deposit from a
