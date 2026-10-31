@@ -106,7 +106,6 @@ export default function RecordTransaction({
   fronted = false,
   onFrontedChange,
   onDuesRecorded,
-  onDuesCancel,
 }: {
   /** photoFailed is true only when a photo was picked and the transaction
    * posted but the receipt upload failed - never set for a transfer, which
@@ -122,9 +121,8 @@ export default function RecordTransaction({
   initialMemberId?: number | null
   /** Iuran, the toggle's fourth item: a dues payment moves money, so it is
    * recorded here like every other kind (ADR-032). Choosing it swaps the form
-   * below for RecordDuesPayment's, with its own callbacks, since where she
-   * lands after a dues payment depends on the door she came in by.
-   * initialDues opens with it chosen. */
+   * below for RecordDuesPayment's, with its own success callback (its own
+   * confirmation). initialDues opens with it chosen. */
   initialDues?: boolean
   /** The month a dues payment opened from a status card is for ("YYYY-MM"). */
   initialDuesPeriod?: string | null
@@ -135,7 +133,6 @@ export default function RecordTransaction({
   fronted?: boolean
   onFrontedChange?: (fronted: boolean) => void
   onDuesRecorded: () => void
-  onDuesCancel?: () => void
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
@@ -570,7 +567,7 @@ export default function RecordTransaction({
           initialMemberId={initialMemberId}
           initialPeriod={initialDuesPeriod}
           onRecorded={onDuesRecorded}
-          onCancel={onDuesCancel ?? onCancel}
+          onCancel={onCancel}
         />
       ) : (
         <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>

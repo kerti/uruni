@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
+import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
 import AmountInput from '@/components/money/AmountInput'
 import SectionDivider from '@/components/SectionDivider'
@@ -97,12 +97,7 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 
   return (
     <div className="flex flex-col gap-6">
-      {/* A way back, not an action (#319) - the same quiet link as an
-          envelope's own detail screen. */}
-      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" />
-        {text.backToSettings}
-      </Button>
+      <BackLink label={text.backToSettings} onClick={onBack} />
 
       <h1 className="text-xl font-semibold">{tier.name}</h1>
 

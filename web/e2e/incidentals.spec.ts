@@ -57,8 +57,12 @@ test.describe('incidentals', () => {
     // is asserted right after the action, before anything else.
     await expect(page.getByText(copy.settings.incidentals.opened)).toBeVisible()
 
-    // The new envelope is a card in this section, open status shown. Anchored to
-    // the card: "Berjalan" is not unique once a second envelope opens.
+    // Opening lands on the new envelope itself (#745), whose way back is
+    // Pengaturan - where it is now a card, open status shown. Anchored to the
+    // card: "Berjalan" is not unique once a second envelope opens.
+    await expect(page.getByRole('heading', { level: 1, name: occasion })).toBeVisible()
+    await expect(page).toHaveURL(/\/incidentals\?purpose=\d+$/)
+    await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
     const card = page.getByRole('button', { name: new RegExp(occasion) })
     await expect(card).toBeVisible()
     await expect(card).toContainText(copy.incidentals.status.open)
@@ -98,14 +102,15 @@ test.describe('incidentals', () => {
       await page.getByRole('button', { name: copy.record.submit }).click()
       await expect(page.getByText(copy.record.successIn)).toBeVisible()
 
-      // Back on home, the row's balance reflects the contribution, and tapping
-      // it again shows the same total on the detail view.
-      await berandaRow(page).click()
+      // Saving returns to the envelope it was recorded from (#745), the way
+      // back still pointing at Beranda, and the total reflects it.
+      await expect(page).toHaveURL(/\/incidentals\?purpose=\d+&from=home$/)
+      await expect(page.getByRole('button', { name: copy.incidentals.detail.backToHome })).toBeVisible()
       // Anchored to the collected row, not the page: this amount appears three
       // times - Beranda's breakdown row, the recent-five entry for the
-      // contribution, and the detail view this means. A bare getByText matched
-      // whichever the navigation had not yet torn down (racy before it was
-      // ambiguous). toContainText retries, so this waits for the detail view.
+      // contribution, and the detail view this means; anchoring keeps the
+      // match on the detail view whatever screen a navigation tears down.
+      // toContainText retries, so this waits for the detail view.
       const collectedRow = page.locator(`div:has(> span:text-is(${JSON.stringify(copy.incidentals.detail.collectedLabel)}))`)
       await expect(collectedRow).toContainText('Rp60.000')
       await expectAccessible(page)

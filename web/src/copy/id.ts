@@ -829,7 +829,6 @@ export const copy = {
     // words are `statuses` above; this holds what is new. Short month heads are
     // the one place a month is abbreviated.
     grid: {
-      heading: 'Status iuran 12 bulan',
       range: (from: string, to: string) => `${from} \u2013 ${to}`,
       viewOneMonth: 'Satu bulan',
       viewTwelveMonths: '12 bulan',
@@ -839,11 +838,11 @@ export const copy = {
       // Visually hidden label on each cell: "Oktober 2025: Lunas".
       cellLabel: (period: string, status: string) => `${period}: ${status}`,
     },
-    // The matrix is its own screen, opened from Riwayat's Iuran tab, so back
-    // returns to that tab rather than home. Just "Kembali": the screen's
-    // heading already names where it leads, and a longer label did not fit
-    // half of a 375px action row.
-    back: 'Kembali',
+    // The matrix is its own screen, opened from Riwayat's Iuran tab: its title
+    // repeats the row that opens it, and its one way back (#745) is the top
+    // link to that tab, named like Pengaturan's and Beranda's.
+    heading: 'Status iuran',
+    backToHistory: 'Kembali ke riwayat',
     // Recording a dues payment (PRD section 7.3). Two ways in: Catat's fourth
     // Jenis, Iuran - a dues payment moves money, and Catat is where money
     // moving is recorded (ADR-032) - and this button on the status matrix,

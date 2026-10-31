@@ -29,13 +29,16 @@ import Home from '@/screens/Home'
 import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
 import { ClosedIncidentals } from '@/screens/Settings/Incidentals'
+import type { IncidentalOpenedState } from '@/screens/Settings/Incidentals'
 import { demoLoginOf, getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { DemoMode } from '@/lib/demoMode'
+import { recordOriginFrom, returnToOf } from '@/lib/recordOrigin'
 import { useRefetchKey } from '@/lib/useDialogParam'
 import type { SessionStatus, AuthUser } from '@/lib/auth'
 import type { Fund } from '@/lib/setup'
+import type { RecordOriginState } from '@/lib/recordOrigin'
 import { copy } from '@/copy/id'
 import { errorCode } from '@/lib/api'
 
@@ -157,46 +160,28 @@ function demoFields(session: SessionStatus | undefined): Pick<SessionStatus, 'de
   return session ? { demo_email: session.demo_email, demo_password: session.demo_password } : {}
 }
 
-/** The envelope detail's origin, carried in the navigation's state. */
-interface EnvelopeOriginState {
-  from: 'home'
-}
-
-/** What a successful record hands to home through the history entry it
- * creates. photoFailed is true only when a photo was picked and the
- * transaction posted but the receipt upload failed - never set for a
- * transfer, which has no photo field. */
-interface HomeState {
+/** What a successful record hands to the screen it returns to (Beranda, or
+ * the screen Catat was opened from) through the history entry it creates.
+ * photoFailed is true only when a photo was picked and the transaction posted
+ * but the receipt upload failed - never set for a transfer, which has no photo
+ * field. */
+interface RecordedState {
   // 'dues': a dues payment recorded through Catat's Iuran.
   // 'reimbursement': a Keluar ticked "ditalangi" - a Talangan claim.
   recorded: Recorded | 'dues'
   photoFailed?: boolean
 }
 
-/** The same idiom for a dues payment: the confirmation belongs to the one
- * history entry that navigation creates, not to this component. */
-interface DuesState {
-  duesRecorded: true
-}
-
-/** A dues payment opened from the status matrix rather than from Catat's
- * Iuran: saving and Kembali both go back to the matrix, the door she came in
- * by. */
-interface RecordFromDuesState {
-  /** The matrix's own query string ("?view=grid&period=2026-08", or ""), so
-   * the way back lands on the same view and month. */
-  fromDues: { search: string }
-}
-
 /** The confirmation a navigation hands to the screen it lands on, if any: the
- * record form's (to Beranda) or a dues payment's (back to the status matrix). A
+ * record form's (to wherever Catat returns) or Buka amplop's (to the new
+ * amplop). A
  * failed photo upload replaces the ordinary success line rather than joining it
  * - the sentence already says the transaction is saved, so repeating
  * successIn/successOut would say the same thing twice in two tones - and is the
  * attention tone: the transaction is fine, but something did not go through. */
 function pickArrivalToast(state: unknown): ArrivalToast | null {
-  const s = state as Partial<HomeState & DuesState> | null
-  if (s?.duesRecorded === true) return { tone: 'success', text: copy.dues.payment.success }
+  const s = state as Partial<RecordedState & IncidentalOpenedState> | null
+  if (s?.incidentalOpened === true) return { tone: 'success', text: copy.settings.incidentals.opened }
   const recorded = s?.recorded
   if (recorded === undefined) return null
   if (s?.photoFailed === true) {
@@ -242,6 +227,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // location.key, minus the entries a dialog pushes or clears - so opening a
   // dialog never reloads the list under it (useRefetchKey).
   const refetchKey = useRefetchKey()
+  // Catat opened from another screen returns there on save and on Kembali
+  // (#745); opened from its own nav button, it returns to Beranda.
+  const recordReturn = returnToOf(location.state)
   const [searchParams, setSearchParams] = useSearchParams()
 
   // ?purpose=<id> - shared by three routes, read here for two of them
@@ -298,7 +286,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // entry's state belongs to that entry alone, the lifetime this message
   // wants.
   function handleRecorded(recorded: Recorded, photoFailed?: boolean) {
-    navigate('/', { state: { recorded, photoFailed } satisfies HomeState })
+    navigate(recordReturn ?? '/', { state: { recorded, photoFailed } satisfies RecordedState })
   }
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -321,17 +309,17 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }
 
   const title = state.data?.name ?? copy.app.name
-  // Where the envelope detail was opened from: Beranda says so in the history
-  // entry's state, Pengaturan says nothing, and a deep link or reload has no
-  // state at all - both of those lead back to Pengaturan.
-  const envelopeFromHome = (location.state as EnvelopeOriginState | null)?.from === 'home'
-  const recordFromDuesState = (location.state as RecordFromDuesState | null)?.fromDues
-  const recordFromDues = recordFromDuesState !== undefined && recordFromDuesState !== null && typeof recordFromDuesState === 'object'
-  const duesReturn = '/dues' + (recordFromDues ? recordFromDuesState.search : '')
+  // Where the envelope detail was opened from: Beranda says so in the URL
+  // (?from=home), Pengaturan says nothing - and nor does a deep link, which
+  // leads back to Pengaturan too. In the URL rather than the entry's state, so
+  // Catat's returnTo carries it and an arrival toast's state clear keeps it.
+  const envelopeFromHome = searchParams.get('from') === 'home'
   const recordDuesPeriod = periodParam(searchParams.get('period'))
   const recordDues = searchParams.get('type') === 'dues'
   // "Pengeluaran ini ditalangi": form mode is a route (ADR-032), like
-  // ?type=dues. Written with replace so ticking it adds no history entry.
+  // ?type=dues. Written with replace so ticking it adds no history entry, and
+  // with the entry's state, which a replace would otherwise drop - and with it
+  // the screen Catat returns to.
   const recordFronted = searchParams.get('fronted') === '1'
   const setRecordFronted = (next: boolean) =>
     setSearchParams(
@@ -341,7 +329,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         else params.delete('fronted')
         return params
       },
-      { replace: true },
+      { replace: true, state: location.state },
     )
   return (
     <Routes>
@@ -351,19 +339,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <RecordTransaction
               onRecorded={handleRecorded}
-              onCancel={() => navigate('/')}
+              onCancel={() => navigate(recordReturn ?? '/')}
               initialPurposeId={initialPurposeId}
               initialMemberId={initialMemberId}
               initialDues={recordDues}
               initialDuesPeriod={recordDuesPeriod}
               fronted={recordFronted}
               onFrontedChange={setRecordFronted}
-              onDuesRecorded={() =>
-                recordFromDues
-                  ? navigate(duesReturn, { state: { duesRecorded: true } satisfies DuesState })
-                  : navigate('/', { state: { recorded: 'dues' } satisfies HomeState })
-              }
-              onDuesCancel={recordFromDues ? () => navigate(duesReturn) : undefined}
+              onDuesRecorded={() => navigate(recordReturn ?? '/', { state: { recorded: 'dues' } satisfies RecordedState })}
             />
           </Shell>
         }
@@ -405,7 +388,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onBack={() => navigate('/history/dues')}
               onRecordPayment={(target) =>
                 navigate(target ? `/record?type=dues&member=${target.memberId}&period=${target.period}` : '/record?type=dues', {
-                  state: { fromDues: { search: location.search } } satisfies RecordFromDuesState,
+                  state: recordOriginFrom(location),
                 })
               }
               refetchKey={refetchKey}
@@ -447,7 +430,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           the door to return through. */}
       <Route
         path="/dues/payment"
-        element={<Navigate to="/record?type=dues" state={{ fromDues: { search: '' } } satisfies RecordFromDuesState} replace />}
+        element={<Navigate to="/record?type=dues" state={{ returnTo: '/dues' } satisfies RecordOriginState} replace />}
       />
       <Route
         path="/members"
@@ -499,7 +482,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onBack={() => navigate(envelopeFromHome ? '/' : '/settings')}
                 backLabel={envelopeFromHome ? copy.incidentals.detail.backToHome : copy.incidentals.detail.backToSettings}
                 onRecordFor={(purposeId, memberId) =>
-                  navigate(`/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}`)
+                  navigate(`/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}`, {
+                    state: recordOriginFrom(location),
+                  })
                 }
                 onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
                 purposeId={initialPurposeId}
@@ -532,9 +517,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Home
               refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}
-              onOpenIncidental={(purposeId) =>
-                navigate(`/incidentals?purpose=${purposeId}`, { state: { from: 'home' } satisfies EnvelopeOriginState })
-              }
+              onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}&from=home`)}
               onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
               onViewOwed={() => navigate('/history/reimbursements')}

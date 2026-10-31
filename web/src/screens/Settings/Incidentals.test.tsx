@@ -162,7 +162,7 @@ describe('Settings incidentals', () => {
     expect(screen.getByRole('dialog', { name: copy.incidentals.open.heading })).toBeInTheDocument()
   })
 
-  it('opens an envelope, posting occasion/target/date, then closes the dialog and reloads the list', async () => {
+  it('opens an envelope, posting occasion/target/date, then lands on the new envelope (#745)', async () => {
     const { fetchMock, calls } = stubIncidentals([], () => jsonResponse(envelope(3, 'Kerja bakti'), 201))
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
@@ -175,11 +175,10 @@ describe('Settings incidentals', () => {
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'POST', body: { occasion: 'Kerja bakti', target_amount: null } })
-    // A successful open closes the dialog and drops the param.
-    await waitFor(() => expect(currentLocation()).toBe('/settings'))
+    // A successful open goes straight to the new envelope; App.tsx's arrival
+    // toast says so (#743).
+    await waitFor(() => expect(currentLocation()).toBe('/incidentals?purpose=3'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    // ...and says so (#743).
-    expect(await screen.findByText(text.opened)).toBeInTheDocument()
   })
 
   // ADR-034: the open dialog also carries the envelope's minimum and its

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, Circle, CircleCheck, CircleDashed } from 'lucide-react'
 
+import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
@@ -147,7 +148,14 @@ export default function DuesStatus({
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div role="group" aria-label={gridText.heading} className={segmentedTrackClass(2)}>
+      {/* Riwayat's tab strip is not on this screen, so the screen names
+          itself (#745); the nav still highlights Riwayat, where back leads. */}
+      <div className="flex flex-col gap-1">
+        <BackLink label={text.backToHistory} onClick={onBack} />
+        <h1 className="text-xl font-semibold">{text.heading}</h1>
+      </div>
+
+      <div role="group" aria-label={text.heading} className={segmentedTrackClass(2)}>
         <Button
           type="button"
           variant={showGrid ? 'ghost' : 'default'}
@@ -302,14 +310,9 @@ export default function DuesStatus({
         </>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" size="lg" onClick={onBack}>
-          {text.back}
-        </Button>
-        <Button type="button" size="lg" onClick={() => onRecordPayment()}>
-          {text.recordLink}
-        </Button>
-      </div>
+      <Button type="button" size="lg" className="w-full" onClick={() => onRecordPayment()}>
+        {text.recordLink}
+      </Button>
     </div>
   )
 }
