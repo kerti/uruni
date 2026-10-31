@@ -1,4 +1,5 @@
 import { copy } from '../src/copy/id'
+import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
 import { chooseOption } from './popper'
 import { expectAccessible } from './a11y'
@@ -88,9 +89,9 @@ test.describe('dues status', () => {
       const field = page.getByLabel(new RegExp(`^${copy.dues.payment.amountLabel('')}`)).nth(index)
       await field.fill('')
       await field.fill(value)
-      // Still focused, so the field shows the bare digits it holds - proof the
-      // value is what this spec asked for, not a concatenation.
-      await expect(field).toHaveValue(value)
+      // The figure it holds, grouped as she types (#749) - proof the value is
+      // what this spec asked for, not a concatenation.
+      await expect(field).toHaveValue(formatIDR(Number(value)))
     }
 
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()

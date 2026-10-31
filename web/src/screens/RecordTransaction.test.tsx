@@ -516,8 +516,8 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
     void user
 
-    expect(screen.getByText(text.locationBalance(formatIDR(135_000)))).toBeInTheDocument()
-    expect(screen.getByText(text.locationBalance(formatIDR(250_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.balance(formatIDR(135_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.balance(formatIDR(250_000)))).toBeInTheDocument()
   })
 
   it('warns when the move would take the SOURCE below zero, without blocking it', async () => {
@@ -547,7 +547,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.fromLocationLabel, 'Tunai')
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
 
-    expect(screen.getByText(text.locationBalance(formatIDR(-80_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.balance(formatIDR(-80_000)))).toBeInTheDocument()
     expect(screen.queryByText(text.locationGoesNegative(formatIDR(30_000)))).not.toBeInTheDocument()
   })
 
@@ -887,8 +887,8 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     stubPurposeMove(750_000, 120_000)
     const { user } = await choosePurposeMove()
 
-    expect(await screen.findByText(text.purposeBalance(formatIDR(750_000)))).toBeInTheDocument()
-    expect(screen.getByText(text.purposeBalance(formatIDR(120_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.balance(formatIDR(750_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.balance(formatIDR(120_000)))).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: text.swapPurposes }))
     expect(selectedOptionName(text.fromPurposeLabel)).toBe('Halal bihalal RT')
@@ -910,7 +910,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     stubPurposeMove(750_000)
     await choosePurposeMove()
 
-    expect(await screen.findByText(text.purposeBalance(formatIDR(750_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.balance(formatIDR(750_000)))).toBeInTheDocument()
   })
 
   it('refuses the same pos on both sides, saying why, and keeps submit disabled', async () => {

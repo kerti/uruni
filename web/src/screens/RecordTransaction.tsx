@@ -617,10 +617,8 @@ export default function RecordTransaction({
                   value={fromPurposeId}
                   onChange={setFromPurposeId}
                   disabled={submitting}
+                  aside={fromPurposeBalance !== null ? text.balance(formatIDR(fromPurposeBalance)) : undefined}
                 />
-                {fromPurposeBalance !== null && (
-                  <p className="text-sm text-muted-foreground">{text.purposeBalance(formatIDR(fromPurposeBalance))}</p>
-                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 {/* Kas Utama to an envelope and back again are the same pair
@@ -647,10 +645,8 @@ export default function RecordTransaction({
                   value={toPurposeId}
                   onChange={setToPurposeId}
                   disabled={submitting}
+                  aside={toPurposeBalance !== null ? text.balance(formatIDR(toPurposeBalance)) : undefined}
                 />
-                {toPurposeBalance !== null && (
-                  <p className="text-sm text-muted-foreground">{text.purposeBalance(formatIDR(toPurposeBalance))}</p>
-                )}
                 {!hasOpenEnvelope && <p className="text-sm text-muted-foreground">{text.noOpenEnvelopeHint}</p>}
                 {samePurpose && (
                   <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
@@ -694,10 +690,8 @@ export default function RecordTransaction({
                 value={accountId}
                 onChange={setAccountId}
                 disabled={submitting}
+                aside={isTransfer && fromBalance !== null ? text.balance(formatIDR(fromBalance)) : undefined}
               />
-              {isTransfer && fromBalance !== null && (
-                <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
-              )}
             </div>
           )}
 
@@ -729,8 +723,8 @@ export default function RecordTransaction({
                 value={toAccountId}
                 onChange={setToAccountId}
                 disabled={submitting}
+                aside={toBalance !== null ? text.balance(formatIDR(toBalance)) : undefined}
               />
-              {toBalance !== null && <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toBalance))}</p>}
 
               {sameLocation && (
                 <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">

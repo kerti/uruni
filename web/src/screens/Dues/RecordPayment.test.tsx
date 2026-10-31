@@ -137,8 +137,8 @@ describe('RecordDuesPayment', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Januari 2026/ }))
     expect(screen.getAllByRole('button', { name: /^Ubah jumlah/ })).toHaveLength(1)
     expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
-    // Autofocused, so it shows the bare digits it holds.
-    expect(await openEditor('Januari 2026')).toHaveValue('50000')
+    // Autofocused, grouped as it is everywhere (#749).
+    expect(await openEditor('Januari 2026')).toHaveValue(formatIDR(50_000))
     // Unticking closes the editor.
     await userEvent.click(screen.getByRole('checkbox', { name: /Januari 2026/ }))
     expect(screen.queryByLabelText(text.amountLabel('Januari 2026'))).not.toBeInTheDocument()
@@ -429,7 +429,7 @@ describe('RecordDuesPayment', () => {
 
       await screen.findByRole('checkbox', { name: 'November 2026' })
       expect(screen.getByRole('checkbox', { name: 'Oktober 2026' })).toBeChecked()
-      expect(screen.getByLabelText(text.amountLabel('Oktober 2026'))).toHaveValue('40000')
+      expect(screen.getByLabelText(text.amountLabel('Oktober 2026'))).toHaveValue(formatIDR(40_000))
       expect(screen.getByRole('button', { name: /^Ubah jumlah Oktober 2026/ })).toHaveTextContent(formatIDR(40_000))
     })
 

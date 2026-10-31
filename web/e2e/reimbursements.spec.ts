@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
 import { chooseOption } from './popper'
 
@@ -136,7 +137,7 @@ test.describe('reimbursements', () => {
     const amount = page.getByLabel(copy.reimbursements.record.amountLabel)
     await amount.fill('')
     await amount.fill('35000')
-    await expect(amount).toHaveValue('35000')
+    await expect(amount).toHaveValue(formatIDR(35_000))
     await page.getByRole('button', { name: copy.reimbursements.correct.submit }).click()
 
     // Back on the tab with the confirmation and the corrected amount.
