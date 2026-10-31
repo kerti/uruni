@@ -149,14 +149,13 @@ export default function DuesStatusGrid({ refetchKey }: { refetchKey?: unknown })
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h2 className="text-lg font-semibold">{gridText.heading}</h2>
-        {state.status === 'success' && state.data && state.data.periods.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            {gridText.range(formatPeriod(state.data.periods[0]), formatPeriod(state.data.periods[state.data.periods.length - 1]))}
-          </p>
-        )}
-      </div>
+      {/* The screen's title and the view switch already say what this is
+          (#745); only the span of months is news. */}
+      {state.status === 'success' && state.data && state.data.periods.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {gridText.range(formatPeriod(state.data.periods[0]), formatPeriod(state.data.periods[state.data.periods.length - 1]))}
+        </p>
+      )}
 
       {(state.status === 'idle' || state.status === 'loading') && <Loading />}
       {state.status === 'error' && state.error && <ErrorState error={state.error} onRetry={() => void run(getDuesGrid)} />}

@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
+import BackLink from '@/components/BackLink'
 import DateField from '@/components/DateField'
 import RecordSummary from '@/components/RecordSummary'
 import OpeningDateHint from '@/components/OpeningDateHint'
@@ -338,12 +338,7 @@ function DetailView({
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {/* A way back, not an action (#319): a quiet link, like a browser's own
-          back, rather than a full-width button competing with the real ones. */}
-      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" />
-        {backLabel}
-      </Button>
+      <BackLink label={backLabel} onClick={onBack} />
 
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold">{envelope.occasion}</h1>

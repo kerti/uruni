@@ -25,7 +25,7 @@ test.describe('dues status, twelve months', () => {
 
     await page.getByRole('button', { name: copy.dues.grid.viewTwelveMonths }).click()
     await expect(page).toHaveURL(/[?&]view=grid\b/)
-    await expect(page.getByRole('heading', { name: copy.dues.grid.heading })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
     // The month field and the "belum bayar" toggle belong to the list.
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeHidden()
     await expect(page.getByLabel(copy.dues.unpaidFilterLabel)).toBeHidden()
@@ -58,10 +58,10 @@ test.describe('dues status, twelve months', () => {
   test('keeps the view across a reload and goes back to the list', async ({ page }) => {
     await logIn(page)
     await page.goto('/dues?view=grid')
-    await expect(page.getByRole('heading', { name: copy.dues.grid.heading })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
 
     await page.reload()
-    await expect(page.getByRole('heading', { name: copy.dues.grid.heading })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
 
     await page.getByRole('button', { name: copy.dues.grid.viewOneMonth }).click()
     await expect(page).not.toHaveURL(/view=grid/)

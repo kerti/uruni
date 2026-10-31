@@ -1,6 +1,6 @@
 import { Camera, Search } from 'lucide-react'
 import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import { listReimbursements, updateReimbursement, deleteReimbursement } from '@/
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { recordOriginFrom } from '@/lib/recordOrigin'
 import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
@@ -77,6 +78,7 @@ interface FormData {
 export default function Reimbursements({ refetchKey }: { refetchKey?: unknown }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const q = (searchParams.get('q') ?? '').trim()
   const [draft, setDraft] = useState(q)
 
@@ -453,7 +455,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         />
       </div>
 
-      <Button type="button" size="lg" onClick={() => navigate('/record?fronted=1')}>
+      <Button type="button" size="lg" onClick={() => navigate('/record?fronted=1', { state: recordOriginFrom(location) })}>
         {text.record.heading}
       </Button>
 

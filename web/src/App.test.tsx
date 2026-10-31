@@ -439,11 +439,11 @@ describe('App (record loop)', () => {
   // purpose chosen. The route is detail-only (its list moved to Pengaturan),
   // so it is reached directly with ?purpose=<id>.
   it.each([
-    ['a deep link or reload, which carries no origin', null, copy.incidentals.detail.backToSettings],
-    ["Beranda's per-pos list", { from: 'home' }, copy.incidentals.detail.backToHome],
+    ['a deep link or reload, which carries no origin', '', copy.incidentals.detail.backToSettings],
+    ["Beranda's per-pos list", '&from=home', copy.incidentals.detail.backToHome],
   ])(
-    "routes an envelope's record action into the record form with its purpose chosen, and the back link follows %s",
-    async (_origin, state, backLabel) => {
+    "routes an envelope's record action into the record form with its purpose chosen and back again, and the back link follows %s",
+    async (_origin, from, backLabel) => {
       const envelope = {
         purpose_id: 12,
         occasion: 'Halal bihalal RT',
@@ -453,8 +453,7 @@ describe('App (record loop)', () => {
         created_at: 1,
         minimum_per_member: null,
       } satisfies Incidental
-      // react-router keeps navigate()'s state under `usr` in the history entry.
-      window.history.pushState(state === null ? {} : { usr: state, key: 'origin', idx: 0 }, '', '/incidentals?purpose=12')
+      window.history.pushState({}, '', `/incidentals?purpose=12${from}`)
       vi.stubGlobal(
         'fetch',
         routedFetch([
@@ -489,6 +488,13 @@ describe('App (record loop)', () => {
 
       await screen.findByRole('heading', { name: copy.record.headingOut })
       await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+
+      // Kembali returns to the envelope it came from (#745), its own way back
+      // still pointing where it did.
+      await userEvent.click(screen.getByRole('button', { name: copy.common.back }))
+      await screen.findByText(copy.incidentals.detail.collectedLabel)
+      expect(window.location.pathname + window.location.search).toBe(`/incidentals?purpose=12${from}`)
+      expect(screen.getByRole('button', { name: backLabel })).toBeInTheDocument()
       window.history.pushState({}, '', '/')
     },
   )

@@ -1,13 +1,13 @@
-import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import BackLink from '@/components/BackLink'
 import DateField from '@/components/DateField'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useToast } from '@/components/toast/useToast'
 import AmountInput from '@/components/money/AmountInput'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import Loading from '@/components/states/Loading'
@@ -56,6 +56,12 @@ function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
  * The form is occasion, an optional target, and a date defaulting to today.
  * Contributing and disbursing stay on the envelope's detail screen.
  */
+/** What Buka amplop hands the new amplop's screen: App.tsx's arrival toast
+ * reads it and says the amplop is open. */
+export interface IncidentalOpenedState {
+  incidentalOpened: true
+}
+
 export default function SettingsIncidentals() {
   const navigate = useNavigate()
   const [listState, listRun] = useApi<Incidental[]>()
@@ -64,7 +70,6 @@ export default function SettingsIncidentals() {
   // shows a filled picker instead of a spinner.
   const [membersState, membersRun] = useApi<Member[]>()
   const { value, open, close, clear } = useDialogParam()
-  const toast = useToast()
 
   useEffect(() => {
     // listRun/membersRun are stable useCallbacks (useApi.ts): fires once.
@@ -117,11 +122,14 @@ export default function SettingsIncidentals() {
         open={target === 'new'}
         members={membersState.data ?? []}
         onClose={close}
-        onOpened={() => {
-          close()
-          toast.success(text.opened)
-          reload()
-        }}
+        onOpened={(opened) =>
+          // Straight onto the new amplop (#745), in place of the dialog's
+          // entry: back from there is Pengaturan, not the dialog again.
+          navigate(`/incidentals?purpose=${opened.purpose_id}`, {
+            replace: true,
+            state: { incidentalOpened: true } satisfies IncidentalOpenedState,
+          })
+        }
       />
     </section>
   )
@@ -200,7 +208,7 @@ function OpenIncidentalDialog({
   open: boolean
   members: Member[]
   onClose: () => void
-  onOpened: () => void
+  onOpened: (opened: Incidental) => void
 }) {
   const [state, run] = useApi<Incidental>()
   const [occasion, setOccasion] = useState('')
@@ -235,7 +243,7 @@ function OpenIncidentalDialog({
         minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
         recipientMemberIds,
       })
-      onOpened()
+      onOpened(opened)
       return opened
     })
   }
@@ -332,10 +340,7 @@ export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOp
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" />
-        {copy.incidentals.detail.backToSettings}
-      </Button>
+      <BackLink label={copy.incidentals.detail.backToSettings} onClick={onBack} />
       <h1 className="text-xl font-semibold">{text.closedRow}</h1>
 
       {state.status === 'idle' || state.status === 'loading' ? (

@@ -188,4 +188,18 @@ test.describe('reimbursements', () => {
     await expect(page.getByText(copy.reimbursements.unwaive.success)).toBeVisible()
     await expect(row.getByText(copy.reimbursements.status.outstanding)).toBeVisible()
   })
+
+  test('Catat from the tab returns to the tab, its filter intact (#745)', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/history/reimbursements?q=Warga')
+    await page.getByRole('button', { name: copy.reimbursements.record.heading, exact: true }).click()
+    await expect(page.getByLabel(copy.record.frontedLabel)).toBeChecked()
+    await chooseOption(page, copy.reimbursements.record.memberLabel)
+    await page.getByLabel(copy.record.amountLabel).fill('30000')
+    await page.getByRole('button', { name: copy.record.submit }).click()
+
+    await expect(page.getByText(copy.record.successFronted)).toBeVisible()
+    await expect(page).toHaveURL(/\/history\/reimbursements\?q=Warga$/)
+    await expect(page.getByText('Rp30.000')).toBeVisible()
+  })
 })

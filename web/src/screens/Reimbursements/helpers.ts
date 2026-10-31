@@ -9,10 +9,10 @@ export const TALANGAN_PATH = '/history/reimbursements'
 
 /**
  * What the Talangan correct screen hands back to the tab through router location state,
- * as App.tsx's HomeState and DuesState do: the confirmation belongs to the one
+ * as App.tsx's RecordedState does: the confirmation belongs to the one
  * history entry that navigation creates, so opening the tab later does not
  * show a stale one. The tab turns the key into copy. (Recording a claim is
- * Catat's, and lands on Beranda.)
+ * Catat's, and lands on Beranda - or back here, from the tab's own Catat.)
  */
 export interface TalanganState {
   reimbursementDone: 'corrected'

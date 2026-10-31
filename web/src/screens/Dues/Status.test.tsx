@@ -129,6 +129,18 @@ describe('DuesStatus', () => {
     expect(screen.queryByRole('button', { name: /ingat|kirim|notif/i })).not.toBeInTheDocument()
   })
 
+  it('names itself and has one way back, at the top (#745)', async () => {
+    vi.stubGlobal('fetch', stubDuesStatus())
+    const onBack = vi.fn()
+    render(<DuesStatus onBack={onBack} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+    await screen.findByText('Warga Satu')
+    expect(screen.getByRole('heading', { level: 1, name: text.heading })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.back })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: text.backToHistory }))
+    expect(onBack).toHaveBeenCalledOnce()
+  })
+
   it('defaults the period selector to the current month', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
@@ -249,7 +261,7 @@ describe('DuesStatus', () => {
       expect(await screen.findByText('Warga Satu')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: gridText.viewOneMonth })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByRole('button', { name: gridText.viewTwelveMonths })).toHaveAttribute('aria-pressed', 'false')
-      expect(screen.queryByRole('heading', { name: gridText.heading })).not.toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
     })
 
     it('switches to the grid through the URL and hides the list-only controls', async () => {
@@ -265,7 +277,7 @@ describe('DuesStatus', () => {
 
       await userEvent.click(screen.getByRole('button', { name: gridText.viewTwelveMonths }))
 
-      expect(await screen.findByRole('heading', { name: gridText.heading })).toBeInTheDocument()
+      expect(await screen.findByRole('table')).toBeInTheDocument()
       expect(screen.getByTestId('where')).toHaveTextContent('?view=grid')
       expect(screen.queryByLabelText(text.periodLabel)).not.toBeInTheDocument()
       expect(screen.queryByLabelText(text.unpaidFilterLabel)).not.toBeInTheDocument()

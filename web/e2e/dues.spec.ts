@@ -36,7 +36,7 @@ test.describe('dues status', () => {
     await expect(page.getByText('Warga Dua')).toBeVisible()
     await expect(page.getByText(copy.dues.statuses.unpaid).first()).toBeVisible()
 
-    await page.getByRole('button', { name: copy.dues.back }).click()
+    await page.getByRole('button', { name: copy.dues.backToHistory }).click()
     await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
   })
 
@@ -98,10 +98,15 @@ test.describe('dues status', () => {
     // Back on the roster, refreshed, with the confirmation for this navigation.
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
+    // Checked at rest at the end of the screen: the nav is translucent glass,
+    // so whatever scrolls under it mid-page (here Catat pembayaran, once the
+    // paid card shrinks) is a scroll position, not a layout - the page's
+    // bottom padding clears the nav once scrolled to its end.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
     await expectAccessible(page)
 
     // Back returns to Riwayat's Iuran tab, not home.
-    await page.getByRole('button', { name: copy.dues.back }).click()
+    await page.getByRole('button', { name: copy.dues.backToHistory }).click()
     await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
 
     // Every posted row says whose dues it was: home's recent activity shows the
