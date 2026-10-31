@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { rateSpan } from '@/lib/rateSpan'
+import { rateInForce, rateSpan } from '@/lib/rateSpan'
 import type { DuesRate } from '@/lib/setup'
 
 function rate(id: number, effectiveFrom: string): DuesRate {
@@ -36,5 +36,19 @@ describe('rateSpan', () => {
   it('reaches onward for a lone rate', () => {
     const rates = [rate(1, '2026-01')]
     expect(rateSpan(rates, rates[0])).toEqual({ from: '2026-01', until: null })
+  })
+})
+
+describe('rateInForce (#748)', () => {
+  it('is the latest rate already started, whatever the order, ignoring one still to come', () => {
+    const rates = [rate(3, '2027-01'), rate(1, '2025-01'), rate(2, '2026-06')]
+    expect(rateInForce(rates, '2026-10')?.id).toBe(2)
+    expect(rateInForce(rates, '2026-06')?.id).toBe(2)
+    expect(rateInForce(rates, '2027-01')?.id).toBe(3)
+  })
+
+  it('is null when every rate starts later, or there is none', () => {
+    expect(rateInForce([rate(1, '2027-01')], '2026-10')).toBeNull()
+    expect(rateInForce([], '2026-10')).toBeNull()
   })
 })

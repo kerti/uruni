@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
-import { rateSpan } from '@/lib/rateSpan'
+import { rateInForce, rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
 import { errorCode } from '@/lib/api'
 import { useResetWhen } from '@/lib/useResetWhen'
@@ -171,6 +171,7 @@ function TierRates({
   // A row superseded from another screen unmounts when the list reloads,
   // taking any message of its own with it, so the notice lives here.
   const [superseded, setSuperseded] = useState(false)
+  const inForceId = rateInForce(rates, currentPeriod())?.id ?? null
 
   // The reload is silent (refresh): the screen stays mounted, so this notice
   // survives it. A loud one would drop the whole screen to Loading.
@@ -191,19 +192,24 @@ function TierRates({
         <p className="text-sm text-muted-foreground">{text.noRates}</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {rates.map((rate) => (
-            <RateRow
-              key={rate.id}
-              rate={rate}
-              rates={rates}
-              onChanged={() => {
-                setSuperseded(false)
-                onChanged()
-              }}
-              onSuperseded={handleSuperseded}
-              refresh={refresh}
-            />
-          ))}
+          {/* Newest first, the one pricing this month marked (#748): the
+              question here is "what do they pay now, and what is coming". */}
+          {[...rates]
+            .sort((a, b) => b.effective_from.localeCompare(a.effective_from))
+            .map((rate) => (
+              <RateRow
+                key={rate.id}
+                rate={rate}
+                rates={rates}
+                inForce={rate.id === inForceId}
+                onChanged={() => {
+                  setSuperseded(false)
+                  onChanged()
+                }}
+                onSuperseded={handleSuperseded}
+                refresh={refresh}
+              />
+            ))}
         </ul>
       )}
       <AddRate tierId={tier.id} onAdded={onChanged} refresh={refresh} />
@@ -217,12 +223,15 @@ function TierRates({
 function RateRow({
   rate,
   rates,
+  inForce,
   onChanged,
   onSuperseded,
   refresh,
 }: {
   rate: DuesRate
   rates: DuesRate[]
+  /** This rate prices the current month: it carries the "Berlaku sekarang" chip. */
+  inForce: boolean
   onChanged: () => void
   onSuperseded: () => void
   refresh: () => Promise<void>
@@ -284,9 +293,11 @@ function RateRow({
           {confirming && (
             <p className="text-sm text-attention-text">{text.rateCorrectConfirm(formatIDR(rate.amount), formatIDR(amount), spanLabel)}</p>
           )}
-          {/* One row, primary right (#235). Deleting lives here rather than
-              on the reading row: a rate is removed to re-file it against
-              the right month, which is a correction, not a glance. */}
+          {/* Deleting lives here rather than on the reading row: a rate is
+              removed to re-file it against the right month, which is a
+              correction, not a glance. It takes its own line (#748): three
+              buttons in one row ran past the card on a phone. Kembali and the
+              save share the row under it, primary right (#235). */}
           {confirming ? (
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="lg" className="ml-auto" disabled={busy} onClick={() => setConfirming(false)}>
@@ -297,12 +308,12 @@ function RateRow({
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 size="lg"
-                className="text-attention-text"
+                className="self-start px-0 text-attention-text"
                 disabled={busy}
                 onClick={() =>
                   void run(
@@ -318,29 +329,33 @@ function RateRow({
               >
                 {busy ? text.deletingRate : text.deleteRate}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="ml-auto"
-                disabled={busy}
-                onClick={() => {
-                  setAmount(rate.amount)
-                  setEditing(false)
-                }}
-              >
-                {copy.common.back}
-              </Button>
-              <Button type="submit" size="lg" disabled={busy}>
-                {busy ? text.saving : text.saveRate}
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  disabled={busy}
+                  onClick={() => {
+                    setAmount(rate.amount)
+                    setEditing(false)
+                  }}
+                >
+                  {copy.common.back}
+                </Button>
+                <Button type="submit" size="lg" disabled={busy}>
+                  {busy ? text.saving : text.saveRate}
+                </Button>
+              </div>
             </div>
           )}
         </form>
       ) : (
         <div className="flex items-center justify-between gap-3">
           <span className="flex min-w-0 flex-col">
-            <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
+              {inForce && <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.inForce}</span>}
+            </span>
             <span className="text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
           </span>
           <Button type="button" variant="outline" size="lg" className="shrink-0" disabled={busy} onClick={() => setEditing(true)}>
@@ -462,7 +477,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
           </Button>
         </div>
       ) : (
-        <Button type="button" variant="ghost" size="lg" className="self-start text-attention-text" onClick={() => setConfirming(true)}>
+        <Button type="button" variant="ghost" size="lg" className="self-start px-0 text-attention-text" onClick={() => setConfirming(true)}>
           {text.delete}
         </Button>
       )}

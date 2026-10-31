@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesTierScreen from '@/screens/DuesTier'
 import { copy } from '@/copy/id'
-import { formatPeriod } from '@/lib/dates'
+import { addMonthsToPeriod, currentPeriod, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { pickMonth } from '@/test/datePicker'
 import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
@@ -72,6 +72,25 @@ describe('A tier screen', () => {
     // The old rate stays: it is what explains the months it covered.
     expect(screen.getByText(text.effectiveFrom('Januari 2026'))).toBeInTheDocument()
     expect(screen.getByText(text.effectiveFrom('Juli 2026'))).toBeInTheDocument()
+  })
+
+  it('lists newest first and marks the one rate pricing this month (#748)', async () => {
+    // Relative to today: the chip follows the calendar, not a fixed month.
+    const now = currentPeriod()
+    const old = addMonthsToPeriod(now, -12)
+    const current = addMonthsToPeriod(now, -1)
+    const coming = addMonthsToPeriod(now, 3)
+    const { fetchMock } = stubTier([tier(1, 'Reguler')], [rate(1, 1, 40_000, old), rate(2, 1, 50_000, current), rate(3, 1, 60_000, coming)])
+    vi.stubGlobal('fetch', fetchMock)
+    renderScreen()
+
+    await screen.findByText(text.effectiveFrom(formatPeriod(old)))
+    const rows = screen.getAllByRole('listitem')
+    expect(rows.map((row) => within(row).getByText(/^Mulai /).textContent)).toEqual(
+      [coming, current, old].map((period) => text.effectiveFrom(formatPeriod(period))),
+    )
+    expect(screen.getAllByText(text.inForce)).toHaveLength(1)
+    expect(within(rows[1]).getByText(text.inForce)).toBeInTheDocument()
   })
 
   it('renders a tier with no rates plainly, not as an error', async () => {
