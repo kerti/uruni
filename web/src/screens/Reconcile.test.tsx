@@ -199,6 +199,28 @@ describe('Reconcile', () => {
     await waitFor(() => expect(screen.getByText(text.matched)).toBeInTheDocument())
   })
 
+  it('fills the recorded figure with one tap per location, editable, and saves nothing until Simpan (#747)', async () => {
+    const fetchMock = routedFetch(stubLoad())
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    // One per card, named with its location.
+    await userEvent.click(screen.getByRole('button', { name: `${text.fillRecorded}, Tunai` }))
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue(formatIDR(100_000))
+    expect(screen.getByLabelText(text.actualLabel('Bank Uji Coba'))).toHaveValue('')
+    expect(await screen.findAllByText(text.lineMatched)).toHaveLength(1)
+
+    // Still hers to change: a different count shows the gap.
+    const tunai = screen.getByLabelText(text.actualLabel('Tunai'))
+    await userEvent.clear(tunai)
+    await userEvent.type(tunai, '90000')
+    expect(screen.getByText(text.lineDiscrepancy(formatIDR(10_000)))).toBeInTheDocument()
+
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false)
+  })
+
   it('reaches all three per-line resolutions and posts the fix for entry_added', async () => {
     const fetchMock = routedFetch([
       ...stubLoad(),

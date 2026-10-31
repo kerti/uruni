@@ -171,9 +171,14 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expect(page.getByRole('heading', { name: copy.reconciliation.heading })).toBeVisible()
 
     // First count: every location holds what the ledger says (afterRecords in
-    // Tunai, zero in the bank). Every line matches, so nothing to resolve.
-    await page.getByLabel(copy.reconciliation.actualLabel('Bank Uji Coba')).fill('0')
-    await page.getByLabel(copy.reconciliation.actualLabel('Tunai')).fill(String(afterRecords))
+    // Tunai, zero in the bank), so one tap per location fills it (#747).
+    // Every line matches, so nothing to resolve.
+    // The location is screen-reader-only text after the label, which
+    // Chromium joins with its own spacing.
+    for (const location of ['Bank Uji Coba', 'Tunai']) {
+      await page.getByRole('button', { name: new RegExp(`^${copy.reconciliation.fillRecorded}\\W+${location}$`) }).click()
+    }
+    await expect(page.getByLabel(copy.reconciliation.actualLabel('Tunai'))).toHaveValue(formatIDR(afterRecords))
     // Each line says it matches, under its own count.
     await expect(page.getByText(copy.reconciliation.lineMatched)).toHaveCount(2)
     await expectAccessible(page)
