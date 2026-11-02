@@ -124,7 +124,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
       ) : listState.status === 'error' || !listState.data ? (
         listState.error && <ErrorState error={listState.error} onRetry={() => void listRun(listStoredBackups)} />
       ) : listState.data.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{text.empty}</p>
+        <p className="text-muted-foreground">{text.empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {listState.data.map((item) => (

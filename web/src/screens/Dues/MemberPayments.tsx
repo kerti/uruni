@@ -91,7 +91,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">{text.empty}</p>
+    return <p className="text-muted-foreground">{text.empty}</p>
   }
 
   // The panel's surface is the caller's (Status.tsx); rows only separate from
