@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"context"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
@@ -30,7 +31,7 @@ func TestReportPageCheckStates(t *testing.T) {
 
 	base.Reconciliation = &ledger.ReportReconciliation{Date: "2026-09-30", Matched: true}
 	page = NewPage(base, false)
-	if page.Check.Class != "matched" || page.Check.When != "Terakhir dicek 30 September 2026" {
+	if page.Check.Class != "matched" || page.Check.When != "Terakhir dicek 30 September 2026." {
 		t.Errorf("matched = %+v", page.Check)
 	}
 
@@ -41,32 +42,35 @@ func TestReportPageCheckStates(t *testing.T) {
 	}
 }
 
-// "Cocok" is about the count, not about now: the date line grows the
-// "ada catatan baru sejak itu" suffix only when something was recorded since,
-// in the matched and the discrepancy state alike (#734).
+// "Cocok" is about the count, not about now: the date is followed by its own
+// "Ada catatan baru sejak itu." only when something was recorded since, in the
+// matched and the discrepancy state alike (#734).
 func TestReportPageCheckSaysWhenEntriesCameAfterTheCount(t *testing.T) {
 	t.Parallel()
 	base := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"}}
-	const suffix = " \u00b7 ada catatan baru sejak itu"
+	const since = "Ada catatan baru sejak itu."
 
 	for _, tc := range []struct {
-		name       string
-		rec        ledger.ReportReconciliation
-		newEntries bool
-		want       string
+		name string
+		rec  ledger.ReportReconciliation
+		want string
 	}{
-		{"matched, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true}, false, "Terakhir dicek 30 September 2026"},
-		{"matched, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true, NewEntries: true}, true, "Terakhir dicek 30 September 2026" + suffix},
-		{"discrepancy, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000}, false, "Terakhir dicek 30 September 2026"},
-		{"discrepancy, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000, NewEntries: true}, true, "Terakhir dicek 30 September 2026" + suffix},
+		{"matched, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true}, ""},
+		{"matched, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Matched: true, NewEntries: true}, since},
+		{"discrepancy, nothing since", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000}, ""},
+		{"discrepancy, new entries", ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000, NewEntries: true}, since},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			r := base
 			rec := tc.rec
 			r.Reconciliation = &rec
-			if got := NewPage(r, false).Check.When; got != tc.want {
-				t.Errorf("When = %q, want %q", got, tc.want)
+			check := NewPage(r, false).Check
+			if check.When != "Terakhir dicek 30 September 2026." {
+				t.Errorf("When = %q", check.When)
+			}
+			if check.Since != tc.want {
+				t.Errorf("Since = %q, want %q", check.Since, tc.want)
 			}
 		})
 	}
@@ -239,5 +243,30 @@ func TestPDFFontsAreReadOnceAcrossConcurrentRenders(t *testing.T) {
 	wg.Wait()
 	if got := pdfFontReads.Load(); got != 1 {
 		t.Errorf("font files read %d times, want 1", got)
+	}
+}
+
+// No em dash in anything the report prints (#753). A raw byte is already
+// TestSourceFilesAreASCII's; this catches the escape and the entity, which
+// that test has to allow.
+func TestReportSourcesHaveNoEmDash(t *testing.T) {
+	t.Parallel()
+	sources := os.DirFS(".")
+	entries, err := fs.ReadDir(sources, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := fs.ReadFile(sources, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s := string(src); strings.Contains(s, `\u2014`) || strings.Contains(s, "&mdash;") {
+			t.Errorf("%s has an em dash: use a full stop, comma, colon or middle dot", name)
+		}
 	}
 }

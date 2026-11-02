@@ -412,11 +412,11 @@ func (d *pdfDoc) header(p Page) {
 		if color == "" {
 			color = "muted-foreground"
 		}
-		line := c.Message
-		if c.When != "" {
-			line += " " + c.When + "."
+		for _, line := range []string{c.Message, c.When, c.Since} {
+			if line != "" {
+				d.text(pdfLine{text: line, size: pdfBodySize, color: color}, pdfContentW, "L")
+			}
 		}
-		d.text(pdfLine{text: line, size: pdfBodySize, color: color}, pdfContentW, "L")
 	}
 
 	if len(p.Purposes) > 0 {

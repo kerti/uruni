@@ -1,6 +1,6 @@
 // Every user-facing string lives here: Bahasa Indonesia, sentence case, warm
 // (ADR-014). Centralized from the first screen so a second language stays
-// additive — no copy inline in components.
+// additive - no copy inline in components.
 
 // The one sentence the public demo (ADR-045) says about its shared login, in two
 // places: under the save button of the two Akun bendahara dialogs, and as the
@@ -205,7 +205,7 @@ export const copy = {
   },
   common: {
     loading: 'Memuat…',
-    offlineBanner: 'Belum tersambung — Uruni butuh koneksi.',
+    offlineBanner: 'Belum tersambung. Uruni butuh koneksi.',
     retry: 'Coba lagi',
     // Shown only when a new build is already downloaded and waiting. Never an
     // alarm - nothing is broken, and nothing reloads until she taps.
@@ -230,7 +230,7 @@ export const copy = {
     errors: {
       not_found: 'Data yang dicari tidak ditemukan.',
       method_not_allowed: 'Aksi ini tidak didukung.',
-      network_error: 'Belum tersambung — Uruni butuh koneksi.',
+      network_error: 'Belum tersambung. Uruni butuh koneksi.',
       // A write whose response never arrived. The server may already have saved
       // it - so say it is uncertain, and to check before saving again. One line for
       // every write (ADR-043): it names no place and promises no more than the system
@@ -296,36 +296,36 @@ export const copy = {
       // it was posted anyway - a stale form left open across a close.
       // Incidentals.tsx's screen-scoped errors map has no entry for this code:
       // the guard fires on the record form, not there.
-      incidental_closed: 'Amplop ini sudah ditutup — buka lagi dulu untuk mencatat transaksi baru.',
+      incidental_closed: 'Amplop ini sudah ditutup. Buka lagi dulu untuk mencatat transaksi baru.',
       // ADR-033: POST /api/transactions/{id}/purpose-correction's named
       // refusals. The chip, dialog and row labels normally keep these
       // unreachable; the strings are here so a code that does arrive is never
       // orphaned.
       purpose_correction_opening: 'Pos saldo awal tidak bisa diperbaiki.',
       purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
-      purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — ubah lewat catatan talangannya.',
+      purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini. Ubah lewat catatan talangannya.',
       purpose_correction_transfer: 'Pos hasil pindah tidak bisa diperbaiki lagi.',
       // The refusal now covers every reversal, not only a dues one (ADR-042).
       purpose_correction_reversal: 'Pos pembatalan tidak bisa diperbaiki.',
       // Reverse-then-correct, reachable from a stale page (ADR-042).
       purpose_correction_already_reversed: 'Transaksi ini sudah dibatalkan, posnya tidak bisa diperbaiki.',
-      purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
-      purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
+      purpose_correction_target_closed: 'Amplop ini sudah ditutup. Buka lagi dulu sebelum memindahkan transaksi ke sini.',
+      purpose_correction_source_closed: 'Amplop ini sudah ditutup. Buka lagi dulu sebelum memindahkan transaksi dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
       // Every amount has a ceiling of Rp999.999.999.999 (12 digits). The
       // amount input stops at 12 digits, so this is the fallback for a request
       // that got past it (a stale client, a direct API call).
-      amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
+      amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp999.999.999.999. Cek lagi, mungkin ada nol yang kelebihan.',
       // A date outside the plausible window (before 2000, or past the field's
       // ceiling). The pickers keep inside it; this covers a stale form or a mistyped year.
-      date_out_of_range: 'Tanggalnya di luar batas yang wajar — cek lagi, mungkin salah ketik tahunnya.',
+      date_out_of_range: 'Tanggalnya di luar batas yang wajar. Cek lagi, mungkin salah ketik tahunnya.',
       // ADR-036: POST /api/purpose-moves' named refusals. The form already
       // withholds Titipan, a closed envelope and an amount above the balance,
       // so these are the fallback for a stale form - a close or a posting that
       // landed after it loaded.
       purpose_move_same_purpose: 'Pilih dua pos yang berbeda.',
       purpose_move_pass_through: 'Uang titipan tidak bisa dipindahkan antar pos - titipan hanya bisa diteruskan.',
-      purpose_move_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan uang ke sini atau dari sini.',
+      purpose_move_closed: 'Amplop ini sudah ditutup. Buka lagi dulu sebelum memindahkan uang ke sini atau dari sini.',
       purpose_move_insufficient: 'Saldo pos asal tidak cukup untuk jumlah ini.',
       purpose_move_account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
       // Every posting and every Cek kas count refuses a retired location, and a
@@ -340,7 +340,7 @@ export const copy = {
       account_holds_money: 'Lokasi ini masih menyimpan uang. Pindahkan dulu saldonya ke lokasi lain lewat Pindah lokasi, baru nonaktifkan.',
       account_balance_negative: 'Saldo tercatat lokasi ini minus. Cek kas dulu untuk menemukan selisihnya, baru nonaktifkan.',
       reconciliation_location_missing:
-        'Ada lokasi aktif yang belum dihitung. Daftarnya sudah diperbarui — hitung lokasi itu, lalu simpan lagi.',
+        'Ada lokasi aktif yang belum dihitung. Daftarnya sudah diperbarui. Hitung lokasi itu, lalu simpan lagi.',
       // A Cek kas "Sesuaikan saldo" (adjusted) must equal the selisih exactly.
       // The form blocks a mismatch before save, so she meets this only when
       // the gap moved under a stale form (a transaction landed after she
@@ -351,7 +351,7 @@ export const copy = {
       // envelope the money has left. Added ahead of its UI, like the
       // purpose_correction_* codes above.
       purpose_correction_named_contribution:
-        'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
+        'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini. Batalkan sumbangannya, lalu catat lagi.',
       // The named 409 for a second reversal of the same row (ADR-029, ADR-042): the
       // shared fallback, worded for the Iuran screens; Riwayat's mapper checks
       // copy.history.transactions.errors first.
@@ -364,7 +364,7 @@ export const copy = {
       reversal_of_reversal: 'Pembatalan tidak bisa dibatalkan lagi.',
       reversal_adjustment: 'Penyesuaian tidak bisa dibatalkan.',
       reversal_reconciliation_fix: 'Transaksi ini dipakai untuk menutup selisih cek kas, jadi tidak bisa dibatalkan.',
-      reversal_before_original: 'Transaksi ini bertanggal setelah hari ini — pembatalannya baru bisa dicatat mulai tanggal itu.',
+      reversal_before_original: 'Transaksi ini bertanggal setelah hari ini. Pembatalannya baru bisa dicatat mulai tanggal itu.',
       // The receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its own
       // wording, as in the Go comment beside that code.
@@ -422,7 +422,7 @@ export const copy = {
     },
     register: {
       heading: 'Buat akun bendahara',
-      body: 'Ini akun pertama untuk Uruni — sekali dibuat, akun ini yang menjaga kas bersama.',
+      body: 'Ini akun pertama untuk Uruni. Sekali dibuat, akun ini yang menjaga kas bersama.',
       emailLabel: 'Email',
       passwordLabel: 'Kata sandi',
       submit: 'Buat akun',
@@ -458,12 +458,12 @@ export const copy = {
     submitting: 'Menyimpan…',
     fund: {
       heading: 'Beri nama kas ini',
-      body: 'Nama ini akan muncul di laporan publik dan di seluruh aplikasi — bisa diganti nanti kalau perlu.',
+      body: 'Nama ini akan muncul di laporan publik dan di seluruh aplikasi. Bisa diganti nanti kalau perlu.',
       nameLabel: 'Nama kas',
     },
     locations: {
       heading: 'Pilih tempat kas disimpan',
-      body: 'Setiap tempat penyimpanan uang — tunai atau rekening bank — dicatat sebagai satu lokasi. Boleh diganti namanya, boleh ditambah.',
+      body: 'Setiap tempat penyimpanan uang, tunai atau rekening bank, dicatat sebagai satu lokasi. Boleh diganti namanya, boleh ditambah.',
       kindLabel: 'Jenis',
       kindCash: 'Tunai',
       kindBank: 'Bank',
@@ -475,7 +475,7 @@ export const copy = {
     balances: {
       heading: 'Isi saldo awal (opsional)',
       body: 'Kosongkan kalau lokasi ini belum ada uangnya.',
-      amountLabel: (accountName: string) => `Saldo awal — ${accountName}`,
+      amountLabel: (accountName: string) => `Saldo awal: ${accountName}`,
     },
     roster: {
       heading: 'Tambah anggota dan iuran (opsional)',
@@ -829,7 +829,7 @@ export const copy = {
       unpaid: 'Belum bayar',
       partial: 'Bayar sebagian',
       paid: 'Lunas',
-      paid_in_advance: 'Lunas — sudah bayar di muka',
+      paid_in_advance: 'Lunas · sudah bayar di muka',
     },
     // Paid ahead with a known end: its own line under the amounts, naming the
     // last paid month, while the badge reads a plain "Lunas". The
@@ -937,7 +937,7 @@ export const copy = {
     // footer rather than a second dialog.
     roster: {
       heading: 'Daftar anggota',
-      body: 'Semua yang ikut iuran kas ini. Anggota yang sudah tidak ikut lagi cukup dinonaktifkan — catatan lamanya tetap utuh.',
+      body: 'Semua yang ikut iuran kas ini. Anggota yang sudah tidak ikut lagi cukup dinonaktifkan. Catatan lamanya tetap utuh.',
       empty: 'Belum ada anggota.',
       // Search finds nothing - a real answer, not a failure (the wording idiom
       // of history.transactions.noResults).
@@ -998,7 +998,7 @@ export const copy = {
       deleteConfirmAction: 'Ya, hapus',
       // The 409 from a member who already has posted history: a refusal that
       // points at the right action, as the locations section's does.
-      deleteRefused: 'Anggota ini sudah punya catatan — nonaktifkan saja, jangan dihapus.',
+      deleteRefused: 'Anggota ini sudah punya catatan. Nonaktifkan saja, jangan dihapus.',
       // The toast after a save in the edit or add dialog (#743): one sentence per outcome.
       saved: 'Anggota sudah disimpan.',
       deactivated: 'Anggota sudah dinonaktifkan.',
@@ -1101,7 +1101,7 @@ export const copy = {
     },
     locations: {
       heading: 'Lokasi penyimpanan',
-      body: 'Tempat uang kas disimpan — tunai atau rekening. Nama dan jenisnya bisa diubah kapan saja; lokasi yang sudah tidak dipakai bisa dinonaktifkan, catatannya tetap utuh.',
+      body: 'Tempat uang kas disimpan: tunai atau rekening. Nama dan jenisnya bisa diubah kapan saja; lokasi yang sudah tidak dipakai bisa dinonaktifkan, catatannya tetap utuh.',
       empty: 'Belum ada lokasi.',
       kindLabel: 'Jenis',
       kindCash: 'Tunai',
@@ -1141,7 +1141,7 @@ export const copy = {
       // The 409 the server answers once anything references the location. Not
       // phrased as a failure: deactivating is what she wants, and this points
       // her at it.
-      deleteRefused: 'Lokasi ini sudah punya riwayat — nonaktifkan saja, jangan dihapus.',
+      deleteRefused: 'Lokasi ini sudah punya riwayat. Nonaktifkan saja, jangan dihapus.',
       // The toast after a save in the edit or add dialog (#743): one sentence per outcome.
       saved: 'Lokasi sudah disimpan.',
       deactivated: 'Lokasi sudah dinonaktifkan.',
@@ -1251,7 +1251,7 @@ export const copy = {
     // routes and the schema stay `incidental` (ADR-014).
     incidentals: {
       heading: 'Amplop',
-      body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat, dan bisa dibuka lagi.',
+      body: 'Amplop terpisah untuk acara sekali jalan: kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat, dan bisa dibuka lagi.',
       empty: 'Belum ada amplop dibuka.',
       // Closed envelopes pile up over the years, so Pengaturan lists only the
       // open ones and gathers the rest behind this one row - also the heading
@@ -1278,7 +1278,7 @@ export const copy = {
       // "info login" rather than spelling out "kata sandi" - the file carries
       // the password hash, not the password, and this line is a caution, not an
       // inventory of the zip's contents.
-      body: 'Satu file berisi seluruh catatan kas — termasuk info login. Simpan di tempat yang aman.',
+      body: 'Satu file berisi seluruh catatan kas, termasuk info login. Simpan di tempat yang aman.',
       download: 'Unduh cadangan',
       downloading: 'Menyiapkan…',
       // The auto-list's small heading, distinct enough from "Cadangan" above it

@@ -103,6 +103,7 @@ type Check struct {
 	Class   string // "matched", "discrepancy" or "never"
 	Message string
 	When    string
+	Since   string // only when something was recorded after the count
 }
 
 // Purpose is one pos with its balance, as the header lists it.
@@ -498,17 +499,19 @@ func NewPage(r ledger.Report, empty bool) Page {
 		Empty:       empty,
 	}
 
-	switch rec := r.Reconciliation; {
-	case rec == nil:
+	if rec := r.Reconciliation; rec == nil {
 		page.Check = &Check{Class: "never", Message: Text.NeverChecked}
-	case rec.Matched:
-		page.Check = &Check{Class: "matched", Message: Text.Matched, When: Text.LastChecked(Text.longDate(rec.Date), rec.NewEntries)}
-	default:
-		page.Check = &Check{
-			Class:   "discrepancy",
-			Message: Text.Discrepancy(money.FormatIDR(rec.Difference)),
-			When:    Text.LastChecked(Text.longDate(rec.Date), rec.NewEntries),
+	} else {
+		check := &Check{Class: "discrepancy", When: Text.LastChecked(Text.longDate(rec.Date))}
+		if rec.Matched {
+			check.Class, check.Message = "matched", Text.Matched
+		} else {
+			check.Message = Text.Discrepancy(money.FormatIDR(rec.Difference))
 		}
+		if rec.NewEntries {
+			check.Since = Text.NewEntriesSince
+		}
+		page.Check = check
 	}
 
 	if r.OwedToMembers > 0 {
