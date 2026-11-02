@@ -22,7 +22,7 @@ RUN npm run build
 # 2) Build the Go binary with the SPA embedded via embed.FS.
 #    CGO_ENABLED=0 requires the pure-Go SQLite driver (modernc.org/sqlite) so the
 #    final image can be static/distroless.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
