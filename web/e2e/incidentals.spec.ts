@@ -25,20 +25,15 @@ test.describe('incidentals', () => {
 
   // @smoke on this one too: the smoke tier's "record money in" is the next test
   // and contributes to the envelope this one opens.
-  test('open an envelope from Pengaturan and verify it appears on Beranda', { tag: '@smoke' }, async ({ page }) => {
+  test('open an envelope from Beranda and verify it appears there', { tag: '@smoke' }, async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Opening a new envelope has no button on Beranda (ADR-032): incidentals
-    // are entry points there, not a destination behind a button. Opening one is
-    // Pengaturan's, beside Titipan - reached through the footer nav.
-    await page.getByRole('link', { name: copy.shell.nav.settings }).click()
-    await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
-    await expectAccessible(page)
-
-    // Add is a dialog (ADR-032), addressed by ?edit=incidental:new.
-    await page.getByRole('button', { name: copy.settings.incidentals.add }).click()
+    // An envelope is opened where the money is (ADR-047): Buka amplop sits
+    // under Beranda's Saldo per pos. Add is a dialog (ADR-032), addressed by
+    // ?edit=incidental:new.
+    await page.getByRole('button', { name: copy.incidentals.open.heading, exact: true }).click()
     await expect(page).toHaveURL(/[?&]edit=incidental%3Anew/)
     const openDialog = page.getByRole('dialog', { name: copy.incidentals.open.heading })
     await expect(openDialog).toBeVisible()
@@ -55,19 +50,13 @@ test.describe('incidentals', () => {
     await expect(openDialog).not.toBeVisible()
     // Opening it is confirmed (#743). The toast hides itself after ~4s, so this
     // is asserted right after the action, before anything else.
-    await expect(page.getByText(copy.settings.incidentals.opened)).toBeVisible()
+    await expect(page.getByText(copy.incidentals.opened)).toBeVisible()
 
     // Opening lands on the new envelope itself (#745), whose way back is
-    // Pengaturan - where it is now a card.
+    // Beranda - where it is now a row of Saldo per pos.
     await expect(page.getByRole('heading', { level: 1, name: occasion })).toBeVisible()
     await expect(page).toHaveURL(/\/incidentals\?purpose=\d+$/)
-    await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
-    const card = page.getByRole('button', { name: new RegExp(occasion) })
-    await expect(card).toBeVisible()
-
-    // Beranda keeps its own entry point too (the ADR's point): a fresh visit to
-    // home renders the same envelope as its own row.
-    await page.getByRole('link', { name: copy.shell.nav.home }).click()
+    await page.getByRole('button', { name: copy.incidentals.detail.backToHome }).click()
     await expect(berandaRow(page)).toBeVisible()
   })
 
@@ -145,18 +134,15 @@ test.describe('incidentals', () => {
     // once closed, this screen offers reopen, not a second close.
     await expect(page.getByText(copy.incidentals.close.rolledLabel(60_000))).toBeVisible()
 
-    // Once closed, the envelope leaves Pengaturan's list for the
-    // closed-envelopes screen behind its one row - one tap away - and its card
-    // there opens the detail again. Opened from Beranda, so the back control
-    // leads there (#736) - and the closed envelope is gone from its breakdown.
+    // Once closed, the envelope leaves Beranda's breakdown for the
+    // closed-envelopes screen behind its one row there - one tap away - and
+    // its card there opens the detail again (ADR-047).
     await page.getByRole('button', { name: copy.incidentals.detail.backToHome }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(berandaRow(page)).toBeHidden()
-    await page.getByRole('link', { name: copy.shell.nav.settings }).click()
-    await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeHidden()
-    await page.getByRole('button', { name: new RegExp(copy.settings.incidentals.closedRow) }).click()
-    await expect(page.getByRole('heading', { name: copy.settings.incidentals.closedRow })).toBeVisible()
+    await page.getByRole('button', { name: new RegExp(copy.incidentals.closedRow) }).click()
+    await expect(page.getByRole('heading', { name: copy.incidentals.closedRow })).toBeVisible()
+    await expectAccessible(page)
     await page.getByRole('button', { name: new RegExp(occasion) }).click()
     await expect(page.getByRole('button', { name: copy.incidentals.actions.reopen })).toBeVisible()
   })

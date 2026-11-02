@@ -459,3 +459,6 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 
 **The maintainer replaced lucide with Phosphor's duotone weight**, compared on a sheet against Phosphor regular, Tabler, Hugeicons and Streamline Flex (balances-landing's set, whose free tier lacks the plus, history, arrows and trash Uruni needs, and needs a credit). Triangles stay over chevrons and the shade stays on light surfaces; it drops only on dark fills and the dialog's round close. **The hero and Catat lost their faux-3D bevel for glass light**: solid Forest kept, an iOS-style rim bright at two opposite corners, and the hero rounded to 24px, the one exception to the cards' 14px.
 
+## Amplop opens from Beranda (decided 2026-11-02)
+
+**Configuration lives in Pengaturan; operations live where the money is** ([ADR-047](./ADR/047-amplop-opens-from-beranda.md), #752). Buka amplop and the closed envelopes moved from Pengaturan to the bottom of Beranda's Saldo per pos, where the open envelopes already were, each row now showing who has given; Titipan, which has no close, stays in Pengaturan.

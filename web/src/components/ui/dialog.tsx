@@ -129,8 +129,9 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        // No DialogDescription on these forms - the title says it all - so
-        // opt out of Radix's describedby warning explicitly.
+        // Most forms have no DialogDescription - the title says it all - so
+        // opt out of Radix's describedby warning explicitly. A dialog that has
+        // one passes aria-describedby with its id, which overrides this.
         aria-describedby={undefined}
         className={cn(
           'fixed top-1/2 left-1/2 z-50 flex max-h-[90dvh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
@@ -202,6 +203,14 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   )
 }
 
+/** One line under the title saying what the dialog is for, in the header band.
+ * Give it an id and pass the same one as DialogContent's aria-describedby. */
+function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  return (
+    <DialogPrimitive.Description data-slot="dialog-description" className={cn('text-sm text-muted-foreground', className)} {...props} />
+  )
+}
+
 /** The button strip. Bleeds to the content box's edges (hence the negative
  * margins matching its p-4), so it must be the last thing in the dialog.
  * Children go in reading order - secondary first, primary last - side by
@@ -219,4 +228,4 @@ function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-export { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle }
+export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle }

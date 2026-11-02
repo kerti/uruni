@@ -74,12 +74,11 @@ function errorText(err: ApiError): string {
  * navigates there with the purpose pre-chosen (`/record?purpose=<id>`).
  * Closing IS specific to an envelope, so it has its own dialog here (`?edit=close:<id>`, ADR-046).
  *
- * Opening a new envelope and the card list of every envelope (open and
- * closed) live in Pengaturan (screens/Settings/Incidentals.tsx) - the same
- * object as Titipan there. What survives at this route is the detail view
- * alone, always reached with `?purpose=<id>` (App.tsx redirects `/incidentals`
- * without one, or with an unparseable one, to `/settings`): from a Beranda
- * purpose-breakdown row, or from a card in that section.
+ * Opening a new envelope and finding the closed ones happen on Beranda's
+ * Saldo per pos (ADR-047), beside the open envelopes' rows. What survives at
+ * this route is the detail view alone, always reached with `?purpose=<id>`
+ * (App.tsx redirects `/incidentals` without one, or with an unparseable one,
+ * to Beranda): from a Beranda row, or from a card on the closed list.
  *
  * `onViewTransactionsFor` leads the other way, into Riwayat -> Transaksi
  * filtered to this envelope's purpose. ADR-032 drops a closed envelope off
@@ -88,14 +87,12 @@ function errorText(err: ApiError): string {
  */
 export default function Incidentals({
   onBack,
-  backLabel = copy.incidentals.detail.backToSettings,
   onRecordFor,
   onViewTransactionsFor,
   purposeId,
 }: {
+  /** Back to Beranda, the envelope's one door (ADR-047). */
   onBack: () => void
-  /** Names where onBack leads (Beranda or Pengaturan); defaults to Pengaturan. */
-  backLabel?: string
   /** Navigates to Catat, this envelope's purpose pre-chosen - and, when given,
    * a member pre-chosen too (ADR-034: one action per row, record a
    * contribution with the member already filled in) - and an amount, what
@@ -245,7 +242,6 @@ export default function Incidentals({
         onRename={() => openDialog(`incidental:${purposeId}`)}
         onRetry={() => void detailRun(() => getIncidental(purposeId))}
         onBack={onBack}
-        backLabel={backLabel}
       />
       <CloseEnvelopeDialog
         purposeId={purposeId}
@@ -291,7 +287,6 @@ function DetailView({
   onRename,
   onRetry,
   onBack,
-  backLabel,
 }: {
   detailState: ReturnType<typeof useApi<IncidentalDetail>>[0]
   participationState: ReturnType<typeof useApi<IncidentalParticipation>>[0]
@@ -305,7 +300,6 @@ function DetailView({
   onRename: () => void
   onRetry: () => void
   onBack: () => void
-  backLabel: string
 }) {
   if (detailState.status === 'idle' || detailState.status === 'loading') {
     return <Loading />
@@ -340,7 +334,7 @@ function DetailView({
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <BackLink label={backLabel} onClick={onBack} />
+      <BackLink label={copy.incidentals.detail.backToHome} onClick={onBack} />
 
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-xl font-semibold">{envelope.occasion}</h1>
