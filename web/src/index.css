@@ -88,7 +88,7 @@
   --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
   /* The fixed bottom nav's lift: card-strength, cast upward, so rows
        scrolling under the bar read as passing beneath it rather than meeting a
-       cream strip the colour of the page. */
+       strip the colour of the page. */
   --shadow-bar: 0 -4px 16px rgb(34 50 58 / 0.08);
   /* Catat's circle: the one control that sits on top of the bar, so it needs
        more lift than any token above. floating at 10% was invisible on an
@@ -169,7 +169,7 @@
    as a tint only, and gentle semantics (terracotta for "selisih", never
    alarm-red). Change these there first, then here. */
 :root {
-  --background: #f6f4ef;
+  --background: #f3f3f2;
   --foreground: #22323a;
   --card: #ffffff;
   --card-foreground: #22323a;
@@ -184,12 +184,12 @@
   --accent: #7bae8d;
   --accent-foreground: #22323a;
 
-  --muted: #eeebe3;
-  --muted-foreground: #5e6b71; /* 4.62:1 on --muted, 5.0:1 on the page (#508) */
+  --muted: #eae9e7;
+  --muted-foreground: #5e6b71; /* 4.53:1 on --muted, 4.95:1 on the page (#508) */
   --border: #e4e0d7;
   /* A step darker than the --border hairline: a field is something to type into,
-       and at the hairline's shade its edge all but vanished on the cream. */
-  --input: #998a6c; /* 3.08:1 on the page, 3.38:1 on a card: AA non-text (#508) */
+       and at the hairline's shade its edge all but vanished on the page. */
+  --input: #998a6c; /* 3.05:1 on the page, 3.38:1 on a card: AA non-text (#508) */
   --ring: #2f6f60;
 
   --success: #2c7756; /* 4.65:1 on success-soft, 4.92:1 on the page (#526) */
@@ -271,7 +271,7 @@
 /* Solid glass - iOS's liquid glass on the two Forest surfaces that sit above
    the page: Catat's circle and Beranda's balance hero. They keep their solid
    fill (see-through glass would wash out the action colour and the white
-   figures on it, and over a flat cream page there is nothing behind them to
+   figures on it, and over a flat page there is nothing behind them to
    show) and take glass's light rather than a bevel: a soft highlight
    pooling at the upper left, a faint inner glow, a light shadow, and
    glass-rim's edge. No shade along the bottom - that is what read as

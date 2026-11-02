@@ -8,13 +8,13 @@ import "html/template"
 // TestReportPaletteMatchesIndexCSS fails on any drift, so a test, not a
 // comment, keeps the copy honest.
 var reportPalette = map[string]string{
-	"background":         "#f6f4ef",
+	"background":         "#f3f3f2",
 	"foreground":         "#22323a",
 	"card":               "#ffffff",
 	"primary":            "#1f5d50",
 	"primary-foreground": "#ffffff",
 	"accent":             "#7bae8d",
-	"muted":              "#eeebe3",
+	"muted":              "#eae9e7",
 	"muted-foreground":   "#5e6b71",
 	"border":             "#e4e0d7",
 	"input":              "#998a6c",
