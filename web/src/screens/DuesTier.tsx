@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import SectionLabel from '@/components/SectionLabel'
 
 import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
@@ -141,7 +142,7 @@ function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () 
 
   return (
     <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-      <h2 className="text-base font-semibold">{text.nameHeading}</h2>
+      <SectionLabel>{text.nameHeading}</SectionLabel>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="tier-name">{text.nameLabel}</Label>
         <Input id="tier-name" type="text" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
@@ -182,7 +183,7 @@ function TierRates({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{text.ratesHeading}</h2>
+      <SectionLabel>{text.ratesHeading}</SectionLabel>
       {superseded && (
         <p role="alert" className="text-sm text-attention-text">
           {copy.common.errors.dues_rate_superseded}
