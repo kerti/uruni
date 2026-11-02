@@ -385,21 +385,9 @@ export default function Home({
       </section>
 
       <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
-          {/* 44px to the thumb, not to the layout (#319): an invisible hit area
-              centred on the link - ReceiptRowButton's technique - so the row
-              is only as tall as its small heading, rather than min-h-11
-              pushing the heading 12px further from what is above it. */}
-          <Button
-            type="button"
-            variant="link"
-            className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
-            onClick={onViewHistory}
-          >
-            {copy.home.recentActivityViewAll}
-          </Button>
-        </div>
+        <SectionLabel action={{ label: copy.home.recentActivityViewAll, onClick: onViewHistory }}>
+          {copy.home.recentActivityHeading}
+        </SectionLabel>
         <TransactionList
           transactions={recentTransactions}
           purposeNames={purposeNames}

@@ -35,7 +35,7 @@ export default function ReceiptRowButton({
       aria-label={copy.receipts.rowControlAria(hasReceipt)}
       onClick={onClick}
       className={cn(
-        "relative flex shrink-0 items-center gap-1 transition-colors after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
+        'touch-target flex shrink-0 items-center gap-1 transition-colors',
         hasReceipt ? 'text-primary hover:text-primary/80' : 'text-muted-foreground/70 hover:text-foreground',
         className,
       )}

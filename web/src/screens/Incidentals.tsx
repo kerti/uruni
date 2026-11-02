@@ -679,7 +679,7 @@ function ParticipationSection({
                           <span className="text-sm text-muted-foreground">{label}</span>
                           <button
                             type="button"
-                            className="relative shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+                            className="touch-target shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline"
                             aria-label={text.recordAria(row.member.name)}
                             onClick={() => onRecord(row.member.id, stillDue(minimum, row.contributed_amount))}
                           >
@@ -924,19 +924,7 @@ function EnvelopeActivity({
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
-        {/* The same invisible 44px hit area as Beranda's own "Lihat semua"
-            (#319), so the row stays as tall as its small heading. */}
-        <Button
-          type="button"
-          variant="link"
-          className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
-          onClick={onViewAll}
-        >
-          {copy.home.recentActivityViewAll}
-        </Button>
-      </div>
+      <SectionLabel action={{ label: copy.home.recentActivityViewAll, onClick: onViewAll }}>{copy.home.recentActivityHeading}</SectionLabel>
       {state.status === 'error' && state.error ? (
         <ErrorState
           error={state.error}

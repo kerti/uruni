@@ -250,6 +250,24 @@
   display: none;
 }
 
+/* A 44px touch target around a control drawn smaller than that - a link
+   beside a section label, a receipt glyph, a small button - without the
+   control's own box growing and pushing the layout apart (#319). An
+   invisible box centred on the control, at least 44px each way and never
+   smaller than the control itself. Design-System.md: 44x44 minimum. */
+@utility touch-target {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 2.75rem);
+    height: max(100%, 2.75rem);
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* Solid glass - iOS's liquid glass on the two Forest surfaces that sit above
    the page: Catat's circle and Beranda's balance hero. They keep their solid
    fill (see-through glass would wash out the action colour and the white
