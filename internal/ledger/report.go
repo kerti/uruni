@@ -45,6 +45,15 @@ type ReportParams struct {
 	// side.
 	PurposeID *int64
 
+	// AccountID narrows MonthWalk to one location (Riwayat's Lokasi filter,
+	// #784); MonthlyReport, the public report's reader, refuses it, since a
+	// location is the treasurer's working detail and the page prints none
+	// (ADR-035). Under it the walk is that location's: the ends are its
+	// balance, a Pindah lokasi into or out of it is on the Moved line, and
+	// another location's rows are not in it. With PurposeID too, the money of
+	// that pos in that location.
+	AccountID *int64
+
 	// MemberID filters transactions to one member: the dues or contribution
 	// member, or the member a settled claim paid back. A purpose move names
 	// no member, so a member filter hides moves.
@@ -249,9 +258,11 @@ type ReportMove struct {
 // tests assert, not something the report forces or checks at runtime (a
 // public page does not fail on a neighbour).
 //
-// Full says whether the walk applies: with no filter (the whole fund) or a
+// Full says whether the walk applies: with no filter (the whole fund), a
 // purpose filter alone (that pos, whose Moved line is the net of its
-// reclass_purpose legs). Under a member or direction filter only In and Out
+// reclass_purpose legs), a location filter (that location, whose Moved line is
+// the net of its between_accounts legs: a Pindah lokasi in is plus, out minus)
+// or both (that pos's money in that location). Under a member or direction filter only In and Out
 // are meaningful; Start and End stay zero, since a balance has no meaning for
 // one member or direction.
 type ReportWalk struct {
@@ -269,11 +280,13 @@ type ReportWalk struct {
 	Out         money.Amount
 	Adjustments money.Amount
 
-	// Moved is a purpose filter's line: the signed net of that purpose's
-	// reclass_purpose legs dated in the month, summed from the raw legs rather
-	// than the folded display rows, so it equals the change in the pos's balance
-	// whatever the display folds. Always zero for the whole fund, where the two
-	// legs of a move cancel.
+	// Moved is a purpose or location filter's line: the signed net of the
+	// transfer legs dated in the month that touch what is walked, summed from
+	// the raw legs rather than the folded display rows, so it equals the change
+	// in that balance whatever the display folds. For a purpose these are its
+	// reclass_purpose legs; for a location, its between_accounts legs (a
+	// reclass pair on a location has both legs there and nets to zero). Always
+	// zero for the whole fund, where the two legs of a move cancel.
 	Moved money.Amount
 	End   money.Amount
 }
@@ -366,6 +379,10 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial or paid", ErrInvalidArgument, p.DuesStatus)
 	}
 
+	if p.AccountID != nil {
+		return Report{}, fmt.Errorf("%w: the public report has no location filter", ErrInvalidArgument)
+	}
+
 	// The fund is read first: its zone decides "today" and "this month" (ADR-041).
 	fund, err := l.q.GetFund(ctx, p.FundID)
 	if err != nil {
@@ -453,14 +470,25 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 }
 
 // walkEnds sets the walk's two balances and their dates. The ends are ledger
-// sums, and only the whole fund or one pos has them (Full). A purpose that did
-// not exist yet sums to nothing.
+// sums, and only the whole fund, one pos or one location (with or without a
+// pos) has them (Full). A purpose or location that did not exist yet sums to
+// nothing.
 func (l *Ledger) walkEnds(ctx context.Context, p ReportParams, monthStart time.Time, b reportBound, asOf string, walk *ReportWalk) error {
 	if !walk.Full {
 		return nil
 	}
 	dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
 	walk.StartOn, walk.EndOn = dayBefore, asOf
+	if p.AccountID != nil {
+		var err error
+		if walk.Start, err = l.reportAccountBalance(ctx, p, reportBound{through: &dayBefore}); err != nil {
+			return err
+		}
+		if walk.End, err = l.reportAccountBalance(ctx, p, b); err != nil {
+			return err
+		}
+		return nil
+	}
 	if p.PurposeID == nil {
 		start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
 		if err != nil {
@@ -672,6 +700,19 @@ func (l *Ledger) reportPurposeBalance(ctx context.Context, fundID, purposeID int
 	return money.FromDB(v), nil
 }
 
+// reportAccountBalance is p's one location's balance at b, narrowed to p's pos
+// when it has one: the walk's ends under the Lokasi filter, summed from the
+// ledger like every other balance.
+func (l *Ledger) reportAccountBalance(ctx context.Context, p ReportParams, b reportBound) (money.Amount, error) {
+	v, err := l.q.ReportAccountBalance(ctx, store.ReportAccountBalanceParams{
+		FundID: p.FundID, AccountID: *p.AccountID, PurposeID: p.PurposeID, Through: b.through,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("report location balance: %w", err)
+	}
+	return money.FromDB(v), nil
+}
+
 // envelopeOpenAt is whether an envelope was open at the end of the day
 // through, nil meaning now. Closing rolls the leftover out on closed_on, so an
 // envelope closed on that very day is already gone from it.
@@ -757,18 +798,25 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 			}
 			switch *row.TransferKind {
 			case string(TransferKindBetweenAccounts):
+				// With locations hidden the pair is invisible, but under a Lokasi
+				// filter a leg on that location changes its balance, so it is a
+				// Pindah lokasi on the Moved line: into the location plus, out minus.
+				// A pair between two other locations has no leg here.
+				if walk.Full && p.AccountID != nil && legMoves(p, row) {
+					if err := walk.addMoved(row); err != nil {
+						return nil, ReportWalk{}, err
+					}
+				}
 				continue
 			case string(TransferKindReclassPurpose):
 				// Dipindah is the raw leg, whatever the display folds: a pair of
-				// corrections that folds to nothing still posted legs.
-				if walk.Full && p.PurposeID != nil && row.PurposeID == *p.PurposeID {
-					leg := ReportEntry{Direction: Direction(row.Direction), Amount: money.FromDB(row.Amount)}
-					signed, err := leg.signed()
-					if err != nil {
+				// corrections that folds to nothing still posted legs. Under a
+				// Lokasi filter alone both legs sit on the location and net to zero,
+				// so Moved stays 0 and the walk foots; with a pos too, the legs
+				// touching that pos count as they do without a location.
+				if walk.Full && (p.PurposeID != nil || p.AccountID != nil) && legMoves(p, row) {
+					if err := walk.addMoved(row); err != nil {
 						return nil, ReportWalk{}, err
-					}
-					if walk.Moved, err = walk.Moved.Add(signed); err != nil {
-						return nil, ReportWalk{}, fmt.Errorf("totalling moved legs: %w", err)
 					}
 				}
 
@@ -821,6 +869,29 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 		}
 	}
 	return out, walk, nil
+}
+
+// legMoves is whether one transfer leg touches the balance the filters walk: it
+// is in the filtered location and/or on the filtered pos, whichever are set.
+func legMoves(p ReportParams, row store.ListReportTransactionsRow) bool {
+	if p.AccountID != nil && row.AccountID != *p.AccountID {
+		return false
+	}
+	return p.PurposeID == nil || row.PurposeID == *p.PurposeID
+}
+
+// addMoved lands one raw transfer leg on the Moved line, signed as the ledger's
+// balance reads it.
+func (w *ReportWalk) addMoved(row store.ListReportTransactionsRow) error {
+	leg := ReportEntry{Direction: Direction(row.Direction), Amount: money.FromDB(row.Amount)}
+	signed, err := leg.signed()
+	if err != nil {
+		return err
+	}
+	if w.Moved, err = w.Moved.Add(signed); err != nil {
+		return fmt.Errorf("totalling moved legs: %w", err)
+	}
+	return nil
 }
 
 // signed is the amount as the ledger's balance reads it: in is plus, out minus.
@@ -1050,6 +1121,9 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 // member filter hides it, as it hides a move. A purpose filter matches the row's
 // purpose; an opening is Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {
+	if p.AccountID != nil && *p.AccountID != row.AccountID {
+		return false
+	}
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false
 	}

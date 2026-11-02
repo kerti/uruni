@@ -8,6 +8,7 @@ import { formatIDR } from '@/lib/money'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
+import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import type { Member, Transaction } from '@/lib/setup'
 import type { TransactionSummary } from '@/lib/transactions'
@@ -52,6 +53,12 @@ const purposes = [
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
   { id: 12, kind: 'pass_through', name: 'Titipan', created_at: 1 },
 ] satisfies Purpose[]
+
+/** The locations the Lokasi filter offers (#784) - an inactive one too. */
+const accounts = [
+  { id: 31, name: 'Tunai', kind: 'cash', inactive_on: null, created_at: 1 },
+  { id: 32, name: 'Bank lama', kind: 'bank', inactive_on: '2026-06-01', created_at: 1 },
+] satisfies Account[]
 
 /** The roster the filter dialog offers - an inactive member too, since her
  * rows are still history. */
@@ -108,6 +115,7 @@ function stubApi(pageFor: (url: URL) => Page, everything: string[] = [], summary
       const method = (init?.method ?? 'GET').toUpperCase()
       everything.push(`${method} ${url.pathname}${url.search}`)
       if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+      if (url.pathname === '/api/accounts') return jsonResponse(accounts)
       if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
       if (method === 'POST' && url.pathname.endsWith('/purpose-correction')) {
         posted.push({ url: url.pathname, body: JSON.parse(String(init?.body)) })
@@ -219,7 +227,7 @@ describe('Transactions tab', () => {
     expect(screen.getAllByText('Kas Utama').length).toBeGreaterThan(0)
 
     expect(everything.toSorted()).toEqual(
-      ['GET /api/members', 'GET /api/purposes', 'GET /api/transactions', 'GET /api/transactions?q=galon'].toSorted(),
+      ['GET /api/accounts', 'GET /api/members', 'GET /api/purposes', 'GET /api/transactions', 'GET /api/transactions?q=galon'].toSorted(),
     )
   })
 
@@ -235,6 +243,7 @@ describe('Transactions tab', () => {
           if (purposesDown) throw new TypeError('Failed to fetch')
           return jsonResponse(purposes)
         }
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
         if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
         if (url.pathname === '/api/transactions') return jsonResponse({ transactions: [row(6, 'Galon')], next_cursor: null })
         return jsonResponse({ error: { code: 'not_found', message: 'x' } }, 404)
@@ -346,6 +355,34 @@ describe('Transactions tab', () => {
 })
 
 describe('Transactions tab: filters (#424)', () => {
+  // Lokasi (#784): the app's own filter, also a link from Beranda's location
+  // rows; every location is offered, an inactive one too.
+  it('reads ?account= from the URL, names it Lokasi and sends it to the list and the summary', async () => {
+    const everything: string[] = []
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }), everything)
+    renderAt('/history/transactions?account=31&month=2026-09')
+
+    expect(await screen.findByText(text.accountFilterLabel('Tunai'))).toBeInTheDocument()
+    expect(requests[0].searchParams.get('account_id')).toBe('31')
+    expect(everything).toContain('GET /api/transactions/summary?month=2026-09&account_id=31')
+  })
+
+  it('offers every location in the dialog, an inactive one too, and applies it', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions')
+    await screen.findByText('Setoran')
+
+    await user.click(screen.getByRole('button', { name: text.filterButton }))
+    await chooseOption(text.filterAccount, 'Bank lama')
+    await user.click(screen.getByRole('button', { name: text.filterApply }))
+
+    await waitFor(() => expect(requests.length).toBe(2))
+    expect(requests[1].searchParams.get('account_id')).toBe('32')
+    expect(screen.getByTestId('location')).toHaveTextContent('account=32')
+    expect(await screen.findByText(text.accountFilterLabel('Bank lama'))).toBeInTheDocument()
+  })
+
   it('applies the dialog to the URL and the request, keeping the search', async () => {
     const user = userEvent.setup()
     const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
@@ -556,6 +593,7 @@ describe('Transactions tab: reversing a row (ADR-042)', () => {
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input), 'http://localhost')
         if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
         if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
         if (url.pathname.endsWith('/reversal') && init?.method === 'POST') {
           posts.push({ url: url.pathname, body: JSON.parse(String(init.body)) })

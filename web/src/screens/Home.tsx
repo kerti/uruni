@@ -65,6 +65,7 @@ export default function Home({
   onReconcile,
   onOpenIncidental,
   onViewTransactionsFor,
+  onViewTransactionsForAccount,
   onViewHistory,
   onViewOwed,
   onIncidentalOpened,
@@ -81,6 +82,9 @@ export default function Home({
   /** A tap on the Kas Utama or a Titipan row: Riwayat's Transaksi tab
    * filtered to that purpose (`?purpose=<id>`). */
   onViewTransactionsFor: (purposeId: number) => void
+  /** A tap on a location row (#784): Riwayat's Transaksi tab filtered to
+   * that location (`?account=<id>`). */
+  onViewTransactionsForAccount: (accountId: number) => void
   /** Riwayat's Transaksi tab - the "lihat semua" link below. App.tsx supplies
    * the actual navigate() call. */
   onViewHistory: () => void
@@ -220,14 +224,21 @@ export default function Home({
 
       <section className="flex flex-col gap-2">
         <SectionLabel>{copy.home.locationsHeading}</SectionLabel>
-        {/* A plain list of names and figures, not cards (2026-10-03): a
-            card reads as a button, and a location row opens nothing -
-            Riwayat has no location filter to send it to. */}
-        <ul className="flex flex-col divide-y divide-border">
+        {/* Each location opens Riwayat filtered to it (#784), as each pos
+            row does - so a selisih on Tunai is one tap from what went
+            through Tunai. Cards, like the pos rows, now that a row opens
+            something (the 2026-10-03 plain list held only while there was
+            nowhere to send it). */}
+        <ul className="flex flex-col gap-2">
           {balances.accounts.map((account: AccountBalance) => (
-            <li key={account.id} className="flex min-h-11 items-center justify-between gap-3 py-2">
-              <span className="min-w-0 truncate">{account.name}</span>
-              <span className="tabular shrink-0 font-medium">{formatIDR(account.balance)}</span>
+            <li key={account.id}>
+              <button type="button" onClick={() => onViewTransactionsForAccount(account.id)} className={rowClass}>
+                <span className="min-w-0 truncate">{account.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="tabular font-medium">{formatIDR(account.balance)}</span>
+                  <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                </span>
+              </button>
             </li>
           ))}
         </ul>

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { copy } from '@/copy/id'
 import { periodBounds } from '@/lib/dates'
+import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import { noFilters, type TransactionFilters } from '@/lib/transactionFilters'
 import type { Member } from '@/lib/setup'
@@ -53,13 +54,14 @@ function FilterSelect({
  * Where she picks Transaksi's filters. Edits a draft and applies it only on
  * "Tampilkan", so a half-chosen set never fires a request per field. Every
  * purpose is offered, a closed envelope's too - this list is that envelope's
- * record (ADR-032) - and every member, an inactive one too, since their rows
- * are still history.
+ * record (ADR-032) - and every location and every member, inactive ones too,
+ * since their rows are still history (#784).
  */
 export default function TransactionFilterDialog({
   open,
   filters,
   purposes,
+  accounts,
   members,
   onApply,
   onClose,
@@ -67,6 +69,7 @@ export default function TransactionFilterDialog({
   open: boolean
   filters: TransactionFilters
   purposes: Purpose[]
+  accounts: Account[]
   members: Member[]
   onApply: (filters: TransactionFilters) => void
   onClose: () => void
@@ -122,6 +125,12 @@ export default function TransactionFilterDialog({
             value={draft.purposeId === null ? null : String(draft.purposeId)}
             options={purposes.map((purpose) => ({ value: String(purpose.id), label: purpose.name }))}
             onChange={(value) => setDraft((d) => ({ ...d, purposeId: value === null ? null : Number(value) }))}
+          />
+          <FilterSelect
+            label={text.filterAccount}
+            value={draft.accountId === null ? null : String(draft.accountId)}
+            options={accounts.map((account) => ({ value: String(account.id), label: account.name }))}
+            onChange={(value) => setDraft((d) => ({ ...d, accountId: value === null ? null : Number(value) }))}
           />
           <FilterSelect
             label={text.filterMember}

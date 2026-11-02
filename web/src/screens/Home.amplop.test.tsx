@@ -99,6 +99,7 @@ function renderHome(entry = '/') {
                   refetchKey="1"
                   onReconcile={vi.fn()}
                   onViewTransactionsFor={vi.fn()}
+                  onViewTransactionsForAccount={vi.fn()}
                   onViewHistory={vi.fn()}
                   onViewOwed={vi.fn()}
                   {...callbacks}

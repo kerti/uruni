@@ -58,6 +58,7 @@ export const copy = {
       // concept). The empty line is separate from noResults above: an empty
       // envelope is not a failed search.
       purposeFilterLabel: (name: string) => `Pos: ${name}`,
+      accountFilterLabel: (name: string) => `Lokasi: ${name}`,
       purposeFilterEmpty: 'Belum ada transaksi untuk pos ini.',
       // Riwayat's filters: the public report's four, in its words
       // (report_copy.go) - Bulan, Pos, Anggota and the record form's Jenis
@@ -68,6 +69,7 @@ export const copy = {
       filterHeading: 'Filter transaksi',
       filterMonth: 'Bulan',
       filterPurpose: 'Pos',
+      filterAccount: 'Lokasi',
       filterMember: 'Anggota',
       filterAll: 'Semua',
       filterApply: 'Tampilkan',

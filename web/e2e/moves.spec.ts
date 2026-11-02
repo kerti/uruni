@@ -164,4 +164,27 @@ test.describe('moves and corrections', () => {
     await expect(dialog.getByText(copy.transactionDetail.directionOut)).toHaveCount(0)
     await expect(dialog.getByRole('button', { name: copy.history.transactions.reverse })).toHaveCount(0)
   })
+
+  // #784: a location row on Beranda opens Riwayat filtered to that location.
+  // The Pindah lokasi touches both, so it is on each list - once - while the
+  // Pindah pos and the correction, made on Tunai, are on Tunai's alone.
+  test('a location row opens its own transactions, a Pindah lokasi on both sides', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/')
+    const rows = page.getByRole('main').getByRole('listitem')
+    const location = rows.filter({ hasText: copy.rowLabels.transferLocation.text('Tunai', 'Bank Uji Coba') })
+    const allocation = rows.filter({ hasText: copy.rowLabels.transferPurposeMove.kind })
+
+    await page.getByRole('button', { name: /^Bank Uji Coba/ }).click()
+    await expect(page).toHaveURL(/\/history\/transactions\?account=\d+$/)
+    await expect(page.getByText(copy.history.transactions.accountFilterLabel('Bank Uji Coba'))).toBeVisible()
+    await expect(location).toHaveCount(1)
+    await expect(allocation).toHaveCount(0)
+
+    await page.goBack()
+    await page.getByRole('button', { name: /^Tunai/ }).click()
+    await expect(page.getByText(copy.history.transactions.accountFilterLabel('Tunai'))).toBeVisible()
+    await expect(location).toHaveCount(1)
+    await expect(allocation).toHaveCount(1)
+  })
 })

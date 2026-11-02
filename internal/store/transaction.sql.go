@@ -1038,8 +1038,9 @@ WITH matched AS (
     AND (?7 IS NULL OR t.member_id = ?7)
     AND (?8 IS NULL OR t.dues_period = ?8)
     AND (?9 IS NULL OR t.purpose_id = ?9)
-    AND (?10 IS NULL OR substr(t.occurred_on, 1, 7) = ?10)
-    AND (?11 IS NULL OR (t.direction = ?11 AND t.kind <> 'transfer'))
+    AND (?10 IS NULL OR t.account_id = ?10)
+    AND (?11 IS NULL OR substr(t.occurred_on, 1, 7) = ?11)
+    AND (?12 IS NULL OR (t.direction = ?12 AND t.kind <> 'transfer'))
 ),
 kept AS (
   SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
@@ -1105,6 +1106,7 @@ type ListTransactionsPageParams struct {
 	MemberID         interface{}
 	DuesPeriod       interface{}
 	PurposeID        interface{}
+	AccountID        interface{}
 	Month            interface{}
 	Direction        interface{}
 }
@@ -1171,7 +1173,12 @@ type ListTransactionsPageRow struct {
 // literal" holds by construction, not by escaping.
 //
 // member_id, purpose_id, month and direction are Riwayat -> Transaksi's filters
-// (#424, the public report's four); dues_period is Dues/MemberPayments.tsx's
+// (#424, the public report's four); account_id (#784) is the Lokasi filter, app
+// only: the public report has none. It is tested per leg like the rest, and
+// combined with purpose_id both must hold on the SAME leg. That is the right
+// reading because a transfer never changes account and purpose together
+// (between_accounts keeps the purpose, reclass_purpose keeps the account;
+// internal/ledger/transfer.go). dues_period is Dues/MemberPayments.tsx's
 // payment history panel alone. month is "YYYY-MM", prefix-compared against
 // occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 // with q and the keyset cursor.
@@ -1265,6 +1272,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 		arg.MemberID,
 		arg.DuesPeriod,
 		arg.PurposeID,
+		arg.AccountID,
 		arg.Month,
 		arg.Direction,
 	)

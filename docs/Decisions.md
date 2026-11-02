@@ -462,3 +462,7 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 ## Amplop opens from Beranda (decided 2026-11-02)
 
 **Configuration lives in Pengaturan; operations live where the money is** ([ADR-047](./ADR/047-amplop-opens-from-beranda.md), #752). Buka amplop and the closed envelopes moved from Pengaturan to the bottom of Beranda's Saldo per pos, where the open envelopes already were, each row now showing who has given; Titipan, which has no close, stays in Pengaturan.
+
+## Lokasi filter on Riwayat (decided 2026-11-02)
+
+**Riwayat's Transaksi tab filters by location, and Beranda's location rows open it** (#784). A transfer shows once when either leg is on the location, and with a pos filter both must hold on the same leg; the month summary foots for that location, Pindah lokasi counting as Dipindah. Every location is offered, inactive ones too. App only: the public report shows no locations. Beranda's Saldo per lokasi rows become cards, which reverses the 2026-10-03 plain list, kept only while a row had nowhere to send her.
