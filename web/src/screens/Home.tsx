@@ -214,13 +214,39 @@ export default function Home({
           Not `--secondary` (#E7F1EA), the soft-sage highlight surface: it is
           a shade away from success-soft (#E3F1E9) and would collide with
           the reconciliation banner directly beneath it. */}
-      <section
-        aria-label={copy.home.balanceHeading}
-        className="relative flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
-      >
-        <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
-        <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
-      </section>
+      {/* The hero and its reconciliation status are one statement - the
+          balance, and whether it matches the money - so the banner tucks
+          under the hero's lower edge, ahead of everything else (ADR-038's
+          2026-11-02 amendment; Design-System.md's home layout). */}
+      <div className="flex flex-col">
+        <section
+          aria-label={copy.home.balanceHeading}
+          className="relative z-10 flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
+        >
+          <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
+          <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
+        </section>
+        {/* A 404 from /api/reconciliations/latest is the only signal that no
+            count has ever been taken - open-lines answers [] either way, so
+            the banner cannot tell "nothing open" from "never looked" on its
+            own. The banner is the reconcile screen's entry point (M6.10):
+            no separate button anywhere else on this screen. onReconcile is
+            App.tsx's navigate('/reconcile'); Home stays router-agnostic. */}
+        <ReconciliationBanner
+          openLines={openLines}
+          everReconciled={latest !== null}
+          onClick={onReconcile}
+          tucked
+          footnotes={
+            latest
+              ? [
+                  copy.home.lastChecked(formatUnixSeconds(latest.performed_at)),
+                  ...(latest.has_new_entries ? [copy.home.newEntriesSince] : []),
+                ]
+              : []
+          }
+        />
+      </div>
 
       <section className="flex flex-col gap-2">
         <SectionLabel>{copy.home.locationsHeading}</SectionLabel>
@@ -242,27 +268,6 @@ export default function Home({
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="flex flex-col gap-2">
-        {/* A 404 from /api/reconciliations/latest is the only signal that no
-            count has ever been taken - open-lines answers [] either way, so
-            the banner cannot tell "nothing open" from "never looked" on its
-            own. */}
-        {/* The reconcile screen's entry point (M6.10) - the banner itself is
-            the natural affordance, per the orchestrator's own ruling, so
-            there is no separate button anywhere else on this screen.
-            onReconcile is App.tsx's navigate('/reconcile'), the same
-            caller-owns-navigation contract RecordTransaction.tsx's
-            onRecorded/onCancel already use - Home stays router-agnostic,
-            same as every other screen in this app. */}
-        <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
-        {latest && (
-          <p className="flex flex-col text-sm text-muted-foreground">
-            <span>{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</span>
-            {latest.has_new_entries && <span>{copy.home.newEntriesSince}</span>}
-          </p>
-        )}
       </section>
 
       {/* Incidentals are not history, they are a live balance sitting in the
