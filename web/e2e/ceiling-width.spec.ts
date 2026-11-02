@@ -215,7 +215,7 @@ test.describe('the ceiling figure fits', () => {
 
   test('every amount input takes twelve digits and shows them whole', async ({ page }) => {
     await logIn(page)
-    const forms = ['/record', '/record?type=dues', '/record?fronted=1', '/reconcile', '/settings?edit=incidental:new']
+    const forms = ['/record', '/record?type=dues', '/record?fronted=1', '/reconcile', '/?edit=incidental:new']
     for (const path of forms) {
       await openScreen(page, path)
       const inputs = page.locator('input[inputmode="numeric"]')

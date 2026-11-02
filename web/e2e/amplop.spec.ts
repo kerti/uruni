@@ -102,7 +102,7 @@ test.describe('amplop in depth', () => {
 
     // Its row on Beranda counts the same way the report does (#746).
     await page.goto('/')
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(0, 2))
+    await expect(page.getByRole('button', { name: new RegExp(`^${occasion}`) })).toContainText(t.participation.progress(0, 2))
   })
 
   test('named contributions: one in full, one under the minimum', async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe('amplop in depth', () => {
     await page.getByRole('checkbox', { name: t.participation.notGivenFilterLabel }).check()
     await expect(page.getByText(t.participation.emptyFiltered)).toBeVisible()
     await page.goto('/')
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(2, 2))
+    await expect(page.getByRole('button', { name: new RegExp(`^${occasion}`) })).toContainText(t.participation.progress(2, 2))
   })
 
   test('pay out of the amplop: Terpakai rises and Sisa falls', async ({ page }) => {
@@ -220,6 +220,9 @@ test.describe('amplop in depth', () => {
     await logIn(page)
     await page.goto('/')
     await page.getByRole('button', { name: new RegExp(t.closedRow) }).click()
+    // Beranda's recent rows carry the same name, so wait for the closed list
+    // before looking for the envelope on it.
+    await expect(page.getByRole('heading', { name: t.closedRow })).toBeVisible()
     await page.getByRole('button', { name: new RegExp(renamed) }).click()
     await page.getByRole('button', { name: t.actions.reopen }).click()
     await expect(page.getByText(t.reopen.success)).toBeVisible()

@@ -89,9 +89,9 @@ test.describe('incidentals', () => {
       await page.getByRole('button', { name: copy.record.submit }).click()
       await expect(page.getByText(copy.record.successIn)).toBeVisible()
 
-      // Saving returns to the envelope it was recorded from (#745), the way
-      // back still pointing at Beranda, and the total reflects it.
-      await expect(page).toHaveURL(/\/incidentals\?purpose=\d+&from=home$/)
+      // Saving returns to the envelope it was recorded from (#745), whose way
+      // back is Beranda (ADR-047), and the total reflects it.
+      await expect(page).toHaveURL(/\/incidentals\?purpose=\d+$/)
       await expect(page.getByRole('button', { name: copy.incidentals.detail.backToHome })).toBeVisible()
       // Anchored to the collected row, not the page: this amount appears three
       // times - Beranda's breakdown row, the recent-five entry for the
