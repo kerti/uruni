@@ -2,7 +2,6 @@ import User from '@/screens/Settings/User'
 import Backup from '@/screens/Settings/Backup'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
-import Incidentals from '@/screens/Settings/Incidentals'
 import Locations from '@/screens/Settings/Locations'
 import PassThrough from '@/screens/Settings/PassThrough'
 import ReportLink from '@/screens/Settings/ReportLink'
@@ -31,8 +30,8 @@ import type { Fund } from '@/lib/setup'
  * - see lib/dialogTarget.ts for why that is load-bearing.
  *
  * Kategori iuran lives here (moved from Anggota, see screens/Members/index.tsx).
- * Incidentals (ADR-032) sits beside Titipan - the two are kinds of one
- * `purpose` (CONTEXT.md). Laporan publik (ADR-035) comes after the admin
+ * Amplop is not here: an envelope is opened and closed where the money is,
+ * on Beranda (ADR-047); Titipan, set up once, is configuration. Laporan publik (ADR-035) comes after the admin
  * sections, then Akun bendahara (#386): it is about the login, not the fund,
  * and changed rarer still, so it sits below everything about the kas but
  * above Cadangan (ADR-012), which stays last: downloading the whole fund is
@@ -62,8 +61,6 @@ export default function Settings({
       <Locations />
       <SectionDivider />
       <PassThrough />
-      <SectionDivider />
-      <Incidentals />
       <SectionDivider />
       <DuesTiers />
       <SectionDivider />

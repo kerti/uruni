@@ -582,7 +582,7 @@ describe('Incidentals', () => {
     expect(screen.queryByRole('button', { name: text.actions.reopen })).not.toBeInTheDocument()
   })
 
-  it('calls onBack, now leading to Pengaturan, when backToSettings is clicked', async () => {
+  it('calls onBack, leading to Beranda, when the back control is clicked', async () => {
     const detail = {
       ...openEnvelope,
       collected_amount: 0,
@@ -603,11 +603,11 @@ describe('Incidentals', () => {
     const onBack = vi.fn()
     renderIncidentals(<Incidentals onBack={onBack} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: text.detail.backToSettings }))
+    await userEvent.click(await screen.findByRole('button', { name: text.detail.backToHome }))
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
-  it('names where the back control leads from backLabel, and opens Catat on Keluar', async () => {
+  it('leads back to Beranda, and opens Catat on Keluar', async () => {
     const detail = {
       ...openEnvelope,
       collected_amount: 0,
@@ -627,19 +627,10 @@ describe('Incidentals', () => {
     )
     const onBack = vi.fn()
     const onRecordFor = vi.fn()
-    renderIncidentals(
-      <Incidentals
-        onBack={onBack}
-        backLabel={text.detail.backToHome}
-        onRecordFor={onRecordFor}
-        onViewTransactionsFor={vi.fn()}
-        purposeId={1}
-      />,
-    )
+    renderIncidentals(<Incidentals onBack={onBack} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await userEvent.click(await screen.findByRole('button', { name: text.detail.backToHome }))
     expect(onBack).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: text.detail.backToSettings })).not.toBeInTheDocument()
 
     // Catat: no member, so the form opens on its Keluar default.
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))

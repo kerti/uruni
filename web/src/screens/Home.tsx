@@ -1,6 +1,7 @@
 import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
+import OpenIncidentalDialog from '@/components/OpenIncidentalDialog'
 import ReconciliationBanner from '@/components/ReconciliationBanner'
 import SectionDivider from '@/components/SectionDivider'
 import TransactionList from '@/components/TransactionList'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
 import { errorCode } from '@/lib/api'
+import { parseDialogTarget } from '@/lib/dialogTarget'
 import { getBalances } from '@/lib/balances'
 import { formatUnixSeconds } from '@/lib/dates'
 import { listIncidentals } from '@/lib/incidentals'
@@ -17,8 +19,9 @@ import { formatIDR } from '@/lib/money'
 import { getLatestReconciliation, listOpenReconciliationLines } from '@/lib/reconciliations'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
 import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
-import type { Incidental } from '@/lib/incidentals'
+import type { IncidentalListItem } from '@/lib/incidentals'
 import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
 
@@ -27,12 +30,16 @@ import type { Transaction } from '@/lib/transactions'
  * newest-first. */
 const RECENT_ACTIVITY_COUNT = 5
 
+/** A Saldo per pos row's box. */
+const rowClass =
+  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none'
+
 interface HomeData {
   balances: Balances
-  // Only the purpose_ids of still-open envelopes (GET /api/incidentals) - the
-  // piece GET /api/balances does not carry, since closed_on lives on the
-  // incidental row, not the balance.
-  openIncidentals: Incidental[]
+  // Every envelope (GET /api/incidentals): which are still open - the piece
+  // GET /api/balances does not carry, since closed_on lives on the incidental
+  // row - each open one's participation line, and how many are closed.
+  incidentals: IncidentalListItem[]
   openLines: OpenReconciliationLine[]
   latest: LatestReconciliation | null
   transactions: Transaction[]
@@ -42,7 +49,9 @@ interface HomeData {
  * The home screen (PRD section 7.7): the everyday-loop landing page reached
  * at "/" once a fund exists (App.tsx's AuthedGate). Order per ADR-032 -
  * balance hero, per-location rows, reconciliation banner + last-checked,
- * purpose breakdown, recent activity. Navigation is Shell's footer and the
+ * purpose breakdown, recent activity. The purpose breakdown is also where an
+ * envelope is opened and the closed ones are found (ADR-047), so this screen
+ * hosts `?edit=incidental:new`. Navigation is Shell's footer and the
  * post-record success banner is App.tsx's, not this screen's. The
  * reconciliation banner is the one destination home owns: it IS reconcile's
  * affordance.
@@ -58,6 +67,8 @@ export default function Home({
   onViewTransactionsFor,
   onViewHistory,
   onViewOwed,
+  onIncidentalOpened,
+  onViewClosedIncidentals,
 }: {
   refetchKey: unknown
   onReconcile: () => void
@@ -75,13 +86,31 @@ export default function Home({
   onViewHistory: () => void
   /** The owed-to-members row: Riwayat's Talangan tab, outstanding view. */
   onViewOwed: () => void
+  /** Buka amplop succeeded: the caller lands her on the new envelope. */
+  onIncidentalOpened: (purposeId: number) => void
+  /** The "Amplop yang sudah ditutup" row. */
+  onViewClosedIncidentals: () => void
 }) {
   const [state, run] = useApi<HomeData>()
+  const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
+  // This screen owns `incidental:new` only; an `incidental:<id>` that arrives
+  // by hand names no dialog here (dialogTarget.ts).
+  const dialogTarget = parseDialogTarget('incidental', dialogValue).kind
+  const loaded = state.status === 'success'
+
+  // A dead `incidental:` value is stripped once the screen has loaded, rather
+  // than flash an empty dialog - clear(), never close(): it is not a
+  // navigation to undo.
+  useEffect(() => {
+    if (dialogTarget === 'edit' || dialogTarget === 'invalid') {
+      if (loaded) clearDialog()
+    }
+  }, [dialogTarget, loaded, clearDialog])
 
   async function loadHomeData(): Promise<HomeData> {
-    const [balances, openIncidentals, openLines, transactionsPage, latest] = await Promise.all([
+    const [balances, incidentals, openLines, transactionsPage, latest] = await Promise.all([
       getBalances(),
-      listIncidentals(true),
+      listIncidentals(false),
       listOpenReconciliationLines(),
       listTransactions(),
       // A fresh fund has never been reconciled - GET
@@ -93,7 +122,7 @@ export default function Home({
         throw err
       }),
     ])
-    return { balances, openIncidentals, openLines, transactions: transactionsPage.transactions, latest }
+    return { balances, incidentals, openLines, transactions: transactionsPage.transactions, latest }
   }
 
   useEffect(() => {
@@ -130,7 +159,7 @@ export default function Home({
     return state.error ? <ErrorState error={state.error} onRetry={() => void run(loadHomeData)} /> : null
   }
 
-  const { balances, openIncidentals, openLines, latest, transactions } = state.data
+  const { balances, incidentals, openLines, latest, transactions } = state.data
   // GET /api/transactions's first page is already newest-first.
   const recentTransactions = transactions.slice(0, RECENT_ACTIVITY_COUNT)
 
@@ -142,9 +171,12 @@ export default function Home({
 
   // The purpose breakdown (PRD section 7.7, ADR-032): Kas Utama
   // (`kind === 'main'`) is the hero above, and a closed incidental drops off
-  // once openIncidentals no longer names it. Titipan has no open/closed
-  // concept, so every pass_through purpose qualifies.
-  const openIncidentalIds = new Set(openIncidentals.map((incidental) => incidental.purpose_id))
+  // once it has a closed_on. Titipan has no open/closed concept, so every
+  // pass_through purpose qualifies.
+  const openIncidentals = new Map<number, IncidentalListItem>(
+    incidentals.filter((incidental) => incidental.closed_on === null).map((incidental) => [incidental.purpose_id, incidental]),
+  )
+  const closedIncidentalCount = incidentals.length - openIncidentals.size
   // Kas Utama first: the hero is the fund total, envelopes and Titipan
   // included, so once money is allocated into envelopes (ADR-036) this row is
   // the only place she sees what Kas Utama itself has left - and its ADR-031
@@ -152,7 +184,7 @@ export default function Home({
   const purposeRows = [
     ...balances.purposes.filter((purpose) => purpose.kind === 'main'),
     ...balances.purposes.filter(
-      (purpose) => purpose.kind === 'pass_through' || (purpose.kind === 'incidental' && openIncidentalIds.has(purpose.id)),
+      (purpose) => purpose.kind === 'pass_through' || (purpose.kind === 'incidental' && openIncidentals.has(purpose.id)),
     ),
   ]
 
@@ -224,36 +256,73 @@ export default function Home({
 
       {/* Incidentals are not history, they are a live balance sitting in the
           fund right now (ADR-032) - so this is entry points, not a button
-          into a list. Kas Utama always exists, so in practice the section
-          always renders; the guard only covers a fund mid-setup. */}
-      {purposeRows.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <SectionLabel>{copy.home.purposeBreakdownHeading}</SectionLabel>
+          into a list. It is also where an envelope is opened and the closed
+          ones are found (ADR-047): operations live where the money is. Kas
+          Utama always exists, so the list is never empty once the fund is
+          set up; the button renders regardless. */}
+      <section className="flex flex-col gap-2">
+        <SectionLabel>{copy.home.purposeBreakdownHeading}</SectionLabel>
+        {purposeRows.length > 0 && (
           <ul className="flex flex-col gap-2">
-            {purposeRows.map((purpose: PurposeBalance) => (
-              // Every row opens something, so every row is a button with a
-              // chevron: an open envelope opens its detail view
-              // (Incidentals.tsx, ?purpose=<id>); Kas Utama and Titipan open
-              // their own history in Riwayat.
-              <li key={purpose.id}>
-                <button
-                  type="button"
-                  onClick={() => (purpose.kind === 'incidental' ? onOpenIncidental(purpose.id) : onViewTransactionsFor(purpose.id))}
-                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
-                >
-                  <span>{purpose.name}</span>
-                  {/* Same element, same sizing as ReconciliationBanner.tsx
-                      directly above. */}
-                  <span className="flex items-center gap-2">
-                    <PurposeAmount balance={purpose.balance} />
+            {purposeRows.map((purpose: PurposeBalance) => {
+              const participation = openIncidentals.get(purpose.id)?.participation ?? null
+              return (
+                // Every row opens something, so every row is a button with a
+                // chevron: an open envelope opens its detail view
+                // (Incidentals.tsx, ?purpose=<id>); Kas Utama and Titipan open
+                // their own history in Riwayat.
+                <li key={purpose.id}>
+                  <button
+                    type="button"
+                    onClick={() => (purpose.kind === 'incidental' ? onOpenIncidental(purpose.id) : onViewTransactionsFor(purpose.id))}
+                    className={rowClass}
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate">{purpose.name}</span>
+                      {/* Who has given so far (#746), the public report's own
+                          line - only for an envelope that expects anyone. */}
+                      {participation && (
+                        <span className="text-sm text-muted-foreground">
+                          {copy.incidentals.participation.progress(participation.given, participation.expected)}
+                        </span>
+                      )}
+                    </span>
+                    {/* Same element, same sizing as ReconciliationBanner.tsx
+                        directly above. */}
+                    <span className="flex shrink-0 items-center gap-2">
+                      <PurposeAmount balance={purpose.balance} />
+                      <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+            {/* Closed envelopes pile up over the years, so they sit one tap
+                away behind a count - absent until there is one. */}
+            {closedIncidentalCount > 0 && (
+              <li>
+                <button type="button" onClick={onViewClosedIncidentals} className={rowClass}>
+                  <span className="min-w-0 truncate">{copy.incidentals.closedRow}</span>
+                  <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+                    <span className="tabular">{closedIncidentalCount}</span>
                     <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
                   </span>
                 </button>
               </li>
-            ))}
+            )}
           </ul>
-        </section>
-      )}
+        )}
+        {/* Outline, not filled: Beranda's one filled action is the count. */}
+        <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => openDialog('incidental:new')}>
+          {copy.incidentals.open.heading}
+        </Button>
+      </section>
+
+      <OpenIncidentalDialog
+        open={dialogTarget === 'new'}
+        onClose={closeDialog}
+        onOpened={(opened) => onIncidentalOpened(opened.purpose_id)}
+      />
 
       {/* What the fund owes members who fronted an expense (#406). The money
           is still inside the balance above, so this is a plain row beside

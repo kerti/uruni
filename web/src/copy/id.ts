@@ -1249,25 +1249,6 @@ export const copy = {
     // "Kegiatan insidental" would be the Indonesian rendering of the English
     // identifier `incidental`, not a word the treasurer uses. Identifiers,
     // routes and the schema stay `incidental` (ADR-014).
-    incidentals: {
-      heading: 'Amplop',
-      body: 'Amplop terpisah untuk acara sekali jalan: kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat, dan bisa dibuka lagi.',
-      empty: 'Belum ada amplop dibuka.',
-      // Closed envelopes pile up over the years, so Pengaturan lists only the
-      // open ones and gathers the rest behind this one row - also the heading
-      // of the screen it opens, so the two read the same.
-      closedRow: 'Amplop yang sudah ditutup',
-      closedEmpty: 'Belum ada amplop yang ditutup.',
-      // Each closed envelope's line on that screen: when it was closed, the one
-      // fact that orders the list. date is already formatted.
-      closedOn: (date: string) => `Ditutup ${date}`,
-      // The dialog heading's word (copy.incidentals.open.heading) - one word
-      // for "start a new envelope", not two.
-      add: 'Buka amplop',
-      // The toast once the envelope is open (#743).
-      opened: 'Amplop sudah dibuka.',
-      cardVerb: 'Lihat',
-    },
     // The whole fund as one file (ADR-012), plus - ADR-013 - the list of
     // copies the server already keeps once a day. Two things: download now
     // (heading/body/download/downloading) and browse what exists (autoHeading
@@ -1524,11 +1505,28 @@ export const copy = {
       referenced_by_other_records: 'Hapus foto notanya dulu sebelum menghapus talangan ini.',
     },
   },
-  // The envelope's detail screen (its list moved to copy.settings.incidentals;
-  // the detail view titles itself with the occasion instead).
+  // Envelopes (ADR-047): opened from Beranda's Saldo per pos, which also
+  // lists the open ones and leads to the closed ones; the detail view titles
+  // itself with the occasion.
   incidentals: {
+    // Closed envelopes pile up over the years, so Beranda lists only the open
+    // ones and gathers the rest behind this one row - also the heading of the
+    // screen it opens, so the two read the same.
+    closedRow: 'Amplop yang sudah ditutup',
+    closedEmpty: 'Belum ada amplop yang ditutup.',
+    // Each closed envelope's line on that screen: when it was closed, the one
+    // fact that orders the list. date is already formatted.
+    closedOn: (date: string) => `Ditutup ${date}`,
+    // The toast once the envelope is open (#743).
+    opened: 'Amplop sudah dibuka.',
+    cardVerb: 'Lihat',
     open: {
+      // Also Beranda's button: one word for "start a new envelope", not two.
       heading: 'Buka amplop',
+      // What an amplop is, read the moment she opens one (ADR-047): the only
+      // place the app explains it.
+      description:
+        'Amplop terpisah untuk acara sekali jalan: kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat, dan bisa dibuka lagi.',
       occasionLabel: 'Acara',
       occasionPlaceholder: 'Mis. Halal bihalal RT',
       targetLabel: 'Target dana (opsional)',
@@ -1559,10 +1557,8 @@ export const copy = {
       // What the envelope holds now - PRD-ID's "sisa" for an envelope's
       // leftover (section 7.5). Rp0 once closed: the leftover rolled out.
       remainingLabel: 'Sisa',
-      // The way back follows where the detail was opened from: Beranda's
-      // per-pos list or a card in Pengaturan. Pengaturan is also the label
-      // for a deep link or a reload, which carry no origin.
-      backToSettings: 'Kembali ke pengaturan',
+      // Beranda is the envelope's one door (ADR-047), so the way back is
+      // always there.
       backToHome: 'Kembali ke beranda',
     },
     close: {

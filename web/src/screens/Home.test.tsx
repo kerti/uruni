@@ -164,6 +164,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -181,6 +183,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -199,6 +203,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -218,6 +224,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -241,6 +249,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -262,6 +272,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -284,6 +296,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -304,6 +318,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -324,6 +340,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -348,6 +366,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -371,6 +391,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
     await screen.findByText(formatIDR(1_450_000))
@@ -425,6 +447,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -458,6 +482,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={onViewHistory}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -476,6 +502,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
     await screen.findByText(formatIDR(1_450_000))
@@ -489,6 +517,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -507,6 +537,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -525,6 +557,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -546,6 +580,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -566,6 +602,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -595,6 +633,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -618,6 +658,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -639,6 +681,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -658,6 +702,8 @@ describe('Home', () => {
           onViewTransactionsFor={onViewTransactionsFor}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -681,6 +727,8 @@ describe('Home', () => {
         onViewTransactionsFor={vi.fn()}
         onViewHistory={vi.fn()}
         onViewOwed={vi.fn()}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
       />,
     )
 
@@ -701,6 +749,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -719,6 +769,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={onViewOwed}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -741,6 +793,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -762,6 +816,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 
@@ -781,6 +837,8 @@ describe('Home', () => {
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
           onViewOwed={vi.fn()}
+          onIncidentalOpened={vi.fn()}
+          onViewClosedIncidentals={vi.fn()}
         />,
       )
 

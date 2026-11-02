@@ -6,20 +6,21 @@ import Settings from '@/screens/Settings/index'
 import { copy } from '@/copy/id'
 import type { Account, Fund } from '@/lib/setup'
 import type { AuthUser } from '@/lib/auth'
-import type { Incidental } from '@/lib/incidentals'
 import type { Purpose } from '@/lib/purposes'
 
 // Pengaturan as a whole, rather than one section at a time - the only way this
 // suite's subject is visible at all.
 //
-// Two sections own an `?edit=` dialog (Lokasi and Amplop) and every section
-// renders against the same URL. Each strips an `?edit=` value it cannot use,
+// Several sections own an `?edit=` dialog (Lokasi, Titipan, ...) and every
+// section renders against the same URL. Each strips an `?edit=` value it cannot use,
 // and they once stripped each other's: opening Amplop's dialog set
 // `?edit=incidental:new`, Lokasi's cleanup read that as malformed the moment
 // its account list resolved, and the param - and the open dialog - vanished
 // mid-edit. It raced on which list loaded first; e2e caught it as `element was
 // detached from the DOM`. Every section-level suite passed throughout, because
-// a section mounted alone has nobody to fight with. Hence this file.
+// a section mounted alone has nobody to fight with. Hence this file. Amplop
+// has since moved to Beranda (ADR-047); Lokasi and Titipan, both list-backed,
+// carry the same race.
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -34,21 +35,6 @@ function jsonResponse(body: unknown, status = 200) {
 function stubSettings() {
   return vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
-    if (url.includes('/api/incidentals')) {
-      return Promise.resolve(
-        jsonResponse([
-          {
-            purpose_id: 7,
-            occasion: 'Halal bihalal RT',
-            target_amount: null,
-            opened_on: '2026-09-01',
-            closed_on: null,
-            created_at: 7,
-            minimum_per_member: null,
-          },
-        ] satisfies Incidental[]),
-      )
-    }
     // Not "Tunai": that string is also the cash kind's badge, and these
     // assertions match on text, so the fixture's name must appear exactly once.
     if (url.includes('/api/accounts')) {
@@ -120,11 +106,11 @@ async function flushEffects() {
 }
 
 describe('Settings, all sections against one URL', () => {
-  it("keeps Amplop's dialog open once every sibling section has loaded", async () => {
+  it("keeps Titipan's dialog open once every sibling section has loaded", async () => {
     vi.stubGlobal('fetch', stubSettings())
-    renderAt('/settings?edit=incidental:new')
+    renderAt('/settings?edit=pass-through:new')
 
-    const dialog = await screen.findByRole('dialog', { name: copy.incidentals.open.heading })
+    const dialog = await screen.findByRole('dialog', { name: copy.settings.passThrough.add })
     expect(dialog).toBeInTheDocument()
 
     // Lokasi's list resolving is what used to strip the param: wait for it to
@@ -135,13 +121,12 @@ describe('Settings, all sections against one URL', () => {
     // background section while a dialog is up, and a wait written that way fails
     // whether or not the bug is present.
     await screen.findByText('Dompet Bendahara')
-    await waitFor(() => expect(screen.getByText('Seragam')).toBeInTheDocument())
     await flushEffects()
 
     // The literal value, not percent-encoded: this entry was pushed as a
     // string rather than written through setSearchParams.
-    expect(search()).toBe('?edit=incidental:new')
-    expect(screen.getByRole('dialog', { name: copy.incidentals.open.heading })).toBeInTheDocument()
+    expect(search()).toBe('?edit=pass-through:new')
+    expect(screen.getByRole('dialog', { name: copy.settings.passThrough.add })).toBeInTheDocument()
   })
 
   it("keeps Lokasi's dialog open once every sibling section has loaded", async () => {
@@ -151,9 +136,9 @@ describe('Settings, all sections against one URL', () => {
     const dialog = await screen.findByRole('dialog', { name: copy.settings.locations.add })
     expect(dialog).toBeInTheDocument()
 
-    // The mirror case: Amplop's list resolving must not strip a value that
+    // The mirror case: Titipan's list resolving must not strip a value that
     // belongs to Lokasi. By text, for the inerting reason above.
-    await screen.findByText('Halal bihalal RT')
+    await screen.findByText('Seragam')
     await flushEffects()
 
     expect(search()).toBe('?edit=location:new')
@@ -162,11 +147,10 @@ describe('Settings, all sections against one URL', () => {
 
   it('still strips a value that is malformed for the section which owns it', async () => {
     vi.stubGlobal('fetch', stubSettings())
-    renderAt('/settings?edit=incidental:7')
+    renderAt('/settings?edit=location:99')
 
-    // `incidental:` is Amplop's prefix and `7` is not a target it can open (a
-    // card navigates to the envelope instead), so this one is its to clear -
-    // the foreign-value rule must not have disabled that.
+    // `location:` is Lokasi's prefix and 99 names no location, so this one is
+    // its to clear - the foreign-value rule must not have disabled that.
     await waitFor(() => expect(search()).toBe(''))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })

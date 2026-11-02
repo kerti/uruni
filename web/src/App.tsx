@@ -28,8 +28,8 @@ import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import Home from '@/screens/Home'
 import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
-import { ClosedIncidentals } from '@/screens/Settings/Incidentals'
-import type { IncidentalOpenedState } from '@/screens/Settings/Incidentals'
+import ClosedIncidentals from '@/screens/ClosedIncidentals'
+import type { IncidentalOpenedState } from '@/components/OpenIncidentalDialog'
 import { demoLoginOf, getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -181,7 +181,7 @@ interface RecordedState {
  * attention tone: the transaction is fine, but something did not go through. */
 function pickArrivalToast(state: unknown): ArrivalToast | null {
   const s = state as Partial<RecordedState & IncidentalOpenedState> | null
-  if (s?.incidentalOpened === true) return { tone: 'success', text: copy.settings.incidentals.opened }
+  if (s?.incidentalOpened === true) return { tone: 'success', text: copy.incidentals.opened }
   const recorded = s?.recorded
   if (recorded === undefined) return null
   if (s?.photoFailed === true) {
@@ -239,6 +239,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // (the `kind: "main"` row) as if absent. /incidentals?purpose=<id> is
   // Home's purpose-breakdown row and Pengaturan's incidentals cards: the only
   // way that route renders a detail view now that its list is retired.
+  // (Beranda is the only door since ADR-047; Pengaturan's cards are gone.)
   // /history/transactions?purpose=<id> is the filter ADR-032 makes a closed
   // envelope's only route to its own record.
   const rawPurpose = searchParams.get('purpose')
@@ -315,11 +316,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }
 
   const title = state.data?.name ?? copy.app.name
-  // Where the envelope detail was opened from: Beranda says so in the URL
-  // (?from=home), Pengaturan says nothing - and nor does a deep link, which
-  // leads back to Pengaturan too. In the URL rather than the entry's state, so
-  // Catat's returnTo carries it and an arrival toast's state clear keeps it.
-  const envelopeFromHome = searchParams.get('from') === 'home'
   const recordDuesPeriod = periodParam(searchParams.get('period'))
   const recordDues = searchParams.get('type') === 'dues'
   // "Pengeluaran ini ditalangi": form mode is a route (ADR-032), like
@@ -466,15 +462,15 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
       />
       {/* #263/ADR-032: the list view is retired, so /incidentals is only
           ever a detail view reached with ?purpose=<id> (a Beranda row, or a
-          card in Pengaturan's own section). Without one - a bare visit, or
-          an unparseable value - there is nothing here to show, so this
-          redirects to Pengaturan, the screen that now owns that list. */}
-      {/* Closed envelopes, gathered off Pengaturan (#319). */}
+          card on the closed list). Without one - a bare visit, or an
+          unparseable value - there is nothing here to show, so this
+          redirects to Beranda, where envelopes are listed (ADR-047). */}
+      {/* Closed envelopes, behind Beranda's closed row (#319, ADR-047). */}
       <Route
         path="/incidentals/closed"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <ClosedIncidentals onBack={() => navigate('/settings')} onOpen={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)} />
+            <ClosedIncidentals onBack={() => navigate('/')} onOpen={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)} />
           </Shell>
         }
       />
@@ -482,12 +478,11 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/incidentals"
         element={
           initialPurposeId === null ? (
-            <Navigate to="/settings" replace />
+            <Navigate to="/" replace />
           ) : (
             <Shell title={title} onLoggedOut={onLoggedOut}>
               <Incidentals
-                onBack={() => navigate(envelopeFromHome ? '/' : '/settings')}
-                backLabel={envelopeFromHome ? copy.incidentals.detail.backToHome : copy.incidentals.detail.backToSettings}
+                onBack={() => navigate('/')}
                 onRecordFor={(purposeId, memberId, amount) =>
                   navigate(
                     `/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}${amount !== undefined ? `&amount=${amount}` : ''}`,
@@ -527,7 +522,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Home
               refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}
-              onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}&from=home`)}
+              onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
+              onIncidentalOpened={(purposeId) =>
+                // Straight onto the new amplop (#745), in place of the dialog's
+                // entry: back from there is Beranda, not the dialog again.
+                navigate(`/incidentals?purpose=${purposeId}`, {
+                  replace: true,
+                  state: { incidentalOpened: true } satisfies IncidentalOpenedState,
+                })
+              }
+              onViewClosedIncidentals={() => navigate('/incidentals/closed')}
               onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
               onViewOwed={() => navigate('/history/reimbursements')}

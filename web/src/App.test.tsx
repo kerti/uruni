@@ -436,11 +436,12 @@ describe('App (record loop)', () => {
 
   // The /incidentals route and its hand-off into the record form: tapping the
   // envelope's record action must land on the real form with that envelope's
-  // purpose chosen. The route is detail-only (its list moved to Pengaturan),
-  // so it is reached directly with ?purpose=<id>.
+  // purpose chosen. The route is detail-only (its list is Beranda's Saldo per
+  // pos, ADR-047), so it is reached directly with ?purpose=<id>, and its way
+  // back is always Beranda.
   it.each([
-    ['a deep link or reload, which carries no origin', '', copy.incidentals.detail.backToSettings],
-    ["Beranda's per-pos list", '&from=home', copy.incidentals.detail.backToHome],
+    ['a Beranda row', '', copy.incidentals.detail.backToHome],
+    ['a link that still carries the retired from=home', '&from=home', copy.incidentals.detail.backToHome],
   ])(
     "routes an envelope's record action into the record form with its purpose chosen and back again, and the back link follows %s",
     async (_origin, from, backLabel) => {
@@ -501,12 +502,13 @@ describe('App (record loop)', () => {
 
   // /incidentals with no ?purpose= (or an unparseable one) has nothing to show
   // now that its list is retired - it redirects to Pengaturan.
-  it('redirects a bare /incidentals visit to settings', async () => {
+  it('redirects a bare /incidentals visit to Beranda, where envelopes are listed (ADR-047)', async () => {
     window.history.pushState({}, '', '/incidentals')
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
 
-    await screen.findByRole('heading', { name: copy.settings.heading })
+    await screen.findByText(copy.home.balanceHeading)
+    expect(window.location.pathname).toBe('/')
     window.history.pushState({}, '', '/')
   })
 

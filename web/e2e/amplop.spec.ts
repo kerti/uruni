@@ -86,8 +86,8 @@ test.describe('amplop in depth', () => {
 
   test('open with a target and a minimum; both members are expected and have not given', async ({ page }) => {
     await logIn(page)
-    await page.goto('/settings')
-    await page.getByRole('button', { name: copy.settings.incidentals.add }).click()
+    await page.goto('/')
+    await page.getByRole('button', { name: t.open.heading, exact: true }).click()
     const dialog = page.getByRole('dialog', { name: t.open.heading })
     await dialog.getByLabel(t.open.occasionLabel).fill(occasion)
     await dialog.getByLabel(t.open.targetLabel).fill('100000')
@@ -100,9 +100,9 @@ test.describe('amplop in depth', () => {
     await expect(participant(page, 'Warga Satu')).toContainText(t.participation.states.notGiven)
     await expect(participant(page, 'Warga Dua')).toContainText(t.participation.states.notGiven)
 
-    // Its card in Pengaturan counts the same way the report does (#746).
-    await page.goto('/settings')
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(0, 2))
+    // Its row on Beranda counts the same way the report does (#746).
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: new RegExp(`^${occasion}`) })).toContainText(t.participation.progress(0, 2))
   })
 
   test('named contributions: one in full, one under the minimum', async ({ page }) => {
@@ -132,11 +132,11 @@ test.describe('amplop in depth', () => {
     await expect(participant(page, 'Warga Dua')).toContainText(formatIDR(20_000))
 
     // Under the minimum still counts as given: nobody is left on "belum
-    // menyumbang saja", and the card says two of two (#746).
+    // menyumbang saja", and Beranda's row says two of two (#746).
     await page.getByRole('checkbox', { name: t.participation.notGivenFilterLabel }).check()
     await expect(page.getByText(t.participation.emptyFiltered)).toBeVisible()
-    await page.goto('/settings')
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toContainText(t.participation.progress(2, 2))
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: new RegExp(`^${occasion}`) })).toContainText(t.participation.progress(2, 2))
   })
 
   test('pay out of the amplop: Terpakai rises and Sisa falls', async ({ page }) => {
@@ -218,8 +218,11 @@ test.describe('amplop in depth', () => {
 
   test('reopen, take a late entry that nets to zero, and close again', async ({ page }) => {
     await logIn(page)
-    await page.goto('/settings')
-    await page.getByRole('button', { name: new RegExp(copy.settings.incidentals.closedRow) }).click()
+    await page.goto('/')
+    await page.getByRole('button', { name: new RegExp(t.closedRow) }).click()
+    // Beranda's recent rows carry the same name, so wait for the closed list
+    // before looking for the envelope on it.
+    await expect(page.getByRole('heading', { name: t.closedRow })).toBeVisible()
     await page.getByRole('button', { name: new RegExp(renamed) }).click()
     await page.getByRole('button', { name: t.actions.reopen }).click()
     await expect(page.getByText(t.reopen.success)).toBeVisible()
