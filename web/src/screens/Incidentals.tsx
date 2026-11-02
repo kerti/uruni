@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 
 import BackLink from '@/components/BackLink'
 import DateField from '@/components/DateField'
@@ -696,7 +697,7 @@ function ParticipationSection({
 
           {state.data.unexpected.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-muted-foreground">{text.otherHeading}</h3>
+              <SubsectionLabel>{text.otherHeading}</SubsectionLabel>
               <ul className="flex flex-col gap-2">
                 {state.data.unexpected.map((row) => (
                   <li

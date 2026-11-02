@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 import SectionLabel from '@/components/SectionLabel'
 
 import BackLink from '@/components/BackLink'
@@ -400,7 +401,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
 
   return (
     <form aria-label={text.addRate} className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-      <h3 className="text-sm font-medium text-muted-foreground">{text.addRateHeading}</h3>
+      <SubsectionLabel>{text.addRateHeading}</SubsectionLabel>
       <AmountInput id={`new-rate-amount-${tierId}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`new-rate-from-${tierId}`}>{text.effectiveFromLabel}</Label>

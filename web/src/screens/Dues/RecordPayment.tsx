@@ -1,4 +1,5 @@
 import { PencilLine } from '@phosphor-icons/react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
@@ -306,7 +307,7 @@ export default function RecordDuesPayment({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">{text.periodsHeading}</h2>
+        <SubsectionLabel as="h2">{text.periodsHeading}</SubsectionLabel>
 
         {memberId === null && <p className="text-muted-foreground">{text.noMemberYet}</p>}
 

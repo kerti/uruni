@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 import SectionLabel from '@/components/SectionLabel'
 import { ArrowCounterClockwise, DownloadSimple } from '@phosphor-icons/react'
 
@@ -113,7 +114,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold">{text.autoHeading}</h3>
+        <SubsectionLabel>{text.autoHeading}</SubsectionLabel>
         <p className="text-sm text-muted-foreground">{text.autoBody}</p>
       </div>
 

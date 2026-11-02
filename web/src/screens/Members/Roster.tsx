@@ -1,4 +1,5 @@
 import { MagnifyingGlass, PauseCircle, PlayCircle, Trash } from '@phosphor-icons/react'
+import SectionLabel from '@/components/SectionLabel'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -240,7 +241,7 @@ export default function Roster() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 

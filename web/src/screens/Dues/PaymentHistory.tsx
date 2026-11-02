@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, Camera, MagnifyingGlass } from '@phosphor-icons/react'
+import SectionLabel from '@/components/SectionLabel'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -174,7 +175,7 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
         {copy.dues.entryLink}
       </Button>
 
-      <h2 className="text-lg font-semibold">{text.heading}</h2>
+      <SectionLabel>{text.heading}</SectionLabel>
 
       <div className="relative">
         <Label htmlFor="dues-payment-search" className="sr-only">
