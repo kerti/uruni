@@ -129,8 +129,9 @@ function Wrapper({
   // bottom corners the hero's own radius - so balance and status read as one
   // object, while the status colour stays on white. On Forest, green would
   // merge into the hero and terracotta would turn harsh. The hero sits above
-  // it (z-10 in Home).
-  const shape = tucked ? '-mt-6 rounded-b-3xl pt-9 pb-3' : 'rounded-lg py-3'
+  // it (z-10 in Home). The ring is inset so the edge lands on the
+  // hero's own width: an outer ring sat 1px past it on each side.
+  const shape = tucked ? '-mt-6 rounded-b-3xl pt-9 pb-3 ring-inset' : 'rounded-lg py-3'
   // w-full + text-left: a <button> doesn't inherit <p>'s block-level,
   // full-width, left-aligned defaults.
   const combined = `flex w-full items-center gap-2 bg-card px-4 text-left ring-1 ${shape} ${ring} ${className}`
