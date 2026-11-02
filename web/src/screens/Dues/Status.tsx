@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CaretDown, CheckCircle, Circle, CircleDashed } from '@phosphor-icons/react'
+import { CaretDown, CheckCircle, Circle, CircleDashed, type Icon } from '@phosphor-icons/react'
 
+import { Badge, type BadgeTone } from '@/components/Badge'
 import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
@@ -17,6 +18,7 @@ import { currentPeriod, formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
+import { card } from '@/components/cardClasses'
 
 const text = copy.dues
 const gridText = copy.dues.grid
@@ -37,14 +39,14 @@ function periodFromUrl(value: string | null): string | null {
  * anywhere near it, per PRD section 7.3's explicit rule. */
 const UNPAID_STATUSES: readonly DuesStatusKind[] = ['unpaid', 'partial']
 
-/** Tone classes for one status badge - no `--destructive` red anywhere on this
- * screen. `paid_in_advance` reuses `paid`'s success colors but adds a ring, so
+/** Tone for one status badge - no `--destructive` red anywhere on this
+ * screen. `paid_in_advance` reuses `paid`'s success tone but adds a ring, so
  * it reads as a variant of "lunas" while staying distinguishable. */
-const badgeTone: Record<DuesStatusKind, string> = {
-  unpaid: 'bg-muted text-muted-foreground',
-  partial: 'bg-attention-soft text-attention-text',
-  paid: 'bg-success-soft text-success',
-  paid_in_advance: 'bg-success-soft text-success ring-1 ring-success',
+const badgeTone: Record<DuesStatusKind, BadgeTone> = {
+  unpaid: 'neutral',
+  partial: 'attention',
+  paid: 'success',
+  paid_in_advance: 'success',
 }
 
 /** Icons stay as calm as the tones: an empty circle for what is not paid yet,
@@ -52,7 +54,7 @@ const badgeTone: Record<DuesStatusKind, string> = {
  * triangle - Reconcile.tsx uses that shape for a selisih, and an ordinary
  * unpaid or half-paid month is not a discrepancy (Design-System.md: gentle
  * semantic states). */
-const badgeIcon: Record<DuesStatusKind, typeof Circle> = {
+const badgeIcon: Record<DuesStatusKind, Icon> = {
   unpaid: Circle,
   partial: CircleDashed,
   paid: CheckCircle,
@@ -60,14 +62,10 @@ const badgeIcon: Record<DuesStatusKind, typeof Circle> = {
 }
 
 function StatusBadge({ status }: { status: DuesStatusKind }) {
-  const Icon = badgeIcon[status]
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium whitespace-nowrap ${badgeTone[status]}`}
-    >
-      <Icon aria-hidden="true" className="size-4" />
+    <Badge tone={badgeTone[status]} icon={badgeIcon[status]} className={status === 'paid_in_advance' ? 'ring-1 ring-success' : undefined}>
       {text.statuses[status]}
-    </span>
+    </Badge>
   )
 }
 
@@ -216,10 +214,7 @@ export default function DuesStatus({
               ) : (
                 <ul className="flex flex-col gap-2">
                   {visibleRows.map((row) => (
-                    <li
-                      key={row.member.id}
-                      className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                    >
+                    <li key={row.member.id} className={`flex flex-col gap-2 ${card}`}>
                       <div className="flex items-center justify-between gap-3">
                         {/* The chip has its own line under the name: beside it,
                         a phone truncated the name and wrapped the status
@@ -227,9 +222,9 @@ export default function DuesStatus({
                         <span className="flex min-w-0 flex-col items-start gap-1">
                           <span className="max-w-full truncate font-medium">{row.member.name}</span>
                           {row.member.arrears_months > 0 && (
-                            <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
+                            <Badge tone="attention" className="tabular">
                               {arrearsText.arrearsBadge(row.member.arrears_months)}
-                            </span>
+                            </Badge>
                           )}
                         </span>
                         {/* Paid ahead with a known end (#357): the badge stays a

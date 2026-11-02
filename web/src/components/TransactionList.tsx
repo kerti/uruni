@@ -18,6 +18,7 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import CorrectPurposeDialog from '@/components/CorrectPurposeDialog'
 import type { Purpose } from '@/lib/purposes'
 import type { Transaction } from '@/lib/transactions'
+import { card } from '@/components/cardClasses'
 
 const reverseText = copy.history.transactions
 
@@ -152,10 +153,7 @@ export default function TransactionList({
               const kind = transferKind(transaction)
               const receiptCount = transaction.receipt_ids?.length ?? 0
               return (
-                <li
-                  key={transaction.id}
-                  className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                >
+                <li key={transaction.id} className={`relative flex flex-col gap-2 ${card}`}>
                   {/* The whole card opens the entry in full (#359, #739), and it is
                     the row's only control: every action (Perbaiki pos, Nota,
                     Batalkan) lives in that detail, because controls nested in a

@@ -29,6 +29,8 @@ import SettleDialog from '@/screens/Reimbursements/SettleDialog'
 import ClaimSummary from '@/screens/Reimbursements/ClaimSummary'
 import ClaimDetailDialog from '@/screens/Reimbursements/ClaimDetailDialog'
 import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
+import { card } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
@@ -343,10 +345,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
               const purposeName = purposeNames.get(claim.purpose_id) ?? '-'
               const receiptCount = claim.receipt_ids?.length ?? 0
               return (
-                <li
-                  key={claim.id}
-                  className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                >
+                <li key={claim.id} className={`relative flex flex-col gap-2 ${card}`}>
                   {/* One tap target (#768), the card shape Transaksi uses: a
                     full-card button underneath the content, which ignores
                     pointer events so a tap anywhere falls through to it.
@@ -610,9 +609,9 @@ function DeleteClaimBody({
 function StatusBadge({ claim, tab }: { claim: Reimbursement; tab: 'outstanding' | 'all' }) {
   if (claim.waived_on) {
     return (
-      <span className="mt-1 self-start rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      <Badge tone="neutral" className="mt-1 self-start">
         {text.status.waived}
-      </span>
+      </Badge>
     )
   }
   // `settled` travels on the wire: the list queries compute whether a
@@ -620,17 +619,17 @@ function StatusBadge({ claim, tab }: { claim: Reimbursement; tab: 'outstanding' 
   // on both tabs: the list says "Dibayar" only for a row a payout settled.
   if (claim.settled) {
     return (
-      <span className="mt-1 self-start rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
+      <Badge tone="success" className="mt-1 self-start">
         {text.status.settled}
-      </span>
+      </Badge>
     )
   }
   // The outstanding view's own filter already says "belum dibayar"; a badge
   // saying it on every card is the same sentence again. The all view needs it.
   if (tab === 'outstanding') return null
   return (
-    <span className="mt-1 self-start rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+    <Badge tone="neutral" className="mt-1 self-start">
       {text.status.outstanding}
-    </span>
+    </Badge>
   )
 }

@@ -24,6 +24,7 @@ import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 import type { TransactionSummary, TransactionsPage } from '@/lib/transactions'
+import { card } from '@/components/cardClasses'
 
 const text = copy.history.transactions
 
@@ -394,7 +395,7 @@ function MonthSummary({ summary }: { summary: TransactionSummary }) {
     lines.push({ label: text.summaryBalance(formatIsoDate(summary.end_on)), amount: summary.end, last: true })
 
   return (
-    <dl className="flex flex-col gap-1.5 rounded-lg bg-card px-4 py-3 text-sm shadow-card ring-1 ring-foreground/10">
+    <dl className={`flex flex-col gap-1.5 text-sm ${card}`}>
       {lines.map((line) => (
         <div
           key={line.label}

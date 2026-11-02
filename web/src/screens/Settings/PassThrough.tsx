@@ -15,6 +15,7 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Purpose } from '@/lib/purposes'
+import { tappableCard } from '@/components/cardClasses'
 
 const text = copy.settings.passThrough
 
@@ -88,11 +89,7 @@ export default function PassThrough() {
         <ul className="flex flex-col gap-2">
           {passThrough.map((purpose) => (
             <li key={purpose.id}>
-              <button
-                type="button"
-                onClick={() => open(`pass-through:${purpose.id}`)}
-                className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-              >
+              <button type="button" onClick={() => open(`pass-through:${purpose.id}`)} className={`flex items-center ${tappableCard}`}>
                 <span className="sr-only">{text.editVerb}</span> <span className="min-w-0 truncate font-medium">{purpose.name}</span>
               </button>
             </li>

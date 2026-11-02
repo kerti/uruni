@@ -9,12 +9,12 @@ import { formatIsoDate } from '@/lib/dates'
 import { listIncidentals } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import type { Incidental } from '@/lib/incidentals'
+import { tappableCard } from '@/components/cardClasses'
 
 const text = copy.incidentals
 
 /** A closed envelope's card box. */
-const cardClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
+const cardClass = `flex items-center justify-between gap-3 ${tappableCard}`
 
 /**
  * Every closed envelope, most recently closed first - the screen behind

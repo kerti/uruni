@@ -14,6 +14,7 @@ import { useApi } from '@/lib/useApi'
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
 import type { StoredBackup } from '@/lib/backup'
+import { card } from '@/components/cardClasses'
 
 const text = copy.settings.backup
 
@@ -127,10 +128,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {listState.data.map((item) => (
-            <li
-              key={item.name}
-              className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-2 shadow-card ring-1 ring-foreground/10"
-            >
+            <li key={item.name} className={`flex items-center justify-between gap-3 ${card}`}>
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-medium">{formatIsoDate(item.date)}</span>

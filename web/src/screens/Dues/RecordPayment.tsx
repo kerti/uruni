@@ -22,6 +22,7 @@ import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Member } from '@/lib/setup'
+import { cardSurface } from '@/components/cardClasses'
 
 const text = copy.dues.payment
 
@@ -330,7 +331,7 @@ export default function RecordDuesPayment({
                   {text.selectAllArrears}
                 </Button>
               )}
-              <ul className="flex flex-col divide-y divide-foreground/10 rounded-lg bg-card shadow-card ring-1 ring-foreground/10">
+              <ul className={`flex flex-col divide-y divide-foreground/10 ${cardSurface}`}>
                 {periods.map((period) => {
                   const checked = selected.includes(period.period)
                   const name = formatPeriod(period.period)

@@ -42,6 +42,8 @@ import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, ParticipationStateKind } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 import type { Transaction } from '@/lib/transactions'
+import { card } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.incidentals
 
@@ -267,9 +269,9 @@ export default function Incidentals({
 
 function StatusBadge({ envelope }: { envelope: Incidental }) {
   if (envelope.closed_on) {
-    return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.closed}</span>
+    return <Badge tone="neutral">{text.status.closed}</Badge>
   }
-  return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.open}</span>
+  return <Badge tone="success">{text.status.open}</Badge>
 }
 
 /** The detail view: one envelope's totals, a link into the real record form
@@ -354,7 +356,7 @@ function DetailView({
           collected minus used here - the two differ once a closed envelope
           is reopened, because the earlier roll is in the balance only. A
           divider sets it apart as the line the rest adds up to. */}
-      <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
+      <div className={`flex flex-col gap-2 ${card}`}>
         {envelope.target_amount !== null && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{text.detail.targetLabel}</span>
@@ -664,10 +666,7 @@ function ParticipationSection({
                   {visibleExpected.map((row) => {
                     const { label, showAmount } = participationStateText(row.state)
                     return (
-                      <li
-                        key={row.member.id}
-                        className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                      >
+                      <li key={row.member.id} className={`flex flex-col gap-1 ${card}`}>
                         <div className="flex items-center justify-between gap-3">
                           <span className="min-w-0 truncate font-medium">{row.member.name}</span>
                           {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
@@ -700,10 +699,7 @@ function ParticipationSection({
               <SubsectionLabel>{text.otherHeading}</SubsectionLabel>
               <ul className="flex flex-col gap-2">
                 {state.data.unexpected.map((row) => (
-                  <li
-                    key={row.member.id}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                  >
+                  <li key={row.member.id} className={`flex items-center justify-between gap-3 ${card}`}>
                     <span className="min-w-0 truncate font-medium">{row.member.name}</span>
                     <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>
                   </li>

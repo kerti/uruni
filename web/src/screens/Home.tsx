@@ -24,6 +24,7 @@ import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
 import type { IncidentalListItem } from '@/lib/incidentals'
 import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
+import { card, tappableCard } from '@/components/cardClasses'
 
 /** How many of the most recent transactions the recent-activity list shows -
  * a client-side slice of GET /api/transactions's first page, which is already
@@ -31,8 +32,7 @@ import type { Transaction } from '@/lib/transactions'
 const RECENT_ACTIVITY_COUNT = 5
 
 /** A Saldo per pos row's box. */
-const rowClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none'
+const rowClass = `flex items-center justify-between gap-3 ${tappableCard}`
 
 interface HomeData {
   balances: Balances
@@ -344,11 +344,7 @@ export default function Home({
           is still inside the balance above, so this is a plain row beside
           it, never a subtraction and never an alarm - and absent at zero. */}
       {balances.owed_to_members > 0 && (
-        <button
-          type="button"
-          onClick={onViewOwed}
-          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
-        >
+        <button type="button" onClick={onViewOwed} className={`flex items-center justify-between gap-3 ${tappableCard}`}>
           <span>{copy.home.owedToMembers}</span>
           <span className="flex items-center gap-2">
             <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
@@ -369,7 +365,7 @@ export default function Home({
           a month is not a verdict. */}
       <section className="flex flex-col gap-2">
         <SectionLabel>{copy.home.cashflowHeading}</SectionLabel>
-        <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+        <div className={card}>
           {/* Two columns while both figures are short; one under the other when
               either is wide enough to crowd its half (a whole figure to its
               own line, never a clipped or wrapped number). */}

@@ -18,6 +18,7 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
 import { currentPeriod } from '@/lib/dates'
+import { tappableCard } from '@/components/cardClasses'
 
 const text = copy.settings.tiers
 
@@ -105,7 +106,7 @@ export default function DuesTiers() {
                 <button
                   type="button"
                   onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
-                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                  className={`flex items-center justify-between gap-3 ${tappableCard}`}
                 >
                   <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{tier.name}</span>
                   {/* What it costs this month, which is the one number she

@@ -21,6 +21,8 @@ import { useApi } from '@/lib/useApi'
 import { errorCode } from '@/lib/api'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
+import { card } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.settings.tiers
 
@@ -282,7 +284,7 @@ function RateRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+    <li className={`flex flex-col gap-2 ${card}`}>
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
           <AmountInput
@@ -356,7 +358,7 @@ function RateRow({
           <span className="flex min-w-0 flex-col">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
-              {inForce && <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.inForce}</span>}
+              {inForce && <Badge tone="success">{text.inForce}</Badge>}
             </span>
             <span className="text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
           </span>
