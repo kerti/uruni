@@ -3,6 +3,8 @@ import { Camera, X } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'
+import { insetPanel } from '@/components/cardClasses'
+import { cn } from '@/lib/utils'
 
 const text = copy.receipts
 
@@ -77,7 +79,7 @@ export default function ReceiptPicker({
       )}
 
       {value && (
-        <div className="flex items-center gap-3 rounded-lg bg-muted p-2">
+        <div className={cn('flex items-center gap-3', insetPanel, 'p-2')}>
           {previewUrl && (
             // Decorative beside the file name text right after it - the pair
             // is the accessible description, the split TransactionList.tsx's

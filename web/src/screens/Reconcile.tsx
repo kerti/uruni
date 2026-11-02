@@ -30,7 +30,7 @@ import type { Purpose } from '@/lib/purposes'
 import type { AccountCountInput, ReconciliationDetail } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
 import type { Direction } from '@/lib/enums'
-import { card, cardSurface } from '@/components/cardClasses'
+import { card, cardSurface, insetPanel } from '@/components/cardClasses'
 
 const text = copy.reconciliation
 
@@ -515,7 +515,7 @@ function AccountCountRow({
             />
 
             {showFixFields && (
-              <div className="flex flex-col gap-3 rounded-lg bg-muted p-3">
+              <div className={`flex flex-col gap-3 ${insetPanel}`}>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`reconcile-fix-direction-${account.id}`}>{copy.record.directionLabel}</Label>
                   <div

@@ -13,6 +13,8 @@ import { deleteReceipt, receiptUrl, uploadReceipt } from '@/lib/receipts'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { ReceiptParentKind } from '@/lib/receipts'
+import { insetPanel } from '@/components/cardClasses'
+import { cn } from '@/lib/utils'
 
 const text = copy.receipts
 
@@ -151,7 +153,7 @@ export default function ReceiptDialog({
             <p className="text-muted-foreground">{kind === 'reimbursements' ? text.emptyReimbursement : text.emptyTransaction}</p>
           )}
           {receiptIds.map((id) => (
-            <div key={id} className="flex flex-col gap-2 rounded-lg bg-muted p-2">
+            <div key={id} className={cn('flex flex-col gap-2', insetPanel, 'p-2')}>
               <div className="relative">
                 {/* The photo itself opens the full-screen viewer
                     (ReceiptViewer.tsx) - a button wrapper rather than a

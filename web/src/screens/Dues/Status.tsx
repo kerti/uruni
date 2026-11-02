@@ -18,7 +18,7 @@ import { currentPeriod, formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
-import { card } from '@/components/cardClasses'
+import { card, insetPanel } from '@/components/cardClasses'
 
 const text = copy.dues
 const gridText = copy.dues.grid
@@ -288,7 +288,7 @@ export default function DuesStatus({
                       </Button>
 
                       {expandedMemberId === row.member.id && (
-                        <div id={`dues-history-${row.member.id}`} className="animate-reveal rounded-lg bg-muted/30 px-3 py-3">
+                        <div id={`dues-history-${row.member.id}`} className={`animate-reveal ${insetPanel}`}>
                           <MemberPayments
                             memberId={row.member.id}
                             period={period}

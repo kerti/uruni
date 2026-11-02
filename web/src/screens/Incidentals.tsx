@@ -42,7 +42,8 @@ import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, ParticipationStateKind } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 import type { Transaction } from '@/lib/transactions'
-import { card } from '@/components/cardClasses'
+import { card, insetPanel } from '@/components/cardClasses'
+import { FigureRow, Figures } from '@/components/Figures'
 import { Badge } from '@/components/Badge'
 
 const text = copy.incidentals
@@ -356,26 +357,12 @@ function DetailView({
           collected minus used here - the two differ once a closed envelope
           is reopened, because the earlier roll is in the balance only. A
           divider sets it apart as the line the rest adds up to. */}
-      <div className={`flex flex-col gap-2 ${card}`}>
-        {envelope.target_amount !== null && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{text.detail.targetLabel}</span>
-            <span className="tabular font-medium">{formatIDR(envelope.target_amount)}</span>
-          </div>
-        )}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{text.detail.collectedLabel}</span>
-          <span className="tabular font-medium">{formatIDR(envelope.collected_amount)}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{text.detail.disbursedLabel}</span>
-          <span className="tabular font-medium">{formatIDR(envelope.disbursed_amount)}</span>
-        </div>
-        <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
-          <span className="font-medium">{text.detail.remainingLabel}</span>
-          <span className="tabular font-semibold">{formatIDR(envelope.balance_amount)}</span>
-        </div>
-      </div>
+      <Figures className={card}>
+        {envelope.target_amount !== null && <FigureRow label={text.detail.targetLabel} amount={envelope.target_amount} />}
+        <FigureRow label={text.detail.collectedLabel} amount={envelope.collected_amount} />
+        <FigureRow label={text.detail.disbursedLabel} amount={envelope.disbursed_amount} />
+        <FigureRow label={text.detail.remainingLabel} amount={envelope.balance_amount} total />
+      </Figures>
 
       {/* The rollover, on every visit to a closed envelope rather than only
           in the moment it was closed (#270) - shown even when it is 0: a
@@ -383,10 +370,9 @@ function DetailView({
           (ADR-031), so the sentence itself says which way it went; the
           amount stays one field, absolute either way. */}
       {rolledAmount !== null && (
-        <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
-          <span className="text-muted-foreground">{text.close.rolledLabel(rolledAmount)}</span>
-          <span className="tabular font-medium">{formatIDR(Math.abs(rolledAmount))}</span>
-        </div>
+        <Figures className={insetPanel}>
+          <FigureRow label={text.close.rolledLabel(rolledAmount)} amount={Math.abs(rolledAmount)} />
+        </Figures>
       )}
 
       {/* One action row for both states; primary on the right (Design-System,
