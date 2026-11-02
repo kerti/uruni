@@ -1,4 +1,3 @@
-import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
 import OpenIncidentalDialog from '@/components/OpenIncidentalDialog'
@@ -25,6 +24,7 @@ import type { IncidentalListItem } from '@/lib/incidentals'
 import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
 import { card, tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 /** How many of the most recent transactions the recent-activity list shows -
  * a client-side slice of GET /api/transactions's first page, which is already
@@ -262,7 +262,7 @@ export default function Home({
                 <span className="min-w-0 truncate">{account.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <span className="tabular font-medium">{formatIDR(account.balance)}</span>
-                  <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                  <RowChevron />
                 </span>
               </button>
             </li>
@@ -307,7 +307,7 @@ export default function Home({
                         directly above. */}
                     <span className="flex shrink-0 items-center gap-2">
                       <PurposeAmount balance={purpose.balance} />
-                      <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                      <RowChevron />
                     </span>
                   </button>
                 </li>
@@ -321,7 +321,7 @@ export default function Home({
                   <span className="min-w-0 truncate">{copy.incidentals.closedRow}</span>
                   <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
                     <span className="tabular">{closedIncidentalCount}</span>
-                    <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                    <RowChevron />
                   </span>
                 </button>
               </li>
@@ -348,7 +348,7 @@ export default function Home({
           <span>{copy.home.owedToMembers}</span>
           <span className="flex items-center gap-2">
             <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
-            <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+            <RowChevron />
           </span>
         </button>
       )}

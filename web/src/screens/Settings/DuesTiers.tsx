@@ -19,6 +19,7 @@ import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
 import { currentPeriod } from '@/lib/dates'
 import { tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 const text = copy.settings.tiers
 
@@ -110,10 +111,17 @@ export default function DuesTiers() {
                 >
                   <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{tier.name}</span>
                   {/* What it costs this month, which is the one number she
-                      came to check. A tier with no rate yet says so rather
-                      than showing a zero it does not mean. */}
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    {current === null ? text.noRates : <span className="tabular">{formatIDR(current.amount)}</span>}
+                      came to check - an amount on a row reads as Beranda's
+                      do. A tier with no rate yet says so, small and grey,
+                      rather than showing a zero it does not mean. The
+                      chevron: the row opens the tier's own screen. */}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {current === null ? (
+                      <span className="text-sm text-muted-foreground">{text.noRates}</span>
+                    ) : (
+                      <span className="tabular font-medium">{formatIDR(current.amount)}</span>
+                    )}
+                    <RowChevron />
                   </span>
                 </button>
               </li>

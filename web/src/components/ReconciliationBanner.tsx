@@ -1,9 +1,10 @@
-import { CaretRight, CheckCircle, MagnifyingGlass, Question } from '@phosphor-icons/react'
+import { CheckCircle, MagnifyingGlass, Question } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { OpenReconciliationLine } from '@/lib/reconciliations'
+import RowChevron from '@/components/RowChevron'
 
 /**
  * The home screen's reconciliation status (PRD section 7.7). Three states,
@@ -162,7 +163,7 @@ function Wrapper({
         onClick={onClick}
       >
         {body}
-        <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+        <RowChevron />
       </button>
     )
   }

@@ -1,4 +1,3 @@
-import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
 import BackLink from '@/components/BackLink'
@@ -10,6 +9,7 @@ import { listIncidentals } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import type { Incidental } from '@/lib/incidentals'
 import { tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 const text = copy.incidentals
 
@@ -55,7 +55,7 @@ export default function ClosedIncidentals({ onBack, onOpen }: { onBack: () => vo
                   <span className="truncate font-medium">{envelope.occasion}</span>
                   <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>
                 </span>
-                <CaretRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                <RowChevron />
               </button>
             </li>
           ))}
