@@ -58,7 +58,8 @@ body{margin:0;background:var(--background);color:var(--foreground);
   font-size:16px;line-height:1.5}
 main{max-width:38rem;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:24px}
 h1{margin:0;font-size:24px;line-height:1.25;font-weight:700}
-h2{margin:0 0 8px;font-size:14px;font-weight:600;color:var(--muted-foreground)}
+h2{margin:0 0 8px;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;color:var(--primary)}
+h2::before{content:"";width:8px;height:8px;flex-shrink:0;border-radius:999px;background:var(--accent)}
 p{margin:0}
 .eyebrow{font-size:14px;font-weight:500;color:var(--muted-foreground)}
 .muted{font-size:14px;color:var(--muted-foreground)}
@@ -116,7 +117,7 @@ ul.dues li{flex-direction:column;gap:6px}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
 .grid{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
-.grid h3{margin:0;font-size:16px;font-weight:600}
+.grid h3{margin:0;font-size:14px;font-weight:600;color:var(--muted-foreground)}
 .grid table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:8px}
 .grid table col,.grid td,.grid th{padding:0}
 .grid thead td,.grid thead th{font-size:10px;font-weight:400;color:var(--muted-foreground);text-align:left;padding-bottom:2px}

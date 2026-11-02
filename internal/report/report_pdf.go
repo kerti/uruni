@@ -50,6 +50,7 @@ const (
 	pdfSmallSize   = 8.5
 	pdfLineFactor  = 0.5 // line height in mm per point of type
 	pdfRuleWidthMM = 0.2
+	pdfPointMM     = 25.4 / 72 // one point of type, in millimetres
 )
 
 // PDF assembles the month as the page does (same bad-month fallback, same
@@ -314,7 +315,18 @@ func (d *pdfDoc) section(title string, ownPage bool) {
 		d.need(24)
 		d.SetY(d.GetY() + pdfSectionGap)
 	}
-	d.text(pdfLine{text: title, bold: true, size: 12, color: "primary"}, pdfContentW, "L")
+	// Led by the logo's Sage dot, as the page's and the app's section labels
+	// are: half the type's size across, half again as the gap before the title.
+	const size = 12.0
+	lh := pdfLineHeight(size)
+	dot := size * pdfPointMM / 2
+	y := d.GetY()
+	d.fill("accent")
+	d.Circle(pdfMarginX+dot/2, y+lh/2, dot/2, "F")
+	d.face(true, size)
+	d.ink("primary")
+	d.SetXY(pdfMarginX+dot*2, y)
+	d.CellFormat(pdfContentW-dot*2, lh, title, "", 1, "L", false, 0, "")
 	d.rule("primary")
 	d.Line(pdfMarginX, d.GetY()+0.6, pdfMarginX+pdfContentW, d.GetY()+0.6)
 	d.SetY(d.GetY() + 2)
