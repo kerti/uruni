@@ -21,7 +21,7 @@ import (
 //	Budi   nothing                                    Belum bayar
 //	Cici   paid 10.000 of 25.000                      Bayar sebagian
 //	Dedi   paid 2026-09 and 2026-10                   Lunas, sampai Oktober 2026
-//	Eka    paid 2026-09 and 2026-11, skipped October  Lunas - sudah bayar di muka
+//	Eka    paid 2026-09 and 2026-11, skipped October  Lunas, sudah bayar di muka
 //	Fina   joined 2026-10-01                          not owing September
 //	Gita   inactive from 2026-08-31                   not owing September
 //	Hadi   no tier                                owes nothing
@@ -132,7 +132,7 @@ func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
 		`<span class="badge paid">Lunas</span>`,
 		`<span class="badge unpaid">Belum bayar</span>`,
 		`<span class="badge partial">Bayar sebagian</span>`,
-		"Lunas \u2014 sudah bayar di muka",
+		"Lunas \u00b7 sudah bayar di muka",
 		"Kategori Senior",
 		"Iuran: Rp25.000",
 		"Dibayar: Rp10.000",

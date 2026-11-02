@@ -48,7 +48,7 @@
 </section>
 
 {{with .Check}}
-<p class="status {{.Class}}" role="status">{{.Message}}{{if .When}}<span class="when">{{.When}}</span>{{end}}</p>
+<p class="status {{.Class}}" role="status">{{.Message}}{{if .When}}<span class="when">{{.When}}</span>{{end}}{{if .Since}}<span class="when">{{.Since}}</span>{{end}}</p>
 {{end}}
 
 {{if .Purposes}}

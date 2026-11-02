@@ -20,16 +20,19 @@ type Copy struct {
 	// Title is the <title>: the fund's name, then what the page is.
 	Title func(fundName string) string
 
-	Eyebrow       string
-	AsOf          func(date string) string
-	AsOfRunning   func(date string) string
-	BalanceLabel  string
-	LastChecked   func(date string, newEntries bool) string
-	Matched       string
-	Discrepancy   func(amount string) string
-	NeverChecked  string
-	PurposesLabel string
-	OwedLabel     string
+	Eyebrow      string
+	AsOf         func(date string) string
+	AsOfRunning  func(date string) string
+	BalanceLabel string
+	LastChecked  func(date string) string
+	// NewEntriesSince follows the date when something was recorded after the
+	// count (#734), so "cocok" is never read as a claim about now.
+	NewEntriesSince string
+	Matched         string
+	Discrepancy     func(amount string) string
+	NeverChecked    string
+	PurposesLabel   string
+	OwedLabel       string
 
 	MonthLabel  string
 	MonthSubmit string
@@ -141,28 +144,20 @@ type Copy struct {
 	Months [12]string
 }
 
-// lastChecked is the count's date line. newEntries adds that something was
-// recorded since the count (#734), so "cocok" is never read as a claim about now.
-func lastChecked(date string, newEntries bool) string {
-	if newEntries {
-		return "Terakhir dicek " + date + " \u00b7 ada catatan baru sejak itu"
-	}
-	return "Terakhir dicek " + date
-}
-
 // Text is the report's copy, the only value of Copy.
 var Text = Copy{
-	Title:         func(fundName string) string { return fundName + " - Laporan kas" },
-	Eyebrow:       "Laporan kas",
-	AsOf:          func(date string) string { return "per " + date },
-	AsOfRunning:   func(date string) string { return "Bulan berjalan \u00b7 per " + date },
-	BalanceLabel:  "Saldo kas",
-	LastChecked:   lastChecked,
-	Matched:       "Kas dan catatan cocok saat dicek.",
-	Discrepancy:   func(amount string) string { return "Ada selisih " + amount + "." },
-	NeverChecked:  "Belum pernah dicek.",
-	OwedLabel:     "Talangan belum dibayar",
-	PurposesLabel: "Saldo per pos",
+	Title:           func(fundName string) string { return fundName + " - Laporan kas" },
+	Eyebrow:         "Laporan kas",
+	AsOf:            func(date string) string { return "per " + date },
+	AsOfRunning:     func(date string) string { return "Bulan berjalan \u00b7 per " + date },
+	BalanceLabel:    "Saldo kas",
+	LastChecked:     func(date string) string { return "Terakhir dicek " + date + "." },
+	NewEntriesSince: "Ada catatan baru sejak itu.",
+	Matched:         "Kas dan catatan cocok saat dicek.",
+	Discrepancy:     func(amount string) string { return "Ada selisih " + amount + "." },
+	NeverChecked:    "Belum pernah dicek.",
+	OwedLabel:       "Talangan belum dibayar",
+	PurposesLabel:   "Saldo per pos",
 
 	MonthLabel:  "Bulan",
 	MonthSubmit: "Lihat",
@@ -197,7 +192,7 @@ var Text = Copy{
 	DuesUnpaid:        "Belum bayar",
 	DuesPartial:       "Bayar sebagian",
 	DuesPaidStatus:    "Lunas",
-	DuesPaidInAdvance: "Lunas \u2014 sudah bayar di muka",
+	DuesPaidInAdvance: "Lunas \u00b7 sudah bayar di muka",
 
 	GridHeading:   "Status iuran 12 bulan",
 	GridRange:     func(from, to string) string { return from + " \u2013 " + to },
