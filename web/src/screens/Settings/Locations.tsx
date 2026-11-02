@@ -100,7 +100,7 @@ export default function Locations() {
               <button type="button" onClick={() => open(`location:${account.id}`)} className={`flex flex-col gap-1 ${tappableCard}`}>
                 <span className="sr-only">{text.editVerb}</span>{' '}
                 <span className="flex w-full items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium">{account.name}</span>
+                  <span className="min-w-0 truncate">{account.name}</span>
                   <span className="shrink-0 text-sm text-muted-foreground">{account.kind === 'bank' ? text.kindBank : text.kindCash}</span>
                 </span>
                 {account.inactive_on !== null && <span className="text-sm text-muted-foreground">{text.inactiveBadge}</span>}

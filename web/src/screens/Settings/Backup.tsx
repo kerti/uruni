@@ -131,7 +131,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
             <li key={item.name} className={`flex items-center justify-between gap-3 ${card}`}>
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-medium">{formatIsoDate(item.date)}</span>
+                  <span>{formatIsoDate(item.date)}</span>
                   <span className="text-sm text-muted-foreground">{kindLabel(item.kind)}</span>
                 </span>
                 <span className="text-sm text-muted-foreground">

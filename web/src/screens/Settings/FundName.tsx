@@ -124,7 +124,7 @@ function SettingCard({ verb, label, value, onClick }: { verb: string; label: str
           accessible name is built from the content and holds every visible
           word (WCAG 2.5.3) - an aria-label would replace it. */}
       <span className="sr-only">{verb}</span> <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="w-full min-w-0 truncate font-medium">{value}</span>
+      <span className="w-full min-w-0 truncate">{value}</span>
     </button>
   )
 }

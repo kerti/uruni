@@ -191,7 +191,7 @@ export default function Roster() {
               <button type="button" onClick={() => open(`member:${member.id}`)} className={`flex flex-col gap-1 ${tappableCard}`}>
                 <span className="sr-only">{text.editVerb}</span>{' '}
                 <span className="flex w-full items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium">{member.name}</span>
+                  <span className="min-w-0 truncate">{member.name}</span>
                 </span>
                 <span className="text-sm text-muted-foreground">
                   {member.tier_id === null

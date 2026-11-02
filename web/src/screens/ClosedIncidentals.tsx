@@ -52,7 +52,7 @@ export default function ClosedIncidentals({ onBack, onOpen }: { onBack: () => vo
               <button type="button" onClick={() => onOpen(envelope.purpose_id)} className={cardClass}>
                 <span className="sr-only">{text.cardVerb}</span>{' '}
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{envelope.occasion}</span>
+                  <span className="truncate">{envelope.occasion}</span>
                   <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>
                 </span>
                 <RowChevron />

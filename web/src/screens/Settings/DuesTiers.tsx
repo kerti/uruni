@@ -109,7 +109,7 @@ export default function DuesTiers() {
                   onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
                   className={`flex items-center justify-between gap-3 ${tappableCard}`}
                 >
-                  <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{tier.name}</span>
+                  <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate">{tier.name}</span>
                   {/* What it costs this month, which is the one number she
                       came to check - an amount on a row reads as Beranda's
                       do. A tier with no rate yet says so, small and grey,

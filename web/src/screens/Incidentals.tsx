@@ -668,7 +668,7 @@ function ParticipationSection({
                     return (
                       <li key={row.member.id} className={`flex flex-col gap-1 ${card}`}>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                          <span className="min-w-0 truncate">{row.member.name}</span>
                           {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
                         </div>
                         {/* Plain ink under the amount (#154), not a button per
@@ -700,7 +700,7 @@ function ParticipationSection({
               <ul className="flex flex-col gap-2">
                 {state.data.unexpected.map((row) => (
                   <li key={row.member.id} className={`flex items-center justify-between gap-3 ${card}`}>
-                    <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                    <span className="min-w-0 truncate">{row.member.name}</span>
                     <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>
                   </li>
                 ))}

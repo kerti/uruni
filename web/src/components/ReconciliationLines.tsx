@@ -17,7 +17,7 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
     <ul className="flex flex-col gap-2">
       {lines.map((line) => (
         <li key={line.id} className={`flex flex-col gap-1 ${card}`}>
-          <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
+          <span>{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
           {/* The figures being compared each get a line of their own, label
               left and amount right, so the amounts line up to compare. */}
           <Figure label={text.recordedLabel} amount={line.recorded_amount} />

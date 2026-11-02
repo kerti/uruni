@@ -90,7 +90,7 @@ export default function PassThrough() {
           {passThrough.map((purpose) => (
             <li key={purpose.id}>
               <button type="button" onClick={() => open(`pass-through:${purpose.id}`)} className={`flex items-center ${tappableCard}`}>
-                <span className="sr-only">{text.editVerb}</span> <span className="min-w-0 truncate font-medium">{purpose.name}</span>
+                <span className="sr-only">{text.editVerb}</span> <span className="min-w-0 truncate">{purpose.name}</span>
               </button>
             </li>
           ))}

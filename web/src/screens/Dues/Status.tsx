@@ -220,7 +220,7 @@ export default function DuesStatus({
                         a phone truncated the name and wrapped the status
                         badge. */}
                         <span className="flex min-w-0 flex-col items-start gap-1">
-                          <span className="max-w-full truncate font-medium">{row.member.name}</span>
+                          <span className="max-w-full truncate">{row.member.name}</span>
                           {row.member.arrears_months > 0 && (
                             <Badge tone="attention" className="tabular">
                               {arrearsText.arrearsBadge(row.member.arrears_months)}
