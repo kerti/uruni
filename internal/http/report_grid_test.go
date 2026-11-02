@@ -27,7 +27,6 @@ func TestReportGridOpensTheDuesSectionAboveItsFilterAndTable(t *testing.T) {
 		t.Errorf("order in the dues section: grid at %d, filter at %d, table at %d; want grid first", g, f, tb)
 	}
 	for _, want := range []string{
-		"Status iuran 12 bulan",
 		"Januari 2026 \u2013 September 2026", // 2000 joins, the rate begins January 2026
 		// The legend, in the four words.
 		"Lunas", "Bayar sebagian", "Belum bayar", "Tidak ada iuran",
@@ -41,6 +40,11 @@ func TestReportGridOpensTheDuesSectionAboveItsFilterAndTable(t *testing.T) {
 		if !strings.Contains(grid, want) {
 			t.Errorf("grid lacks %q:\n%s", want, grid)
 		}
+	}
+	// On the page the dues section's own label names the grid; only the PDF,
+	// where the grid takes a page of its own, titles it separately.
+	if strings.Contains(grid, report.Text.GridHeading) {
+		t.Errorf("grid repeats the section label with %q", report.Text.GridHeading)
 	}
 	for _, class := range []string{"g-paid", "g-half", "g-hollow", "g-none"} {
 		if !strings.Contains(grid, `class="`+class+`"`) {

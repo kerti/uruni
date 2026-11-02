@@ -117,7 +117,6 @@ ul.dues li{flex-direction:column;gap:6px}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
 .grid{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
-.grid h3{margin:0;font-size:14px;font-weight:600;color:var(--muted-foreground)}
 .grid table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:8px}
 .grid table col,.grid td,.grid th{padding:0}
 .grid thead td,.grid thead th{font-size:10px;font-weight:400;color:var(--muted-foreground);text-align:left;padding-bottom:2px}

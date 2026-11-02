@@ -178,7 +178,7 @@ type DuesRow struct {
 // the PDF draw the same cells. Status only; no count, total, amount or order
 // beyond the ledger's (by name).
 type Grid struct {
-	Heading string
+	Heading string // the PDF's title for the grid's own page; the page leaves it to the dues section's label
 	Range   string // "Oktober 2025 - September 2026"
 	Caption string // "Status per 24 Oktober 2026" on a past month; "" on the running one
 	Years   []GridYear
