@@ -52,7 +52,7 @@ export default function Backup() {
         disabled={busy}
         onClick={() => void run(downloadBackup)}
       >
-        <DownloadSimple aria-hidden="true" className="size-4" />
+        <DownloadSimple aria-hidden="true" />
         {busy ? text.downloading : text.download}
       </Button>
 
@@ -143,24 +143,28 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
               </div>
               <div className="flex shrink-0 items-center">
                 {item.can_restore && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
                     aria-label={text.restoreRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
                     onClick={() => onRestore(item.name)}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                   >
-                    <ArrowCounterClockwise aria-hidden="true" className="size-4" />
-                  </button>
+                    <ArrowCounterClockwise aria-hidden="true" />
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
                   aria-label={text.downloadRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
                   disabled={downloadingName === item.name}
                   onClick={() => void handleDownload(item.name)}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                 >
-                  <DownloadSimple aria-hidden="true" className="size-4" />
-                </button>
+                  <DownloadSimple aria-hidden="true" />
+                </Button>
               </div>
             </li>
           ))}

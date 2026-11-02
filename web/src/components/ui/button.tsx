@@ -38,7 +38,12 @@ const buttonVariants = cva(
         // sets as the minimum on mobile. The other sizes stay as shipped -
         // they are for dense, secondary, pointer-driven controls.
         lg: 'h-11 gap-1.5 rounded-xl px-4 text-base has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-        icon: 'size-8',
+        // `icon` is 44px for the same reason as `lg`: every icon-only button
+        // here is a thumb's target (the header's sign-out, a row's restore and
+        // download, a field's clear), and each caller was overriding the
+        // shipped 32px back up to size-11. Its glyph is the 20px the header
+        // and the row chevrons use.
+        icon: "size-11 [&_svg:not([class*='size-'])]:size-5",
         'icon-xs':
           "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg',

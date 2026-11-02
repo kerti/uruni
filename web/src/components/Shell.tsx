@@ -113,19 +113,16 @@ export default function Shell({
               <AppVersion />
             </div>
           </div>
-          {/* size-11 (44px), not the `icon` variant's 32px: Design-System.md
-              sets a 44x44 minimum touch target and this is the header's only
-              control. The label is on the button, not a tooltip - a tooltip
-              is invisible to a thumb. */}
+          {/* The label is on the button, not a tooltip - a tooltip is
+              invisible to a thumb. */}
           <Button
             variant="ghost"
             size="icon"
-            className="size-11"
             onClick={() => void run(logout)}
             disabled={loggingOut}
             aria-label={loggingOut ? copy.shell.loggingOut : copy.shell.logout}
           >
-            <SignOut aria-hidden="true" className="size-5" />
+            <SignOut aria-hidden="true" />
           </Button>
         </div>
       </header>

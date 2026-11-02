@@ -89,7 +89,7 @@ export default function ReceiptPicker({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-11 shrink-0"
+            className="shrink-0"
             aria-label={text.clearSelected}
             disabled={disabled}
             onClick={() => onChange(null)}
