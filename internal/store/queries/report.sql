@@ -42,7 +42,7 @@ LIMIT 1;
 -- (ADR-011).
 -- name: ListReportTransactions :many
 SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
-       t.purpose_id, p.name AS purpose_name,
+       t.account_id, t.purpose_id, p.name AS purpose_name,
        t.member_id, m.name AS member_name,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
@@ -98,6 +98,17 @@ WHERE fund_id = sqlc.arg('fund_id')
 SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
 FROM ledger_entry
 WHERE fund_id = sqlc.arg('fund_id') AND purpose_id = sqlc.arg('purpose_id')
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
+
+-- One location's balance at the bound, or, with a purpose, that purpose's money
+-- in that location (#784): the walk's ends under Riwayat's Lokasi filter. The
+-- same sum as ReportFundBalance narrowed, so the location's running End equals
+-- AccountBalance, which is what Beranda shows.
+-- name: ReportAccountBalance :one
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = sqlc.arg('fund_id') AND account_id = sqlc.arg('account_id')
+  AND (CAST(sqlc.narg('purpose_id') AS INTEGER) IS NULL OR purpose_id = CAST(sqlc.narg('purpose_id') AS INTEGER))
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
 -- Owed at the bound: incurred by then, not yet waived, not yet paid out.

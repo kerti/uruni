@@ -100,7 +100,12 @@ ORDER BY occurred_on, id;
 -- literal" holds by construction, not by escaping.
 --
 -- member_id, purpose_id, month and direction are Riwayat -> Transaksi's filters
--- (#424, the public report's four); dues_period is Dues/MemberPayments.tsx's
+-- (#424, the public report's four); account_id (#784) is the Lokasi filter, app
+-- only: the public report has none. It is tested per leg like the rest, and
+-- combined with purpose_id both must hold on the SAME leg. That is the right
+-- reading because a transfer never changes account and purpose together
+-- (between_accounts keeps the purpose, reclass_purpose keeps the account;
+-- internal/ledger/transfer.go). dues_period is Dues/MemberPayments.tsx's
 -- payment history panel alone. month is "YYYY-MM", prefix-compared against
 -- occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 -- with q and the keyset cursor.
@@ -192,6 +197,7 @@ WITH matched AS (
     AND (sqlc.narg('member_id') IS NULL OR t.member_id = sqlc.narg('member_id'))
     AND (sqlc.narg('dues_period') IS NULL OR t.dues_period = sqlc.narg('dues_period'))
     AND (sqlc.narg('purpose_id') IS NULL OR t.purpose_id = sqlc.narg('purpose_id'))
+    AND (sqlc.narg('account_id') IS NULL OR t.account_id = sqlc.narg('account_id'))
     AND (sqlc.narg('month') IS NULL OR substr(t.occurred_on, 1, 7) = sqlc.narg('month'))
     AND (sqlc.narg('direction') IS NULL OR (t.direction = sqlc.narg('direction') AND t.kind <> 'transfer'))
 ),

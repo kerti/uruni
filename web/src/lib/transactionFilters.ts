@@ -4,15 +4,17 @@
 import type { Direction } from '@/lib/enums'
 
 /** The public report's four filters, under the report's URL params -
- * `month`, `purpose`, `member`, `dir`. */
+ * `month`, `purpose`, `member`, `dir` - plus Lokasi (`account`, #784), which
+ * is the app's alone: the report never shows locations. */
 export interface TransactionFilters {
   month: string | null
   purposeId: number | null
+  accountId: number | null
   memberId: number | null
   direction: Direction | null
 }
 
-export const noFilters: TransactionFilters = { month: null, purposeId: null, memberId: null, direction: null }
+export const noFilters: TransactionFilters = { month: null, purposeId: null, accountId: null, memberId: null, direction: null }
 
 function positiveId(raw: string | null): number | null {
   const n = Number(raw)
@@ -28,6 +30,7 @@ export function readFilters(params: URLSearchParams): TransactionFilters {
   return {
     month: month !== null && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : null,
     purposeId: positiveId(params.get('purpose')),
+    accountId: positiveId(params.get('account')),
     memberId: positiveId(params.get('member')),
     direction: dir === 'in' || dir === 'out' ? dir : null,
   }
@@ -40,6 +43,7 @@ export function writeFilters(params: URLSearchParams, filters: TransactionFilter
   const set = (key: string, value: string | number | null) => (value === null ? next.delete(key) : next.set(key, String(value)))
   set('month', filters.month)
   set('purpose', filters.purposeId)
+  set('account', filters.accountId)
   set('member', filters.memberId)
   set('dir', filters.direction)
   return next

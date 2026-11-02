@@ -601,7 +601,12 @@ type Querier interface {
 	// literal" holds by construction, not by escaping.
 	//
 	// member_id, purpose_id, month and direction are Riwayat -> Transaksi's filters
-	// (#424, the public report's four); dues_period is Dues/MemberPayments.tsx's
+	// (#424, the public report's four); account_id (#784) is the Lokasi filter, app
+	// only: the public report has none. It is tested per leg like the rest, and
+	// combined with purpose_id both must hold on the SAME leg. That is the right
+	// reading because a transfer never changes account and purpose together
+	// (between_accounts keeps the purpose, reclass_purpose keeps the account;
+	// internal/ledger/transfer.go). dues_period is Dues/MemberPayments.tsx's
 	// payment history panel alone. month is "YYYY-MM", prefix-compared against
 	// occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 	// with q and the keyset cursor.
@@ -712,6 +717,11 @@ type Querier interface {
 	// CloseIncidental. Unscoped: Ledger.ReopenIncidental fetches through
 	// GetIncidental's fund-scoped join first.
 	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	// One location's balance at the bound, or, with a purpose, that purpose's money
+	// in that location (#784): the walk's ends under Riwayat's Lokasi filter. The
+	// same sum as ReportFundBalance narrowed, so the location's running End equals
+	// AccountBalance, which is what Beranda shows.
+	ReportAccountBalance(ctx context.Context, arg ReportAccountBalanceParams) (int64, error)
 	// The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
 	// NULL is the running month and reads exactly like its unbounded twin
 	// (FundBalance, PurposeBalance, OutstandingReimbursementTotal,

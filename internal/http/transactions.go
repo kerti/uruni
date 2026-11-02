@@ -319,12 +319,15 @@ func validDuesPeriod(s string) bool {
 type transactionFilters struct {
 	memberID  *int64
 	purposeID *int64
+	accountID *int64
 	month     string
 	direction string
 }
 
-// parseTransactionFilters reads ?member_id=, ?purpose_id=, ?month= and
-// ?direction=, writing the 400 itself on a malformed one.
+// parseTransactionFilters reads ?member_id=, ?purpose_id=, ?account_id= (the
+// Lokasi filter, #784), ?month= and ?direction=, writing the 400 itself on a
+// malformed one. The list and the month summary share it, and both honour every
+// filter, so the summary walks what the list shows.
 func parseTransactionFilters(w http.ResponseWriter, r *http.Request) (transactionFilters, bool) {
 	var f transactionFilters
 	if raw := r.URL.Query().Get("member_id"); raw != "" {
@@ -345,6 +348,17 @@ func parseTransactionFilters(w http.ResponseWriter, r *http.Request) (transactio
 			return f, false
 		}
 		f.purposeID = &purposeID
+	}
+
+	// An inactive location is a valid filter (it has history); an id naming no
+	// location of this fund matches nothing, as purpose_id does.
+	if raw := r.URL.Query().Get("account_id"); raw != "" {
+		accountID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || accountID <= 0 {
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "account_id", "The account_id filter is not a valid number.")
+			return f, false
+		}
+		f.accountID = &accountID
 	}
 
 	if month := r.URL.Query().Get("month"); month != "" {
@@ -405,6 +419,7 @@ func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
 		FundID:    fund.ID,
 		Month:     filters.month,
 		PurposeID: filters.purposeID,
+		AccountID: filters.accountID,
 		MemberID:  filters.memberID,
 		Direction: ledger.Direction(filters.direction),
 	})
@@ -442,8 +457,10 @@ func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
 // substring, see ListTransactionsPage) plus an exact amount match when q is
 // all digits. ?member_id=, ?purpose_id=, ?month= ("YYYY-MM") and
 // ?direction= (in|out) are Riwayat -> Transaksi's filters (#424), the public
-// report's four; ?dues_period= is Dues/MemberPayments.tsx's payment history
-// alone. All compose with q and the cursor.
+// report's four; ?account_id= (#784) is the Lokasi filter, app only. A transfer
+// shows when either leg is in that location, as one row, still neutral.
+// ?dues_period= is Dues/MemberPayments.tsx's payment history alone. All compose
+// with q and the cursor.
 //
 // ListTransactionsPage is asked for one row more than the page size, so the
 // handler can tell an empty next page from a next page without a second
@@ -490,6 +507,9 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	if filters.purposeID != nil {
 		params.PurposeID = *filters.purposeID
+	}
+	if filters.accountID != nil {
+		params.AccountID = *filters.accountID
 	}
 	// Set only when given: these params are untyped (sqlc's nullable
 	// arguments), and an empty string is a filter, where nil is none.

@@ -12,6 +12,7 @@ import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
+import { listAccounts } from '@/lib/accounts'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { activeFilterCount, readFilters, writeFilters, type TransactionFilters } from '@/lib/transactionFilters'
@@ -19,6 +20,7 @@ import { getTransactionSummary, listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import TransactionFilterDialog from '@/screens/History/TransactionFilterDialog'
+import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 import type { TransactionSummary, TransactionsPage } from '@/lib/transactions'
@@ -35,6 +37,8 @@ interface Lookups {
   /** Every purpose, a closed envelope's too: the rows' pos names, the filter
    * dialog and its chip. */
   purposes: Purpose[]
+  /** Every location, an inactive one too (#784): its rows are still history. */
+  accounts: Account[]
   /** Every member, an inactive one too, for the filter dialog. */
   members: Member[]
 }
@@ -50,12 +54,19 @@ interface FirstPage {
 /** The list request for the URL's search and filters; `cursor` asks for the page after it. */
 function pageInput(
   q: string,
-  { purposeId, memberId, month, direction }: Pick<TransactionFilters, 'purposeId' | 'memberId' | 'month' | 'direction'>,
+  {
+    purposeId,
+    accountId,
+    memberId,
+    month,
+    direction,
+  }: Pick<TransactionFilters, 'purposeId' | 'accountId' | 'memberId' | 'month' | 'direction'>,
   cursor?: string,
 ) {
   return {
     q: q || undefined,
     purposeId: purposeId ?? undefined,
+    accountId: accountId ?? undefined,
     memberId: memberId ?? undefined,
     month: month ?? undefined,
     direction: direction ?? undefined,
@@ -80,7 +91,8 @@ function pageInput(
  * no-results line.
  *
  * The filters are the public report's four under its params - `?month=`,
- * `?purpose=`, `?member=`, `?dir=` - picked in TransactionFilterDialog
+ * `?purpose=`, `?member=`, `?dir=` - plus the app's own Lokasi (`?account=`,
+ * #784, also a link from Beranda's location rows) - picked in TransactionFilterDialog
  * (`?edit=filter`) and shown as chips she can clear one at a time.
  * `?purpose=` also arrives as a link: it is how ADR-032's only route to a
  * CLOSED envelope's record works. They live in the URL like `q`, compose with
@@ -96,7 +108,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const [draft, setDraft] = useState(q)
 
   const filters = useMemo(() => readFilters(searchParams), [searchParams])
-  const { month, purposeId, memberId, direction } = filters
+  const { month, purposeId, accountId, memberId, direction } = filters
   const filterCount = activeFilterCount(filters)
 
   // The filter dialog is a search parameter, never component state (ADR-032).
@@ -119,11 +131,11 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   // filter dialog, which stays open across loads and must not blank while the
   // page refetches.
   const lookups = useRef<Promise<Lookups> | null>(null)
-  const [options, setOptions] = useState<Lookups>({ purposes: [], members: [] })
+  const [options, setOptions] = useState<Lookups>({ purposes: [], accounts: [], members: [] })
   const loadLookups = useCallback(() => {
     if (lookups.current === null) {
-      const pending = Promise.all([listPurposes(), listAllMembers()]).then(([purposes, members]) => {
-        const loaded = { purposes, members }
+      const pending = Promise.all([listPurposes(), listAccounts(), listAllMembers()]).then(([purposes, accounts, members]) => {
+        const loaded = { purposes, accounts, members }
         setOptions(loaded)
         return loaded
       })
@@ -136,7 +148,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   }, [])
 
   const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
-    const input = pageInput(q, { purposeId, memberId, month, direction })
+    const input = pageInput(q, { purposeId, accountId, memberId, month, direction })
     const summarised = month !== null && !q
     const [page, loaded, summary] = await Promise.all([
       listTransactions(input),
@@ -145,13 +157,14 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
         ? getTransactionSummary({
             month,
             purposeId: purposeId ?? undefined,
+            accountId: accountId ?? undefined,
             memberId: memberId ?? undefined,
             direction: direction ?? undefined,
           })
         : Promise.resolve(null),
     ])
     return { page, lookups: loaded, summary }
-  }, [q, purposeId, memberId, month, direction, loadLookups])
+  }, [q, purposeId, accountId, memberId, month, direction, loadLookups])
 
   useEffect(() => {
     generation.current += 1
@@ -216,7 +229,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     setMoreLoading(true)
     setMoreError(null)
     try {
-      const page = await listTransactions(pageInput(q, { purposeId, memberId, month, direction }, cursor))
+      const page = await listTransactions(pageInput(q, { purposeId, accountId, memberId, month, direction }, cursor))
       if (startedIn !== generation.current) return
       setMore((prev) => ({ transactions: [...(prev?.transactions ?? []), ...page.transactions], nextCursor: page.nextCursor }))
     } catch (err) {
@@ -257,6 +270,10 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     const chips: { label: string; clear: Partial<TransactionFilters> }[] = []
     if (month !== null) chips.push({ label: text.monthFilterLabel(formatPeriod(month)), clear: { month: null } })
     if (purposeId !== null) chips.push({ label: text.purposeFilterLabel(purposeName(purposeId)), clear: { purposeId: null } })
+    if (accountId !== null) {
+      const name = loaded.accounts.find((a) => a.id === accountId)?.name ?? ''
+      chips.push({ label: text.accountFilterLabel(name), clear: { accountId: null } })
+    }
     if (memberId !== null) {
       const name = loaded.members.find((m) => m.id === memberId)?.name ?? ''
       chips.push({ label: text.memberFilterLabel(name), clear: { memberId: null } })
@@ -351,6 +368,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
         open={filterOpen}
         filters={filters}
         purposes={options.purposes}
+        accounts={options.accounts}
         members={options.members}
         onApply={applyFilters}
         onClose={closeDialog}

@@ -60,6 +60,8 @@ export interface ListTransactionsInput {
   memberId?: number
   duesPeriod?: string
   purposeId?: number
+  /** One location (#784): a transfer shows when either leg is on it. */
+  accountId?: number
   /** "YYYY-MM" - the rows dated in that month. */
   month?: string
   direction?: Direction
@@ -85,6 +87,7 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
   if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
   if (input.duesPeriod) params.set('dues_period', input.duesPeriod)
   if (input.purposeId !== undefined) params.set('purpose_id', String(input.purposeId))
+  if (input.accountId !== undefined) params.set('account_id', String(input.accountId))
   if (input.month) params.set('month', input.month)
   if (input.direction) params.set('direction', input.direction)
   const query = params.toString()
@@ -96,7 +99,8 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
 
 /** GET /api/transactions/summary's body (#751): the public report's walk
  * for one month under Riwayat's filters (ADR-038). `full` says the balances
- * apply - the whole fund or one pos; under a member or direction filter only
+ * apply - the whole fund, one pos, one location (#784) or a pos in a
+ * location; under a member or direction filter only
  * `in` and `out` mean anything, and the dates are null. Every figure is the
  * server's: nothing here is summed from rows. */
 export interface TransactionSummary {
@@ -115,11 +119,12 @@ export interface TransactionSummary {
 /** GET /api/transactions/summary - the month summary for Riwayat's filters;
  * `month` is required. */
 export function getTransactionSummary(
-  input: Pick<ListTransactionsInput, 'purposeId' | 'memberId' | 'direction'> & { month: string },
+  input: Pick<ListTransactionsInput, 'purposeId' | 'accountId' | 'memberId' | 'direction'> & { month: string },
 ): Promise<TransactionSummary> {
   const params = new URLSearchParams({ month: input.month })
   if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
   if (input.purposeId !== undefined) params.set('purpose_id', String(input.purposeId))
+  if (input.accountId !== undefined) params.set('account_id', String(input.accountId))
   if (input.direction) params.set('direction', input.direction)
   return apiFetch<TransactionSummary>(`/api/transactions/summary?${params.toString()}`)
 }

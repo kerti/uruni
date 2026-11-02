@@ -33,7 +33,7 @@ func (q *Queries) FirstTransactionDateByFund(ctx context.Context, fundID int64) 
 
 const listReportTransactions = `-- name: ListReportTransactions :many
 SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
-       t.purpose_id, p.name AS purpose_name,
+       t.account_id, t.purpose_id, p.name AS purpose_name,
        t.member_id, m.name AS member_name,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
@@ -83,6 +83,7 @@ type ListReportTransactionsRow struct {
 	Direction                     string
 	Amount                        int64
 	Kind                          string
+	AccountID                     int64
 	PurposeID                     int64
 	PurposeName                   string
 	MemberID                      *int64
@@ -150,6 +151,7 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 			&i.Direction,
 			&i.Amount,
 			&i.Kind,
+			&i.AccountID,
 			&i.PurposeID,
 			&i.PurposeName,
 			&i.MemberID,
@@ -184,6 +186,37 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 		return nil, err
 	}
 	return items, nil
+}
+
+const reportAccountBalance = `-- name: ReportAccountBalance :one
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = ?1 AND account_id = ?2
+  AND (CAST(?3 AS INTEGER) IS NULL OR purpose_id = CAST(?3 AS INTEGER))
+  AND (CAST(?4 AS TEXT) IS NULL OR occurred_on <= CAST(?4 AS TEXT))
+`
+
+type ReportAccountBalanceParams struct {
+	FundID    int64
+	AccountID int64
+	PurposeID *int64
+	Through   *string
+}
+
+// One location's balance at the bound, or, with a purpose, that purpose's money
+// in that location (#784): the walk's ends under Riwayat's Lokasi filter. The
+// same sum as ReportFundBalance narrowed, so the location's running End equals
+// AccountBalance, which is what Beranda shows.
+func (q *Queries) ReportAccountBalance(ctx context.Context, arg ReportAccountBalanceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, reportAccountBalance,
+		arg.FundID,
+		arg.AccountID,
+		arg.PurposeID,
+		arg.Through,
+	)
+	var balance_amount int64
+	err := row.Scan(&balance_amount)
+	return balance_amount, err
 }
 
 const reportFundBalance = `-- name: ReportFundBalance :one
