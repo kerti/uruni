@@ -64,7 +64,10 @@ test.describe('report, twelve months of dues', () => {
     reportPath = await reportPathFor(page)
     await page.goto(reportPath)
 
-    await expect(grid(page).getByRole('heading', { name: gridHeading })).toBeVisible()
+    // The section label names the grid and the range line gives the months,
+    // so the page no longer repeats a heading of its own (the PDF keeps it).
+    await expect(grid(page)).toBeVisible()
+    await expect(grid(page).getByRole('heading', { name: gridHeading })).toHaveCount(0)
     await expectWholeGrid(page)
 
     // Above the status filter and the month's table, which stay as they were.

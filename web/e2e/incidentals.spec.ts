@@ -98,7 +98,7 @@ test.describe('incidentals', () => {
       // contribution, and the detail view this means; anchoring keeps the
       // match on the detail view whatever screen a navigation tears down.
       // toContainText retries, so this waits for the detail view.
-      const collectedRow = page.locator(`div:has(> span:text-is(${JSON.stringify(copy.incidentals.detail.collectedLabel)}))`)
+      const collectedRow = page.locator(`#root div:has(> dt:text-is(${JSON.stringify(copy.incidentals.detail.collectedLabel)}))`)
       await expect(collectedRow).toContainText('Rp60.000')
       await expectAccessible(page)
     },
