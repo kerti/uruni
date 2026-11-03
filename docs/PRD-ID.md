@@ -81,7 +81,7 @@ Entitas utama:
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
-- Kolom minimal dengan nilai bawaan yang cerdas: nominal, masuk/keluar, lokasi (mengingat yang terakhir), pos (bawaan Kas Utama), tanggal (bawaan hari ini). Catatan dan foto opsional.
+- Kolom minimal: nominal, masuk/keluar (bawaan keluar), lokasi dan pos, tanggal (bawaan hari ini). Catatan dan foto opsional. **Tidak ada yang dipilihkan kecuali satu-satunya pilihan:** lokasi dan pos kosong sampai dipilih, kecuali kas hanya punya satu, atau formulir dibuka dari tempat yang sudah menentukannya (pos amplop itu sendiri, iuran seorang anggota). Lokasi yang diingat pernah membuat setoran ke bank tercatat sebagai tunai, dan salah lokasi justru kesalahan yang dicari cek kas.
 - Uang yang hanya berpindah tempat (tunai ke bank, "Pindah lokasi") atau berpindah pos ("Pindah pos") dicatat sebagai pemindahan yang tidak mengubah nilai, dan pos sebuah baris yang sudah tercatat bisa diperbaiki belakangan ("Perbaiki pos") - keduanya tidak menggerakkan saldo kas.
 - Transaksi yang salah dicatat dibatalkan dengan entri baru, bukan dihapus: pembatalan itu bertanggal sama dengan transaksi aslinya, kecuali kas sudah dicek sejak itu, dan kalau begitu bertanggal hari ini.
 - Pencatatan harus terasa responsif; server adalah satu-satunya sumber kebenaran dan mengonfirmasi penulisan dengan cepat.

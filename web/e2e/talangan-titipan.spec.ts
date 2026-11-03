@@ -105,6 +105,7 @@ async function recordForPos(page: Page, direction: 'in' | 'out', pos: string, am
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
   await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
   await page.getByRole('button', { name: direction === 'in' ? copy.record.directionIn : copy.record.directionOut }).click()
+  await chooseOption(page, copy.record.locationLabel, 'Tunai')
   await chooseOption(page, copy.record.purposeLabel, pos)
   await page.getByLabel(copy.record.amountLabel).fill(String(amount))
   await page.getByRole('button', { name: copy.record.submit }).click()

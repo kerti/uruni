@@ -22,7 +22,7 @@ import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
 import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
-import { defaultSourceAccountId, rememberAccountId, soleCandidateId } from '@/lib/lastAccount'
+import { defaultAccountId, soleCandidateId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { createReimbursement } from '@/lib/reimbursements'
@@ -77,8 +77,9 @@ interface FormData {
  * shows the "tersimpan, tapi belum terunggah" message instead of the ordinary
  * success line.
  *
- * Smart defaults per PRD section 7.2: location remembers the last choice
- * (localStorage, guarded - see lib/lastAccount.ts), purpose defaults to the
+ * Defaults per PRD section 7.2: location starts blank unless the fund has only
+ * one (lib/accountDefault.ts - she says where the money is, each time),
+ * purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent
  * everyday entry - a call made here, not settled elsewhere.
@@ -157,8 +158,8 @@ export default function RecordTransaction({
   const [purposeId, setPurposeId] = useState<number | null>(null)
   // Only used by 'purpose' (ADR-036): where the money is for now, and where it
   // should be for. purposeId above is the ordinary entry's one tag.
-  const [fromPurposeId, setFromPurposeId] = useState<number | null>(null)
-  const [toPurposeId, setToPurposeId] = useState<number | null>(null)
+  const [pickedFromPurposeId, setFromPurposeId] = useState<number | null>(null)
+  const [pickedToPurposeId, setToPurposeId] = useState<number | null>(null)
   const [amount, setAmount] = useState(initialAmount ?? 0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
@@ -189,15 +190,14 @@ export default function RecordTransaction({
     // like App.tsx's session-probe effect.
   }, [loadRun])
 
-  // Applies the smart defaults once the form data has loaded: location
-  // remembers the last active choice (falling back to the first active account
-  // when there is none, or the remembered one was since retired), purpose
-  // defaults to the fund's one `kind: "main"` row.
+  // Applies the defaults once the form data has loaded: location only when the
+  // fund has a single active one (else blank until she picks), purpose the
+  // fund's one `kind: "main"` row.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
 
     if (accountId === null) {
-      const defaultId = defaultSourceAccountId(loadState.data.accounts)
+      const defaultId = defaultAccountId(loadState.data.accounts)
       if (defaultId !== null) setAccountId(defaultId)
     }
 
@@ -206,26 +206,10 @@ export default function RecordTransaction({
       // longer exists would leave the picker on an id nothing matches, and the
       // form unsubmittable for no visible reason.
       const seeded = initialPurposeId == null ? undefined : loadState.data.purposes.find((p) => p.id === initialPurposeId)
-      if (seeded) {
-        setPurposeId(seeded.id)
-      } else {
-        const main = loadState.data.purposes.find((p) => p.kind === 'main')
-        if (main) setPurposeId(main.id)
-      }
-    }
-
-    // Pindah pos opens with the source on Kas Utama (ADR-036), the usual
-    // giver. The destination is never preselected (#737): it starts blank
-    // and is filled only when there is exactly one pos it could be. Never a
-    // Titipan: it is not offered at all (movablePurposes below).
-    if (fromPurposeId === null && toPurposeId === null) {
-      const movable = loadState.data.purposes.filter((p) => p.kind !== 'pass_through')
-      const main = movable.find((p) => p.kind === 'main')
-      if (main) {
-        setFromPurposeId(main.id)
-        const onlyOther = soleCandidateId(movable.filter((p) => p.id !== main.id))
-        if (onlyOther !== null) setToPurposeId(onlyOther)
-      }
+      // Opened from an amplop, its pos; otherwise blank unless the fund has
+      // only the one pos (lib/accountDefault.ts's rule, for pos too).
+      const startId = seeded?.id ?? soleCandidateId(loadState.data.purposes)
+      if (startId !== null) setPurposeId(startId)
     }
 
     // "Dari siapa?" (ADR-034) - the same "only honour a real one" guard as
@@ -267,6 +251,12 @@ export default function RecordTransaction({
   // there is nowhere for it to move to, so say so instead of leaving "Ke"
   // empty.
   const hasOpenEnvelope = movablePurposes.some((p) => p.kind === 'incidental')
+  // Both sides start blank and each fills itself only when one pos is the
+  // only answer: Dari when the fund has one movable pos, Ke once Dari leaves
+  // just one other. Never a Titipan (movablePurposes). Once she picks, her
+  // choice stands.
+  const fromPurposeId = pickedFromPurposeId ?? soleCandidateId(movablePurposes)
+  const toPurposeId = pickedToPurposeId ?? soleCandidateId(movablePurposes.filter((p) => p.id !== fromPurposeId))
   const samePurpose = isPurposeMove && fromPurposeId !== null && fromPurposeId === toPurposeId
   // The source cannot give more than it holds, read from the balance fetched
   // with the form (the ledger re-checks at posting time, so a stale figure
@@ -408,7 +398,6 @@ export default function RecordTransaction({
           occurredOn,
           note: noteOrNull,
         })
-        rememberAccountId(accountId)
         onRecorded(direction)
         return transfer
       }
@@ -426,7 +415,6 @@ export default function RecordTransaction({
           occurredOn,
           note: noteOrNull,
         })
-        rememberAccountId(accountId)
         onRecorded(direction)
         return move
       }
@@ -444,7 +432,6 @@ export default function RecordTransaction({
         // wire.
         memberId: showContributorField ? memberId : null,
       })
-      rememberAccountId(accountId)
 
       // A second request, only once the row above exists (see this component's
       // doc comment). A failure here never rolls the transaction back and never

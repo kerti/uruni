@@ -5,6 +5,7 @@ import { formatIDR } from '../src/lib/money'
 import { expectAccessible } from './a11y'
 import { expect, test } from './fixtures'
 import { cardButton } from './card'
+import { chooseOption } from './popper'
 
 // The treasurer's first hour, on an instance with nothing in it - register, the
 // four-step setup wizard, a first record - then the access paths around it: a
@@ -90,6 +91,8 @@ test.describe('first run and access', () => {
     // A first record, through Catat, moves the balance.
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()
