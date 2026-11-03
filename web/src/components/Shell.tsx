@@ -33,7 +33,7 @@ const navItems = [
  * 2. Safe-area padding, so the header clears a notch and the footer clears a
  *    home indicator. index.html carries the matching `viewport-fit=cover`;
  *    without it the env() insets are all zero.
- * 3. A sticky footer carrying the app's five destinations - Beranda,
+ * 3. A fixed footer carrying the app's five destinations - Beranda,
  *    Riwayat, Catat, Anggota, Pengaturan (ADR-032). Five is the platform's
  *    cap for a tab bar: at 375px that is 75px a tab, which fits an 11px
  *    label. Four are nouns; Catat is the one privileged verb ADR-032 allows,
@@ -85,7 +85,11 @@ export default function Shell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
+      {/* Fixed, like the footer, not sticky: a sticky header belongs to the
+          page, so iOS's bounce past the top pulled it down with the content
+          while the fixed footer stayed put. Pinned, the page bounces beneath
+          both bars, as a native app's does. main reserves its height. */}
+      <header className="fixed inset-x-0 top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
         {/* One column for every screen (max-w-xl, 576px): on a phone it is
             the whole width; on a tablet the header, each screen and the
             footer's buttons line up in it, while the bars' glass still spans
@@ -127,10 +131,13 @@ export default function Shell({
         </div>
       </header>
 
-      {/* The footer is fixed, so main reserves the bar (3.75rem), Catat's
-          circle rising 1.75rem above it, and the home-indicator inset -
-          otherwise the last row of every screen sits under the bar. */}
-      <main className="flex-1 py-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+      {/* Both bars are fixed, so main reserves them. Top: the notch inset,
+          the header (its 2.75rem row - the 44px logout button sets it - plus
+          py-2 and the 1px border) and the page's own 1rem. Bottom: the bar
+          (3.75rem), Catat's circle rising 1.75rem above it, and the
+          home-indicator inset - otherwise the first and last rows of every
+          screen sit under a bar. */}
+      <main className="flex-1 pt-[calc(env(safe-area-inset-top)+4.75rem+1px)] pb-[calc(env(safe-area-inset-bottom)+6rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <div className="mx-auto w-full max-w-xl">
           {state.status === 'error' && state.error && (
             <div className="mb-4">
