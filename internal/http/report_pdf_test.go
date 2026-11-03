@@ -225,9 +225,11 @@ func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
 		money.FormatIDR(1_375_000),       // the balance, a formatted amount with its non-breaking space
 		"+" + money.FormatIDR(1_250_000), // the same, as a row
 		"-" + money.FormatIDR(40_000),    // an outgoing row
-		"Beli gula dan teh",              // a row's note
-		report.Text.DuesLabel,            // the dues section
-		"Ani", "Budi", "Cici", "Dedi",    // members
+		report.Text.PDFColKind,           // the Jenis column, and a row's kind in it
+		report.Text.KindOut,
+		"Beli gula dan teh",           // a row's note
+		report.Text.DuesLabel,         // the dues section
+		"Ani", "Budi", "Cici", "Dedi", // members
 		report.Text.DuesPaidStatus, report.Text.DuesUnpaid, report.Text.DuesPartial, // dues statuses
 		report.Text.DuesPaidInAdvance,
 		report.Text.DuesPaidThrough("Oktober 2026"), // Dedi's paid-through line
@@ -554,7 +556,8 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 			t.Errorf("page %d has no heading %q; runs:\n%s", i+1, want, strings.Join(pages[i], "\n"))
 		}
 		for j, other := range sections {
-			if j != i && pdfHas(pages[i], other) {
+			// The grid's page continues Status iuran under the same label.
+			if j != i && pdfHas(pages[i], other) && (other != report.Text.DuesLabel || sections[i] != report.Text.GridHeading) {
 				t.Errorf("page %d also carries the heading %q", i+1, other)
 			}
 		}

@@ -129,14 +129,27 @@ type Total struct {
 // shows it (a settled claim's payout carries the claim's note; a move, the
 // note both legs carry), "" for none. HasReceipt renders a plain marker;
 // nothing about the receipt reaches the page.
+//
+// Amount is signed (+/-), for the PDF's table, where the sign is the row's
+// direction. The page reads as Riwayat does: Figure, unsigned, after a glyph
+// for the direction, with DirectionWord ("Uang masuk" / "Uang keluar", "" for
+// a move, whose label says what it is) for a screen reader in its place.
 type Row struct {
-	Date       string
-	Label      string
-	Note       string
-	Purpose    string
-	Amount     string
-	Class      string
-	HasReceipt bool
+	Date    string
+	Label   string
+	Note    string
+	Purpose string
+	Amount  string
+	Figure  string
+	// Kind is the row's kind word (the PDF's Jenis column); KindIcon the
+	// page's icon before the label ("" for none) and KindSpoken whether the
+	// page reads Kind aloud beside it. See entryKind.
+	Kind          string
+	KindIcon      string
+	KindSpoken    bool
+	DirectionWord string
+	Class         string
+	HasReceipt    bool
 	// Reversed marks the original of a pair: Sudah dibatalkan (ADR-042).
 	Reversed bool
 }
@@ -178,7 +191,7 @@ type DuesRow struct {
 // the PDF draw the same cells. Status only; no count, total, amount or order
 // beyond the ledger's (by name).
 type Grid struct {
-	Heading string // the PDF's title for the grid's own page; the page leaves it to the dues section's label
+	Heading string // the PDF's subsection label on the grid's page, under the dues section's label; the page needs neither
 	Range   string // "Oktober 2025 - September 2026"
 	Caption string // "Status per 24 Oktober 2026" on a past month; "" on the running one
 	Years   []GridYear
@@ -528,23 +541,44 @@ func NewPage(r ledger.Report, empty bool) Page {
 
 	page.Month = r.Month
 	page.Totals = walkLines(r.Walk)
+	// The amplop pos the report knows of: an unnamed gift into one is a
+	// contribution nobody put a name to, as Riwayat reads it (rowLabel.ts),
+	// not an ordinary Masuk.
+	envelopes := map[int64]bool{}
+	for _, env := range r.Envelopes {
+		envelopes[env.PurposeID] = true
+	}
+	for _, p := range r.PurposeBalances {
+		if p.Kind == ledger.PurposeKindIncidental {
+			envelopes[p.PurposeID] = true
+		}
+	}
 	for _, row := range r.Rows {
 		date := Text.longDate(row.Date)
 		switch {
 		case row.Entry != nil:
 			e := row.Entry
-			sign := "+"
+			sign, word := "+", Text.DirectionIn
 			if e.Direction == ledger.ReportDirectionOut {
-				sign = "-"
+				sign, word = "-", Text.DirectionOut
+			}
+			figure := money.FormatIDR(e.Amount)
+			icon, kind, spoken := Text.entryKind(*e)
+			label := Text.entryLabel(*e)
+			if e.Kind == ledger.TransactionKindNormal && e.MemberName == nil && e.Direction == ledger.ReportDirectionIn && envelopes[e.PurposeID] {
+				icon, kind, spoken, label = "contribution", Text.KindContribution, true, Text.RowAnonymous
 			}
 			page.Rows = append(page.Rows, Row{
-				Date: date, Label: Text.entryLabel(*e), Note: noteText(e.Note), Purpose: e.PurposeName,
-				Amount: sign + money.FormatIDR(e.Amount), Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed,
+				Date: date, Label: label, Note: noteText(e.Note), Purpose: e.PurposeName,
+				Amount: sign + figure, Figure: figure, DirectionWord: word,
+				Kind: kind, KindIcon: icon, KindSpoken: spoken,
+				Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed,
 			})
 		case row.Move != nil:
+			figure := money.FormatIDR(row.Move.Amount)
 			page.Rows = append(page.Rows, Row{
 				Date: date, Label: Text.moveLabel(*row.Move), Note: noteText(row.Move.Note),
-				Amount: money.FormatIDR(row.Move.Amount), Class: "move",
+				Amount: figure, Figure: figure, Class: "move", Kind: Text.KindMoved,
 			})
 		}
 	}

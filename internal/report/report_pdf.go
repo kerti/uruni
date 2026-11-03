@@ -333,10 +333,10 @@ func (d *pdfDoc) section(title string, ownPage bool) {
 }
 
 // pair is a label on the left and a value flush right, on one line.
-func (d *pdfDoc) pair(label, value string, bold bool, valueColor string) {
+func (d *pdfDoc) pair(label, value string, bold bool) {
 	d.row([]pdfCell{
 		{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: label, bold: bold, size: pdfBodySize + 0.5, color: "foreground"}}},
-		{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: value, bold: true, size: pdfBodySize + 0.5, color: valueColor}}},
+		{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: value, bold: bold, size: pdfBodySize + 0.5, color: "foreground"}}},
 	}, true)
 }
 
@@ -420,15 +420,40 @@ func (d *pdfDoc) header(p Page) {
 	d.SetY(y + 15 + 3)
 
 	if c := p.Check; c != nil {
-		color := map[string]string{"matched": "success", "discrepancy": "attention"}[c.Class]
-		if color == "" {
-			color = "muted-foreground"
+		// A card edged in the status colour, as the page's banner and the
+		// app's: the message in ink (terracotta for a selisih), when it was
+		// counted in small grey under it.
+		edge, ink := "border", "foreground"
+		switch c.Class {
+		case "matched":
+			edge = "success"
+		case "discrepancy":
+			edge, ink = "attention", "attention-text"
 		}
-		for _, line := range []string{c.Message, c.When, c.Since} {
-			if line != "" {
-				d.text(pdfLine{text: line, size: pdfBodySize, color: color}, pdfContentW, "L")
+		lines := []pdfLine{{text: c.Message, size: pdfBodySize, color: ink}}
+		for _, footnote := range []string{c.When, c.Since} {
+			if footnote != "" {
+				lines = append(lines, pdfLine{text: footnote, size: pdfSmallSize, color: "muted-foreground"})
 			}
 		}
+		const padX, padY = 5.0, 3.0
+		h := 2 * padY
+		for _, l := range lines {
+			h += pdfLineHeight(l.size)
+		}
+		top := d.GetY()
+		d.rule(edge)
+		d.SetLineWidth(0.3)
+		d.RoundedRect(pdfMarginX, top, pdfContentW, h, 2, "1234", "D")
+		d.SetLineWidth(pdfRuleWidthMM)
+		d.SetY(top + padY)
+		for _, l := range lines {
+			d.face(l.bold, l.size)
+			d.ink(l.color)
+			d.SetX(pdfMarginX + padX)
+			d.CellFormat(pdfContentW-2*padX, pdfLineHeight(l.size), l.text, "", 1, "L", false, 0, "")
+		}
+		d.SetY(top + h + 2)
 	}
 
 	if len(p.Purposes) > 0 {
@@ -459,15 +484,10 @@ func (d *pdfDoc) header(p Page) {
 
 func (d *pdfDoc) transactions(p Page) {
 	d.section(Text.TransactionsLabel, true)
+	// The app's Figures: every amount in ink, the closing balance set apart
+	// in bold rather than in colour.
 	for _, t := range p.Totals {
-		color := "foreground"
-		switch {
-		case t.Last:
-			color = "primary"
-		case t.Label == Text.TotalIn:
-			color = "success"
-		}
-		d.pair(t.Label, t.Value, t.Last, color)
+		d.pair(t.Label, t.Value, t.Last)
 	}
 
 	if len(p.Rows) == 0 {
@@ -477,11 +497,15 @@ func (d *pdfDoc) transactions(p Page) {
 	}
 	// amountW fits "+Rp999.999.999.999" (33mm in bold 9.5pt, #540) with room
 	// to spare: a figure that did not would wrap at its space.
-	const dateW, amountW = 32.0, 40.0
-	noteW := pdfContentW - dateW - amountW
+	// kindW fits the longest kind word, Penyesuaian, at the small size: the
+	// Jenis column tells a dues payment from a contribution from her own row
+	// at a glance down the page, where the page has Riwayat's icons.
+	const dateW, kindW, amountW = 30.0, 24.0, 40.0
+	noteW := pdfContentW - dateW - kindW - amountW
 	d.SetY(d.GetY() + 4)
 	d.tableHead([]pdfCell{
 		headCell(dateW, "L", Text.PDFColDate),
+		headCell(kindW, "L", Text.PDFColKind),
 		headCell(noteW, "L", Text.PDFColNote),
 		headCell(amountW, "R", Text.PDFColAmount),
 	})
@@ -518,6 +542,7 @@ func (d *pdfDoc) transactions(p Page) {
 		}
 		d.row([]pdfCell{
 			{w: dateW, align: "L", lines: []pdfLine{{text: r.Date, size: pdfSmallSize + 0.5, color: "muted-foreground"}}},
+			{w: kindW, align: "L", lines: []pdfLine{{text: r.Kind, size: pdfSmallSize + 0.5, color: "foreground"}}},
 			note,
 			{w: amountW, align: "R", lines: []pdfLine{{text: r.Amount, bold: true, size: pdfBodySize, color: color}}},
 		}, true)
@@ -577,7 +602,11 @@ func (d *pdfDoc) duesGrid(p Page) {
 	if g == nil {
 		return
 	}
-	d.section(g.Heading, true)
+	// The grid continues the dues section on a page of its own: the same
+	// section label, then "12 bulan" as a subsection, as the page's dues
+	// section reads under one label.
+	d.section(Text.DuesLabel, true)
+	d.text(pdfLine{text: g.Heading, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
 	d.text(pdfLine{text: g.Range, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 	if g.Caption != "" {
 		d.text(pdfLine{text: g.Caption, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
@@ -735,7 +764,7 @@ func (d *pdfDoc) envelopes(p Page) {
 			statusColor = "muted-foreground"
 		}
 		d.row([]pdfCell{
-			{w: pdfContentW - 40, align: "L", lines: []pdfLine{{text: e.Name, bold: true, size: 11, color: "foreground"}}},
+			{w: pdfContentW - 40, align: "L", lines: []pdfLine{{text: e.Name, size: 11, color: "foreground"}}},
 			{w: 40, align: "R", lines: []pdfLine{{text: e.Status, bold: true, size: pdfBodySize, color: statusColor}}},
 		}, false)
 		facts := Text.EnvelopeCollected + ": " + e.Collected
