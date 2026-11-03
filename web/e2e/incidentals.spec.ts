@@ -82,9 +82,10 @@ test.describe('incidentals', () => {
       await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
 
       // A contribution is money in - the record form's direction toggle, not a
-      // choice this screen makes. Location keeps its default account; purpose
-      // is already the envelope's.
+      // choice this screen makes. Location is hers to name; purpose is already
+      // the envelope's.
       await page.getByRole('button', { name: copy.record.directionIn }).click()
+      await chooseOption(page, copy.record.locationLabel, 'Tunai')
       await page.getByLabel(copy.record.amountLabel).fill('60000')
       await page.getByRole('button', { name: copy.record.submit }).click()
       await expect(page.getByText(copy.record.successIn)).toBeVisible()

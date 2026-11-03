@@ -94,6 +94,7 @@ test.describe('dues status', () => {
       await expect(field).toHaveValue(formatIDR(Number(value)))
     }
 
+    await chooseOption(page, copy.dues.payment.locationLabel, 'Tunai')
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()
 
     // Back on the roster, refreshed, with the confirmation for this navigation.

@@ -2,6 +2,7 @@ import type { APIRequestContext } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // A save whose answer is lost, then Simpan again, makes one row (ADR-043).
 //
@@ -51,6 +52,7 @@ test.describe('a lost response, then Simpan again', () => {
     await page.goto('/record')
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill(String(amount))
     await page.getByLabel(copy.record.noteLabel, { exact: true }).fill(note)
     await page.getByRole('button', { name: copy.record.submit }).click()

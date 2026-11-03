@@ -13,7 +13,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
-import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
+import { defaultAccountId } from '@/lib/accountDefault'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
 import { formatPeriod, dateBounds, currentPeriod, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -130,12 +130,11 @@ export default function RecordDuesPayment({
     // loadRun is a stable useCallback (useApi.ts); this fires once on mount.
   }, [loadRun])
 
-  // Default location: the same rule as every source picker (#737) - the last
-  // one used, else the first active account.
+  // Default location: blank, unless the fund has one (accountDefault.ts).
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
     if (accountId !== null) return
-    const defaultId = defaultSourceAccountId(loadState.data.accounts)
+    const defaultId = defaultAccountId(loadState.data.accounts)
     // oxlint-disable-next-line react/set-state-in-effect -- one-time default location once the accounts have loaded
     if (defaultId !== null) setAccountId(defaultId)
     // accountId is this effect's output; the early return above makes listing
@@ -234,7 +233,6 @@ export default function RecordDuesPayment({
             .filter((p) => selected.includes(p.period))
             .map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
         })
-        rememberAccountId(accountId)
         onRecorded()
         return result
       },

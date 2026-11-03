@@ -22,7 +22,7 @@ import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
 import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
-import { defaultSourceAccountId, rememberAccountId, soleCandidateId } from '@/lib/lastAccount'
+import { defaultAccountId, soleCandidateId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { createReimbursement } from '@/lib/reimbursements'
@@ -77,8 +77,9 @@ interface FormData {
  * shows the "tersimpan, tapi belum terunggah" message instead of the ordinary
  * success line.
  *
- * Smart defaults per PRD section 7.2: location remembers the last choice
- * (localStorage, guarded - see lib/lastAccount.ts), purpose defaults to the
+ * Defaults per PRD section 7.2: location starts blank unless the fund has only
+ * one (lib/accountDefault.ts - she says where the money is, each time),
+ * purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent
  * everyday entry - a call made here, not settled elsewhere.
@@ -189,15 +190,14 @@ export default function RecordTransaction({
     // like App.tsx's session-probe effect.
   }, [loadRun])
 
-  // Applies the smart defaults once the form data has loaded: location
-  // remembers the last active choice (falling back to the first active account
-  // when there is none, or the remembered one was since retired), purpose
-  // defaults to the fund's one `kind: "main"` row.
+  // Applies the defaults once the form data has loaded: location only when the
+  // fund has a single active one (else blank until she picks), purpose the
+  // fund's one `kind: "main"` row.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
 
     if (accountId === null) {
-      const defaultId = defaultSourceAccountId(loadState.data.accounts)
+      const defaultId = defaultAccountId(loadState.data.accounts)
       if (defaultId !== null) setAccountId(defaultId)
     }
 
@@ -408,7 +408,6 @@ export default function RecordTransaction({
           occurredOn,
           note: noteOrNull,
         })
-        rememberAccountId(accountId)
         onRecorded(direction)
         return transfer
       }
@@ -426,7 +425,6 @@ export default function RecordTransaction({
           occurredOn,
           note: noteOrNull,
         })
-        rememberAccountId(accountId)
         onRecorded(direction)
         return move
       }
@@ -444,7 +442,6 @@ export default function RecordTransaction({
         // wire.
         memberId: showContributorField ? memberId : null,
       })
-      rememberAccountId(accountId)
 
       // A second request, only once the row above exists (see this component's
       // doc comment). A failure here never rolls the transaction back and never

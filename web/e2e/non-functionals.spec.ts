@@ -3,6 +3,7 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // What only a real browser can say about the app's non-functional promises, on
 // the real binary with the built SPA embedded (so the real service worker from
@@ -194,6 +195,7 @@ test.describe('browser-only non-functionals', () => {
     await loadFailed.getByRole('button', { name: copy.common.retry }).click()
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill('77000')
     await page.context().setOffline(true)
     await page.getByRole('button', { name: copy.record.submit }).click()

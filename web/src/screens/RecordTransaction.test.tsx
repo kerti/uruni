@@ -92,15 +92,23 @@ function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bank
   }
 }
 
-function stubFormLoad(passThroughBalance = 30_000) {
+function stubFormLoad(passThroughBalance = 30_000, fundAccounts: Account[] = accounts) {
   return routedFetch([
-    { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(fundAccounts)) },
     {
       match: (m, u) => m === 'GET' && u.includes('/api/balances'),
       handle: () => Promise.resolve(jsonResponse(balancesWith(passThroughBalance))),
     },
     { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
   ])
+}
+
+/** Picks a location once the form has loaded. Every location picker starts
+ * blank with two active locations (lib/accountDefault.ts), so a test that
+ * saves names one, as she has to. */
+async function pickLocation(option = 'Tunai', label: string = text.locationLabel) {
+  await screen.findByRole('combobox', { name: label })
+  await chooseOption(label, option)
 }
 
 describe('RecordTransaction', () => {
@@ -148,27 +156,20 @@ describe('RecordTransaction', () => {
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
   })
 
-  it('excludes a retired account from the location picker and its default', async () => {
+  // She names where the money is, each time: a pre-filled last-used location
+  // once let a bank deposit be saved as cash (lib/accountDefault.ts).
+  it('starts the location blank with two active ones, and offers only the active ones', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    // First active account (id 1, "Tunai") is the default when nothing was
-    // remembered yet.
-    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
+    await userEvent.type(await screen.findByLabelText(text.amountLabel), '1000')
+    expect(screen.getByRole('combobox', { name: text.locationLabel })).toHaveTextContent(copy.common.locationPlaceholder)
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
     expect(await selectOptionNames(text.locationLabel)).toEqual(['Tunai', 'Bank Uji Coba'])
   })
 
-  it('defaults the location to the last one remembered in localStorage, when it is still active', async () => {
-    window.localStorage.setItem('uruni:record:last-account-id', '3')
-    vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
-
-    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Bank Uji Coba'))
-  })
-
-  it('falls back to the first active account when the remembered one was retired since', async () => {
-    window.localStorage.setItem('uruni:record:last-account-id', '2')
-    vi.stubGlobal('fetch', stubFormLoad())
+  it('picks the location by itself when the fund has only one active one', async () => {
+    vi.stubGlobal('fetch', stubFormLoad(undefined, [accounts[0], accounts[1]]))
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
@@ -183,7 +184,7 @@ describe('RecordTransaction', () => {
     expect(await screen.findByLabelText(text.dateLabel)).toHaveTextContent(formatIsoDate(todayISODate()))
   })
 
-  it('posts the plain integer amount typed, remembers the location, and calls onRecorded', async () => {
+  it('posts the plain integer amount typed to the location chosen, and calls onRecorded', async () => {
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
       { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
@@ -198,7 +199,7 @@ describe('RecordTransaction', () => {
     const onRecorded = vi.fn()
     render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    await screen.findByLabelText(text.locationLabel)
+    await pickLocation()
     await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
@@ -217,8 +218,8 @@ describe('RecordTransaction', () => {
       is_adjustment: false,
     })
     expect(typeof body.amount).toBe('number')
-
-    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('1')
+    // Nothing is remembered for the next form.
+    expect(window.localStorage.length).toBe(0)
   })
 
   // Installed to a home screen there is no browser back button (ADR-008's
@@ -276,7 +277,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    await screen.findByLabelText(text.locationLabel)
+    await pickLocation()
     expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText(text.amountLabel), '1000')
@@ -344,7 +345,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
   it('warns without blocking - she may mean it, and #276 makes it correctable either way', async () => {
     vi.stubGlobal('fetch', stubFormLoad(0))
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
-    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+    await pickLocation()
 
     await fillOut('50000', 'Seragam')
 
@@ -563,18 +564,21 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     )
   }
 
-  it('picks Ke lokasi by itself when exactly one other active location exists, and leaves it blank otherwise (#737)', async () => {
+  it('starts both sides blank, then picks Ke lokasi by itself once Dari leaves only one other (#737)', async () => {
     stubWith(135_000, 250_000)
     const { unmount } = render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await startTransfer()
-    expect(selectedOptionName(text.fromLocationLabel)).toBe('Tunai')
+    expect(selectedOptionName(text.fromLocationLabel)).toBe(copy.common.locationPlaceholder)
+    expect(selectedOptionName(text.toLocationLabel)).toBe(copy.common.locationPlaceholder)
+    await chooseOption(text.fromLocationLabel, 'Tunai')
     expect(selectedOptionName(text.toLocationLabel)).toBe('Bank Uji Coba')
     unmount()
 
     stubThreeLocations()
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await startTransfer()
-    expect(selectedOptionName(text.toLocationLabel)).toBe('')
+    await chooseOption(text.fromLocationLabel, 'Tunai')
+    expect(selectedOptionName(text.toLocationLabel)).toBe(copy.common.locationPlaceholder)
   })
 
   it('swaps the two locations in one tap - the deposit/withdraw pair reversed', async () => {
@@ -612,7 +616,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     }
 
     async function fillAndPickPhoto(file: File) {
-      await screen.findByLabelText(text.locationLabel)
+      await pickLocation()
       await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
       await userEvent.upload(screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }), file)
     }
@@ -661,7 +665,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 
       const onRecorded = vi.fn()
       render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
-      await screen.findByLabelText(text.locationLabel)
+      await pickLocation()
       await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
 
       await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -725,7 +729,7 @@ describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
     const fetchMock = stubWithMembers()
     vi.stubGlobal('fetch', fetchMock)
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
-    await screen.findByLabelText(text.locationLabel)
+    await pickLocation()
 
     await userEvent.click(screen.getByRole('button', { name: text.directionIn }))
     await chooseOption(text.purposeLabel, 'Halal bihalal RT')
@@ -819,7 +823,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
   async function choosePurposeMove(onRecorded = vi.fn()) {
     render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = userEvent.setup()
-    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+    await pickLocation()
     await user.click(screen.getByRole('button', { name: text.directionPurpose }))
     return { user, onRecorded }
   }
@@ -1205,7 +1209,7 @@ describe('RecordTransaction: date before the opening balance', () => {
 
   async function open() {
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
-    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
+    await pickLocation()
   }
 
   const tunaiWarning = (when: string) => copy.dateField.beforeOpening('Tunai', formatIsoDate(when))

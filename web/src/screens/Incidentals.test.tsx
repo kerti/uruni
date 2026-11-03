@@ -375,7 +375,8 @@ describe('Incidentals', () => {
     expect(posted).toMatchObject({ note: null })
   })
 
-  it('opens the close form on the last-used location, and remembers the one it closed with (#737)', async () => {
+  it('opens the close form with the location blank when there are two, and closes on the one she picks', async () => {
+    // A key a previous version left behind is ignored.
     window.localStorage.setItem('uruni:record:last-account-id', '3')
     const twoAccounts = [accounts[0], { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 }]
     const detail = {
@@ -412,12 +413,13 @@ describe('Incidentals', () => {
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
     await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
-    expect(selectedOptionName(text.close.accountLabel)).toBe('Bank Uji Coba')
+    expect(selectedOptionName(text.close.accountLabel)).toBe(copy.common.locationPlaceholder)
+    expect(screen.getByRole('button', { name: text.close.submit })).toBeDisabled()
+    await chooseOption(text.close.accountLabel, 'Bank Uji Coba')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
     await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
     expect(posted).toMatchObject({ account_id: 3 })
-    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('3')
   })
 
   it('a second close attempt surfaces the named 409 refusal', async () => {

@@ -2,15 +2,15 @@ import { useId, type ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { copy } from '@/copy/id'
 import type { Account } from '@/lib/accounts'
 
 /**
  * Picks the location ("lokasi") a transaction is recorded against. A retired
  * account (`inactive_on` set) is excluded entirely - PRD section 7.2's
  * location field is for recording new money, not browsing history.
- * RecordTransaction.tsx applies the same exclusion when choosing the
- * *default* selection, which must also fall back past a
- * remembered-but-now-retired choice.
+ * lib/accountDefault.ts applies the same exclusion when choosing the
+ * starting value: blank, unless one active location is the only answer.
  *
  * Renders through the themed Select (`radix-ui` is already a dependency, so
  * this costs styling, not a new package).
@@ -56,7 +56,7 @@ export default function AccountPicker({
         disabled={disabled || activeAccounts.length === 0}
       >
         <SelectTrigger id={selectId} aria-label={label}>
-          <SelectValue>{activeAccounts.find((account) => account.id === value)?.name}</SelectValue>
+          <SelectValue>{activeAccounts.find((account) => account.id === value)?.name ?? copy.common.locationPlaceholder}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {activeAccounts.map((account) => (

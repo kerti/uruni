@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
-import { chooseMenuItem } from './popper'
+import { chooseMenuItem, chooseOption } from './popper'
 
 // An at-record-time photo attach against the real backend: the multipart
 // upload, and the row it attaches to, are what the vitest suite
@@ -43,6 +43,7 @@ test.describe('receipt photos', () => {
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
 
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill('12000')
 
     // The optional photo field - a hidden <input type="file"> named "Tambah foto

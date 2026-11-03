@@ -12,7 +12,7 @@ import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { errorCode } from '@/lib/api'
 import { dateBounds, todayISODate } from '@/lib/dates'
-import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
+import { defaultAccountId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
@@ -152,10 +152,9 @@ function SettleForm({
   const submitting = submitState.status === 'loading'
   const error = submitState.status === 'error' && submitState.error ? errorText(submitState.error) : null
 
-  // Blank until she picks: until then, the same default every source picker
-  // has (#737).
+  // Blank until she picks, unless the fund has one location (accountDefault.ts).
   const [pickedAccountId, setAccountId] = useState<number | null>(null)
-  const accountId = pickedAccountId ?? defaultSourceAccountId(accounts)
+  const accountId = pickedAccountId ?? defaultAccountId(accounts)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
 
   const canSubmit = accountId !== null && occurredOn !== '' && !submitting
@@ -166,7 +165,6 @@ function SettleForm({
     void submitRun(
       async () => {
         await settleReimbursement(claim.id, { account_id: accountId, occurred_on: occurredOn })
-        rememberAccountId(accountId)
         onSettled()
       },
       { settle: reload },

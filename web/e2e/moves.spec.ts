@@ -75,6 +75,7 @@ test.describe('moves and corrections', () => {
 
     await openRecord(page)
     await page.getByRole('button', { name: copy.record.directionPurpose }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill(String(allocated))
     await pick(page, copy.record.fromPurposeLabel, 'Kas Utama')
     await pick(page, copy.record.toPurposeLabel, envelope)
@@ -94,6 +95,7 @@ test.describe('moves and corrections', () => {
     // amplop.
     await openRecord(page)
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()

@@ -216,6 +216,9 @@ export const copy = {
     // The dialog primitive's close button - every sheet in the app uses this
     // label, never a screen-specific synonym.
     close: 'Tutup',
+    // Every location picker starts blank unless the fund has one location
+    // (lib/accountDefault.ts), so she names where the money is each time.
+    locationPlaceholder: 'Pilih lokasi',
     // The way out of a full-screen form, which has no X and, installed to a
     // home screen, no browser back button.
     back: 'Kembali',

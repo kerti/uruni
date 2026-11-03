@@ -8,6 +8,7 @@ import type { Page } from '@playwright/test'
 
 import { expect, logIn, seedEmail, seedPassword, test } from './fixtures'
 import { expectAccessible } from './a11y'
+import { chooseOption } from './popper'
 
 // The fixture's money (cmd/uruni/seed_e2e.go): Tunai opens at Rp1.000.000 and
 // Bank Uji Coba at zero. This file's instance is its own, so every figure below
@@ -97,9 +98,10 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await expectAccessible(page)
 
-    // The fixture's cash account ("Tunai") is the first active account, so it
-    // is the default location - no need to touch the picker.
+    // The fixture has two locations, so the picker starts blank: she names
+    // where the money is, every time.
     await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
 
@@ -119,6 +121,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionIn }).click()
+    await chooseOption(page, copy.record.locationLabel, 'Tunai')
     await page.getByLabel(copy.record.amountLabel).fill(String(received))
     await page.getByRole('button', { name: copy.record.submit }).click()
 

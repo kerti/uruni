@@ -466,3 +466,7 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 ## Lokasi filter on Riwayat (decided 2026-11-02)
 
 **Riwayat's Transaksi tab filters by location, and Beranda's location rows open it** (#784). A transfer shows once when either leg is on the location, and with a pos filter both must hold on the same leg; the month summary foots for that location, Pindah lokasi counting as Dipindah. Every location is offered, inactive ones too. App only: the public report shows no locations. Beranda's Saldo per lokasi rows become cards, which reverses the 2026-10-03 plain list, kept only while a row had nowhere to send her.
+
+## No remembered location (decided 2026-11-03)
+
+**Every location picker starts blank, unless the fund has only one active location.** That covers Catat (Masuk, Keluar, Pindah pos, both sides of Pindah lokasi), Catat iuran, Bayar talangan and Tutup amplop, and it reverses #737's shared last-used default (PRD section 7.2's "remembers last"). A real treasurer saved a dues payment into the bank as cash because the form opened on the location she had used last. A wrong location is the error cek kas exists to catch: it puts two locations off, and only a reversal undoes it, where a wrong pos is one tap on Perbaiki pos. One more tap makes her say where the money is, each time. Pos keeps its Kas Utama default, which is fixed, not remembered. Nothing is stored in the browser any more; a blank picker reads *Pilih lokasi*, and Simpan stays disabled until she picks.
