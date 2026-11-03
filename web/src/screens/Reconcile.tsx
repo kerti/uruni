@@ -30,6 +30,7 @@ import type { Purpose } from '@/lib/purposes'
 import type { AccountCountInput, ReconciliationDetail } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
 import type { Direction } from '@/lib/enums'
+import { soleCandidateId } from '@/lib/accountDefault'
 import { card, cardSurface, insetPanel } from '@/components/cardClasses'
 
 const text = copy.reconciliation
@@ -56,12 +57,12 @@ interface LineState {
   fixNote: string
 }
 
-function emptyLine(mainPurposeId: number | null): LineState {
+function emptyLine(startPurposeId: number | null): LineState {
   return {
     touched: false,
     actualAmount: 0,
     resolution: null,
-    fixPurposeId: mainPurposeId,
+    fixPurposeId: startPurposeId,
     fixDirection: 'out',
     fixAmount: 0,
     fixOccurredOn: todayISODate(),
@@ -74,7 +75,7 @@ function emptyLine(mainPurposeId: number | null): LineState {
  * sign PRD/ReconciliationBanner.tsx give that figure), so the common case -
  * the fix squares the gap exactly - needs no typing. She can edit them
  * afterward. */
-function resolutionDefaults(resolution: Resolution, diff: number, mainPurposeId: number | null): Partial<LineState> {
+function resolutionDefaults(resolution: Resolution, diff: number, startPurposeId: number | null): Partial<LineState> {
   if (resolution === 'left_open') {
     return { resolution, fixAmount: 0, fixNote: '' }
   }
@@ -82,7 +83,7 @@ function resolutionDefaults(resolution: Resolution, diff: number, mainPurposeId:
     resolution,
     fixDirection: diff > 0 ? 'in' : 'out',
     fixAmount: Math.abs(diff),
-    fixPurposeId: mainPurposeId,
+    fixPurposeId: startPurposeId,
     fixOccurredOn: todayISODate(),
     fixNote: '',
   }
@@ -154,7 +155,9 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   // (below) never clobbers what she typed.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
-    const mainPurposeId = loadState.data.purposes.find((p) => p.kind === 'main')?.id ?? null
+    // The fix's pos starts blank unless one pos is the only answer
+    // (lib/accountDefault.ts), the same rule as Catat.
+    const startPurposeId = soleCandidateId(loadState.data.selectablePurposes)
     const activeAccounts = loadState.data.accounts.filter((a) => a.inactive_on === null)
     // oxlint-disable-next-line react/set-state-in-effect -- seed a count line per active account once the load succeeds
     setLines((prev) => {
@@ -162,7 +165,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       let changed = false
       for (const account of activeAccounts) {
         if (!next[account.id]) {
-          next[account.id] = emptyLine(mainPurposeId)
+          next[account.id] = emptyLine(startPurposeId)
           changed = true
         }
       }
@@ -188,7 +191,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   const data = loadState.data
   const activeAccounts = data.accounts.filter((a) => a.inactive_on === null)
   const recordedByAccount = new Map(data.balances.accounts.map((a) => [a.id, a.balance]))
-  const mainPurposeId = data.purposes.find((p) => p.kind === 'main')?.id ?? null
+  const startPurposeId = soleCandidateId(data.selectablePurposes)
   // GET /api/transactions's first page is already newest-first.
   const recentTransactions = data.transactions.slice(0, RECENT_ACTIVITY_COUNT)
   const purposeNames = new Map(data.purposes.map((p) => [p.id, p.name]))
@@ -353,9 +356,9 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
             key={account.id}
             account={account}
             recorded={recordedByAccount.get(account.id) ?? 0}
-            line={lines[account.id] ?? emptyLine(mainPurposeId)}
+            line={lines[account.id] ?? emptyLine(startPurposeId)}
             purposes={data.selectablePurposes}
-            mainPurposeId={mainPurposeId}
+            startPurposeId={startPurposeId}
             disabled={submitting}
             onChange={(patch) => updateLine(account.id, patch)}
           />
@@ -428,7 +431,7 @@ function AccountCountRow({
   recorded,
   line,
   purposes,
-  mainPurposeId,
+  startPurposeId,
   disabled,
   onChange,
 }: {
@@ -436,7 +439,7 @@ function AccountCountRow({
   recorded: number
   line: LineState
   purposes: Purpose[]
-  mainPurposeId: number | null
+  startPurposeId: number | null
   disabled: boolean
   onChange: (patch: Partial<LineState>) => void
 }) {
@@ -510,7 +513,7 @@ function AccountCountRow({
               // tap would silently discard a custom amount, a backdated date
               // or a note she had typed for this line.
               onChoose={(option) => {
-                if (line.resolution !== option) onChange(resolutionDefaults(option, diff, mainPurposeId))
+                if (line.resolution !== option) onChange(resolutionDefaults(option, diff, startPurposeId))
               }}
             />
 

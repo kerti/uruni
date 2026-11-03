@@ -178,19 +178,23 @@ describe('RecordDuesPayment', () => {
     expect(url).toContain(`/api/members/1/outstanding-dues?through=${encodeURIComponent(month)}`)
   })
 
-  it('opens on the last-used location, falling back to the first active one (#737)', async () => {
+  // Her complaint: a dues payment into the bank was saved as cash because the
+  // form opened on the last location used. It now asks, every time
+  // (lib/accountDefault.ts).
+  it('opens with the location blank when the fund has two, and Simpan waits for one', async () => {
     window.localStorage.setItem('uruni:record:last-account-id', '8')
     vi.stubGlobal('fetch', stubApi(outstanding, twoAccounts))
-    const { unmount } = render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
-    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Bank Uji Coba'))
-    unmount()
-
-    window.localStorage.setItem('uruni:record:last-account-id', '99')
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)
-    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Kas tunai'))
+    await pickFirstMember()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Januari 2026' }))
+
+    expect(selectedOptionName(text.locationLabel)).toBe(copy.common.locationPlaceholder)
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
+    await chooseOption(text.locationLabel, 'Bank Uji Coba')
+    expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 
-  it('remembers the location a payment was posted from', async () => {
+  it('posts from the location she chose, and remembers nothing for the next form', async () => {
     const fetchMock = stubApi(outstanding, twoAccounts)
     vi.stubGlobal('fetch', fetchMock)
     const onRecorded = vi.fn()
@@ -201,7 +205,8 @@ describe('RecordDuesPayment', () => {
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1))
-    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('8')
+    expect(lastPostedBody(fetchMock)).toMatchObject({ account_id: 8 })
+    expect(window.localStorage.length).toBe(0)
   })
 
   it('posts every selected period in one request', async () => {

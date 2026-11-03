@@ -193,7 +193,7 @@ export default function Roster() {
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate">{member.name}</span>
                 </span>
-                <span className="text-sm text-muted-foreground">
+                <span className="tabular text-sm text-muted-foreground">
                   {member.tier_id === null
                     ? text.tierNone
                     : text.tierRateLine(

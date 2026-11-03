@@ -495,7 +495,7 @@ describe('Reimbursements tab', () => {
       handle: () => Promise.resolve(jsonResponse(claim(1, { settled }))),
     })
 
-    it('opens from Bayar at ?edit=settle:<id>, shows the claim, pays from the remembered location and toasts', async () => {
+    it('opens from Bayar at ?edit=settle:<id>, shows the claim, pays from the only location and toasts', async () => {
       let settled = false
       const fetchMock = routedFetch([
         oneClaim(),
@@ -537,7 +537,6 @@ describe('Reimbursements tab', () => {
       expect(await screen.findByText(text.emptyOutstanding)).toBeInTheDocument()
       const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
       expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 1 })
-      expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('1')
     })
 
     it('opens straight from a deep link, and strips the param for a claim that is already settled', async () => {

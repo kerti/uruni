@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -106,6 +106,17 @@ function reconciliationDetail(lines: ReconciliationLine[]): ReconciliationDetail
     note: null,
     created_at: 1_756_000_000,
     lines,
+  }
+}
+
+/** The fix's pos starts blank when more than one could be it
+ * (lib/accountDefault.ts); she picks Kas utama on every open fix, as the
+ * usual case. */
+async function pickFixPos() {
+  for (const box of screen.queryAllByRole('combobox', { name: text.fixPurposeLabel })) {
+    if (box.textContent !== copy.common.purposePlaceholder) continue
+    await userEvent.click(box)
+    await userEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Kas utama' }))
   }
 }
 
@@ -274,6 +285,8 @@ describe('Reconcile', () => {
     expect(screen.getByRole('radio', { name: text.resolutionOptions.left_open })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
+
+    await pickFixPos()
     expect(screen.getByRole('radio', { name: text.resolutionOptions.entry_added })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('radio', { name: text.resolutionOptions.adjusted })).toHaveAttribute('aria-checked', 'false')
 
@@ -340,6 +353,8 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
     await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
+
+    await pickFixPos()
     // actual < recorded is an unrecorded outflow - direction defaults "out".
     expect(screen.getByRole('button', { name: copy.record.directionOut })).toHaveAttribute('aria-pressed', 'true')
 
@@ -364,6 +379,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
     await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.entry_added }))
+    await pickFixPos()
 
     // The default fix is the whole gap: nothing remains.
     expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
@@ -398,6 +414,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
     await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
+    await pickFixPos()
 
     const submit = screen.getByRole('button', { name: text.submit })
     expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
@@ -467,6 +484,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
     await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.entry_added }))
+    await pickFixPos()
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     // The headline reads the 30_000 left, not the 50_000 found and not cocok.
@@ -499,6 +517,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
     await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
+    await pickFixPos()
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     await screen.findByText(copy.common.errors.reconciliation_plug_mismatch)
@@ -718,6 +737,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '70000')
     await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
+    await pickFixPos()
 
     const noteField = screen.getByLabelText(text.fixNoteLabel)
     await userEvent.type(noteField, 'Beli galon, lupa dicatat')
@@ -726,6 +746,7 @@ describe('Reconcile', () => {
     // its gap-derived defaults - these buttons read as toggles and a phone makes
     // a double tap easy.
     await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
+    await pickFixPos()
     expect(noteField).toHaveValue('Beli galon, lupa dicatat')
   })
 
@@ -832,6 +853,7 @@ describe('Reconcile', () => {
 
     // A fix-bearing resolution is enough only while its fix is valid.
     await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
+    await pickFixPos()
     expect(submit).not.toBeDisabled()
     await userEvent.clear(screen.getByLabelText(text.fixAmountLabel))
     expect(submit).toBeDisabled()

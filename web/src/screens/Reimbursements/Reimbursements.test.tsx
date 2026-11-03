@@ -148,7 +148,8 @@ describe('SettleDialog', () => {
     { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(list)) },
   ]
 
-  it('opens Bayar dari on the last-used location, else the first active one, and remembers the one it paid from (#737)', async () => {
+  it('opens Bayar dari blank when there are two locations, and pays from the one she picks', async () => {
+    // A key a previous version left behind is ignored.
     window.localStorage.setItem('uruni:record:last-account-id', '2')
     const fetchMock = routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)])
     vi.stubGlobal('fetch', fetchMock)
@@ -156,16 +157,17 @@ describe('SettleDialog', () => {
     const { unmount } = renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={onSettled} onUnusable={vi.fn()} />)
 
     await screen.findByRole('heading', { name: text.settle.heading })
-    expect(selectedOptionName(text.settle.accountLabel)).toBe('Bank Uji Coba')
+    expect(selectedOptionName(text.settle.accountLabel)).toBe(copy.common.locationPlaceholder)
+    expect(screen.getByRole('button', { name: text.settle.submit })).toBeDisabled()
+    await chooseOption(text.settle.accountLabel, 'Bank Uji Coba')
     await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
     await waitFor(() => expect(onSettled).toHaveBeenCalled())
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 2 })
-    expect(window.localStorage.getItem('uruni:record:last-account-id')).toBe('2')
     unmount()
 
-    window.localStorage.setItem('uruni:record:last-account-id', '99')
-    vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...withAccounts(twoAccounts)]))
+    // One active location is the only answer, so it is chosen for her.
+    vi.stubGlobal('fetch', routedFetch([settle, getClaim(claim()), ...withAccounts(accounts)]))
     renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={vi.fn()} onUnusable={vi.fn()} />)
     await screen.findByRole('heading', { name: text.settle.heading })
     expect(selectedOptionName(text.settle.accountLabel)).toBe('Tunai')

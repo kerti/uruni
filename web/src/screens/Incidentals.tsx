@@ -22,7 +22,7 @@ import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
-import { defaultSourceAccountId, rememberAccountId } from '@/lib/lastAccount'
+import { defaultAccountId } from '@/lib/accountDefault'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import {
@@ -477,9 +477,9 @@ function CloseEnvelopeBody({
   refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<unknown>()
-  // Until she picks, the same default every source picker has (#737).
+  // Blank until she picks, unless the fund has one location (accountDefault.ts).
   const [pickedAccountId, setAccountId] = useState<number | null>(null)
-  const accountId = pickedAccountId ?? defaultSourceAccountId(accounts)
+  const accountId = pickedAccountId ?? defaultAccountId(accounts)
   const [closedOn, setClosedOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
@@ -492,7 +492,6 @@ function CloseEnvelopeBody({
     void run(
       async () => {
         await closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note })
-        rememberAccountId(accountId)
         onClosed()
       },
       { settle: refresh },

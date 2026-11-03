@@ -79,6 +79,7 @@ async function pay(page: Page, member: string, periods: { period: string; amount
     await field.fill('')
     await field.fill(String(amount))
   }
+  await chooseOption(page, copy.dues.payment.locationLabel, 'Tunai')
   await page.getByRole('button', { name: copy.dues.payment.submit }).click()
   await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
 }
@@ -213,6 +214,7 @@ test.describe('dues in depth', () => {
     await expect(page.getByText(copy.dues.payment.skippedArrears(1))).toBeVisible()
     await oldest.check()
     await expect(page.getByText(copy.dues.payment.skippedArrears(1))).toHaveCount(0)
+    await chooseOption(page, copy.dues.payment.locationLabel, 'Tunai')
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()
 
     // Back on the month she left, with the confirmation, and no arrears left.

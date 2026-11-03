@@ -70,6 +70,7 @@ async function finishRecord(page: Page, direction: 'in' | 'out', amount: number,
   const amountField = page.getByLabel(copy.record.amountLabel)
   await amountField.click()
   await amountField.fill(String(amount))
+  await chooseOption(page, copy.record.locationLabel, 'Tunai')
   await page.getByLabel(copy.record.noteLabel).fill(note)
   await page.getByRole('button', { name: copy.record.submit }).click()
   await expect(page.getByText(direction === 'in' ? copy.record.successIn : copy.record.successOut)).toBeVisible()
