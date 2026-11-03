@@ -1,4 +1,5 @@
 import { PauseCircle, PlayCircle, Trash } from '@phosphor-icons/react'
+import SectionLabel from '@/components/SectionLabel'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DetailActions from '@/components/DetailActions'
@@ -21,6 +22,7 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Account } from '@/lib/accounts'
 import type { AccountKind } from '@/lib/enums'
+import { tappableCard } from '@/components/cardClasses'
 
 const text = copy.settings.locations
 
@@ -81,7 +83,7 @@ export default function Locations() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
@@ -95,14 +97,10 @@ export default function Locations() {
         <ul className="flex flex-col gap-2">
           {listState.data.map((account) => (
             <li key={account.id}>
-              <button
-                type="button"
-                onClick={() => open(`location:${account.id}`)}
-                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-              >
+              <button type="button" onClick={() => open(`location:${account.id}`)} className={`flex flex-col gap-1 ${tappableCard}`}>
                 <span className="sr-only">{text.editVerb}</span>{' '}
                 <span className="flex w-full items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium">{account.name}</span>
+                  <span className="min-w-0 truncate">{account.name}</span>
                   <span className="shrink-0 text-sm text-muted-foreground">{account.kind === 'bank' ? text.kindBank : text.kindCash}</span>
                 </span>
                 {account.inactive_on !== null && <span className="text-sm text-muted-foreground">{text.inactiveBadge}</span>}

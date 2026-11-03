@@ -87,7 +87,7 @@ function pwa(): Plugin[] {
       scope: '/',
       display: 'standalone',
       orientation: 'portrait',
-      background_color: '#F6F4EF',
+      background_color: '#F3F3F2',
       theme_color: '#1F5D50',
       icons: [
         { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },

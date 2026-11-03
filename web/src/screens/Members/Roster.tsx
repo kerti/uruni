@@ -1,4 +1,5 @@
 import { MagnifyingGlass, PauseCircle, PlayCircle, Trash } from '@phosphor-icons/react'
+import SectionLabel from '@/components/SectionLabel'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -23,6 +24,8 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesTier, Member, MembersPage } from '@/lib/setup'
+import { tappableCard } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.members.roster
 
@@ -185,14 +188,10 @@ export default function Roster() {
         <ul className="flex flex-col gap-2">
           {members.map((member) => (
             <li key={member.id}>
-              <button
-                type="button"
-                onClick={() => open(`member:${member.id}`)}
-                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-              >
+              <button type="button" onClick={() => open(`member:${member.id}`)} className={`flex flex-col gap-1 ${tappableCard}`}>
                 <span className="sr-only">{text.editVerb}</span>{' '}
                 <span className="flex w-full items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium">{member.name}</span>
+                  <span className="min-w-0 truncate">{member.name}</span>
                 </span>
                 <span className="text-sm text-muted-foreground">
                   {member.tier_id === null
@@ -211,9 +210,9 @@ export default function Roster() {
                       semantic state for a discrepancy (Design-System.md) -
                       arrears is a normal fact to find here, not an alarm. */}
                   {member.arrears_months > 0 && (
-                    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
+                    <Badge tone="attention" className="tabular">
                       {text.arrearsBadge(member.arrears_months)}
-                    </span>
+                    </Badge>
                   )}
                 </span>
               </button>
@@ -240,7 +239,7 @@ export default function Roster() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 

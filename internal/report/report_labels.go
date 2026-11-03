@@ -69,6 +69,35 @@ func (c Copy) entryLabel(e ledger.ReportEntry) string {
 	return ""
 }
 
+// entryKind names an ordinary row's kind: icon is the page's kind icon (""
+// for a row that has none, as in Riwayat), word the PDF's Jenis column, and
+// spoken whether the page needs word read aloud beside the icon - not when the
+// label already starts with it (Saldo awal, Penyesuaian, Pembatalan). The
+// icons are Riwayat's (rowLabel.ts).
+func (c Copy) entryKind(e ledger.ReportEntry) (icon, word string, spoken bool) {
+	switch e.Kind {
+	case ledger.TransactionKindDues:
+		return "dues", c.KindDues, true
+	case ledger.TransactionKindOpening:
+		return "opening", c.RowOpening, false
+	case ledger.TransactionKindReimbursement:
+		return "settlement", c.KindSettlement, true
+	case ledger.TransactionKindAdjustment:
+		if e.IsReversal {
+			return "reversal", c.KindReversal, false
+		}
+		return "adjustment", c.RowAdjustment, false
+	case ledger.TransactionKindNormal:
+		if e.MemberName != nil {
+			return "contribution", c.KindContribution, true
+		}
+	}
+	if e.Direction == ledger.ReportDirectionOut {
+		return "", c.KindOut, false
+	}
+	return "", c.KindIn, false
+}
+
 // moveLabel is "Dipindah: <from> -> <to>", with a real arrow.
 func (c Copy) moveLabel(m ledger.ReportMove) string {
 	return c.RowMoved(m.FromPurposeName, m.ToPurposeName)

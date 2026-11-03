@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 
 import BackLink from '@/components/BackLink'
 import DateField from '@/components/DateField'
@@ -41,6 +42,9 @@ import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, ParticipationStateKind } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 import type { Transaction } from '@/lib/transactions'
+import { card, insetPanel } from '@/components/cardClasses'
+import { FigureRow, Figures } from '@/components/Figures'
+import { Badge } from '@/components/Badge'
 
 const text = copy.incidentals
 
@@ -266,9 +270,9 @@ export default function Incidentals({
 
 function StatusBadge({ envelope }: { envelope: Incidental }) {
   if (envelope.closed_on) {
-    return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.closed}</span>
+    return <Badge tone="neutral">{text.status.closed}</Badge>
   }
-  return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.open}</span>
+  return <Badge tone="success">{text.status.open}</Badge>
 }
 
 /** The detail view: one envelope's totals, a link into the real record form
@@ -353,26 +357,12 @@ function DetailView({
           collected minus used here - the two differ once a closed envelope
           is reopened, because the earlier roll is in the balance only. A
           divider sets it apart as the line the rest adds up to. */}
-      <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
-        {envelope.target_amount !== null && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{text.detail.targetLabel}</span>
-            <span className="tabular font-medium">{formatIDR(envelope.target_amount)}</span>
-          </div>
-        )}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{text.detail.collectedLabel}</span>
-          <span className="tabular font-medium">{formatIDR(envelope.collected_amount)}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{text.detail.disbursedLabel}</span>
-          <span className="tabular font-medium">{formatIDR(envelope.disbursed_amount)}</span>
-        </div>
-        <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
-          <span className="font-medium">{text.detail.remainingLabel}</span>
-          <span className="tabular font-semibold">{formatIDR(envelope.balance_amount)}</span>
-        </div>
-      </div>
+      <Figures className={card}>
+        {envelope.target_amount !== null && <FigureRow label={text.detail.targetLabel} amount={envelope.target_amount} />}
+        <FigureRow label={text.detail.collectedLabel} amount={envelope.collected_amount} />
+        <FigureRow label={text.detail.disbursedLabel} amount={envelope.disbursed_amount} />
+        <FigureRow label={text.detail.remainingLabel} amount={envelope.balance_amount} total />
+      </Figures>
 
       {/* The rollover, on every visit to a closed envelope rather than only
           in the moment it was closed (#270) - shown even when it is 0: a
@@ -380,10 +370,9 @@ function DetailView({
           (ADR-031), so the sentence itself says which way it went; the
           amount stays one field, absolute either way. */}
       {rolledAmount !== null && (
-        <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
-          <span className="text-muted-foreground">{text.close.rolledLabel(rolledAmount)}</span>
-          <span className="tabular font-medium">{formatIDR(Math.abs(rolledAmount))}</span>
-        </div>
+        <Figures className={insetPanel}>
+          <FigureRow label={text.close.rolledLabel(rolledAmount)} amount={Math.abs(rolledAmount)} />
+        </Figures>
       )}
 
       {/* One action row for both states; primary on the right (Design-System,
@@ -663,12 +652,9 @@ function ParticipationSection({
                   {visibleExpected.map((row) => {
                     const { label, showAmount } = participationStateText(row.state)
                     return (
-                      <li
-                        key={row.member.id}
-                        className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                      >
+                      <li key={row.member.id} className={`flex flex-col gap-1 ${card}`}>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                          <span className="min-w-0 truncate">{row.member.name}</span>
                           {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
                         </div>
                         {/* Plain ink under the amount (#154), not a button per
@@ -679,7 +665,7 @@ function ParticipationSection({
                           <span className="text-sm text-muted-foreground">{label}</span>
                           <button
                             type="button"
-                            className="relative shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+                            className="touch-target shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline"
                             aria-label={text.recordAria(row.member.name)}
                             onClick={() => onRecord(row.member.id, stillDue(minimum, row.contributed_amount))}
                           >
@@ -696,14 +682,11 @@ function ParticipationSection({
 
           {state.data.unexpected.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-muted-foreground">{text.otherHeading}</h3>
+              <SubsectionLabel>{text.otherHeading}</SubsectionLabel>
               <ul className="flex flex-col gap-2">
                 {state.data.unexpected.map((row) => (
-                  <li
-                    key={row.member.id}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-                  >
-                    <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                  <li key={row.member.id} className={`flex items-center justify-between gap-3 ${card}`}>
+                    <span className="min-w-0 truncate">{row.member.name}</span>
                     <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>
                   </li>
                 ))}
@@ -927,19 +910,7 @@ function EnvelopeActivity({
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
-        {/* The same invisible 44px hit area as Beranda's own "Lihat semua"
-            (#319), so the row stays as tall as its small heading. */}
-        <Button
-          type="button"
-          variant="link"
-          className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
-          onClick={onViewAll}
-        >
-          {copy.home.recentActivityViewAll}
-        </Button>
-      </div>
+      <SectionLabel action={{ label: copy.home.recentActivityViewAll, onClick: onViewAll }}>{copy.home.recentActivityHeading}</SectionLabel>
       {state.status === 'error' && state.error ? (
         <ErrorState
           error={state.error}

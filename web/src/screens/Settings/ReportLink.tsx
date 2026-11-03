@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import SectionLabel from '@/components/SectionLabel'
 import { ArrowSquareOut, Check, Copy, DownloadSimple, ShareNetwork } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { fetchReportPdf, replaceReportSlug } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
+import { card } from '@/components/cardClasses'
 
 const text = copy.settings.report
 
@@ -72,7 +74,7 @@ export default function ReportLink({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
@@ -130,7 +132,7 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+      <div className={`flex flex-col gap-1 ${card}`}>
         <span className="text-sm text-muted-foreground">{text.linkLabel}</span>
         <span className="min-w-0 text-sm font-medium break-all select-all">{url}</span>
       </div>

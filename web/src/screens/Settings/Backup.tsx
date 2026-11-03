@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
+import SectionLabel from '@/components/SectionLabel'
 import { ArrowCounterClockwise, DownloadSimple } from '@phosphor-icons/react'
 
 import { Button } from '@/components/ui/button'
@@ -12,6 +14,7 @@ import { useApi } from '@/lib/useApi'
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
 import type { StoredBackup } from '@/lib/backup'
+import { card } from '@/components/cardClasses'
 
 const text = copy.settings.backup
 
@@ -37,7 +40,7 @@ export default function Backup() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
@@ -49,7 +52,7 @@ export default function Backup() {
         disabled={busy}
         onClick={() => void run(downloadBackup)}
       >
-        <DownloadSimple aria-hidden="true" className="size-4" />
+        <DownloadSimple aria-hidden="true" />
         {busy ? text.downloading : text.download}
       </Button>
 
@@ -112,7 +115,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold">{text.autoHeading}</h3>
+        <SubsectionLabel>{text.autoHeading}</SubsectionLabel>
         <p className="text-sm text-muted-foreground">{text.autoBody}</p>
       </div>
 
@@ -121,17 +124,14 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
       ) : listState.status === 'error' || !listState.data ? (
         listState.error && <ErrorState error={listState.error} onRetry={() => void listRun(listStoredBackups)} />
       ) : listState.data.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{text.empty}</p>
+        <p className="text-muted-foreground">{text.empty}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {listState.data.map((item) => (
-            <li
-              key={item.name}
-              className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-2 shadow-card ring-1 ring-foreground/10"
-            >
+            <li key={item.name} className={`flex items-center justify-between gap-3 ${card}`}>
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-medium">{formatIsoDate(item.date)}</span>
+                  <span>{formatIsoDate(item.date)}</span>
                   <span className="text-sm text-muted-foreground">{kindLabel(item.kind)}</span>
                 </span>
                 <span className="text-sm text-muted-foreground">
@@ -143,24 +143,28 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
               </div>
               <div className="flex shrink-0 items-center">
                 {item.can_restore && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
                     aria-label={text.restoreRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
                     onClick={() => onRestore(item.name)}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                   >
-                    <ArrowCounterClockwise aria-hidden="true" className="size-4" />
-                  </button>
+                    <ArrowCounterClockwise aria-hidden="true" />
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
                   aria-label={text.downloadRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
                   disabled={downloadingName === item.name}
                   onClick={() => void handleDownload(item.name)}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
                 >
-                  <DownloadSimple aria-hidden="true" className="size-4" />
-                </button>
+                  <DownloadSimple aria-hidden="true" />
+                </Button>
               </div>
             </li>
           ))}

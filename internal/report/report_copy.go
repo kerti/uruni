@@ -116,6 +116,21 @@ type Copy struct {
 	RowAdjustment string
 	RowMoved      func(from, to string) string
 
+	// A row's kind (#257's kind words, as Riwayat's screen reader hears them):
+	// the PDF's Jenis column, and the page's sr-only word beside the kind icon.
+	// An ordinary row is Masuk or Keluar; Saldo awal and Penyesuaian reuse the
+	// row labels above.
+	KindDues string
+	// RowAnonymous labels a contribution nobody put a name to
+	// (rowLabels.contribution.anonymous).
+	RowAnonymous     string
+	KindContribution string
+	KindSettlement   string
+	KindReversal     string
+	KindMoved        string
+	KindIn           string
+	KindOut          string
+
 	// The monthly PDF (#378): the page footer's link and the words the statement
 	// adds. Section headings and labels already on the page are reused.
 	PDFDownload     string
@@ -123,6 +138,7 @@ type Copy struct {
 	PDFStatement    func(month string) string
 	PDFSummary      string
 	PDFColDate      string
+	PDFColKind      string
 	PDFColNote      string
 	PDFColAmount    string
 	PDFColMember    string
@@ -194,7 +210,7 @@ var Text = Copy{
 	DuesPaidStatus:    "Lunas",
 	DuesPaidInAdvance: "Lunas \u00b7 sudah bayar di muka",
 
-	GridHeading:   "Status iuran 12 bulan",
+	GridHeading:   "12 bulan",
 	GridRange:     func(from, to string) string { return from + " \u2013 " + to },
 	GridAsOf:      func(date string) string { return "Status per " + date },
 	GridNone:      "Tidak ada iuran",
@@ -224,10 +240,20 @@ var Text = Copy{
 	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
 
+	KindDues:         "Iuran",
+	RowAnonymous:     "Tanpa nama",
+	KindContribution: "Sumbangan",
+	KindSettlement:   "Talangan",
+	KindReversal:     "Pembatalan",
+	KindMoved:        "Dipindah",
+	KindIn:           "Masuk",
+	KindOut:          "Keluar",
+
 	PDFDownload:     "Unduh PDF",
 	PDFFilename:     func(month string) string { return "laporan-kas-" + month + ".pdf" },
 	PDFStatement:    func(month string) string { return "Laporan kas bulan " + month },
 	PDFColDate:      "Tanggal",
+	PDFColKind:      "Jenis",
 	PDFColNote:      "Keterangan",
 	PDFColAmount:    "Jumlah",
 	PDFColMember:    "Anggota",

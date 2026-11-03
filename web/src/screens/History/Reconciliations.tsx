@@ -16,6 +16,8 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
 import type { ReconciliationDetail, ReconciliationListItem, ReconciliationsPage } from '@/lib/reconciliations'
+import { tappableCard } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.reconciliation
 const tabText = copy.history.reconciliations
@@ -119,7 +121,7 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
               <button
                 type="button"
                 onClick={() => open(String(row.id))}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 outline-none select-none transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+                className={`flex items-center justify-between gap-3 ${tappableCard}`}
               >
                 <span>{formatUnixSeconds(row.performed_at)}</span>
                 <SnapshotBadge row={row} />
@@ -154,16 +156,12 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
  * ReconciliationBanner.tsx). */
 function SnapshotBadge({ row }: { row: ReconciliationListItem }) {
   if (row.open_difference_amount === 0) {
-    return (
-      <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
-        {text.resolutionOptions.matched}
-      </span>
-    )
+    return <Badge tone="success">{text.resolutionOptions.matched}</Badge>
   }
   return (
-    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
+    <Badge tone="attention" className="tabular">
       {text.selisihBadge(formatIDR(row.open_difference_amount))}
-    </span>
+    </Badge>
   )
 }
 

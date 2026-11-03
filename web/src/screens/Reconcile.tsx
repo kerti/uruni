@@ -30,6 +30,7 @@ import type { Purpose } from '@/lib/purposes'
 import type { AccountCountInput, ReconciliationDetail } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
 import type { Direction } from '@/lib/enums'
+import { card, cardSurface, insetPanel } from '@/components/cardClasses'
 
 const text = copy.reconciliation
 
@@ -369,7 +370,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
           screen-reader-correct for free, and it survives a re-render (the
           stale-count path re-reads the balances mid-flow) without anything
           having to remember it was open. */}
-      <details className="group flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+      <details className={`group flex flex-col gap-2 ${card}`}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-muted-foreground marker:content-none">
           {copy.home.recentActivityHeading}
           <CaretDown
@@ -382,10 +383,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
         ) : (
           <ul className="flex flex-col gap-2 pt-3">
             {recentTransactions.map((transaction) => (
-              <li
-                key={transaction.id}
-                className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-              >
+              <li key={transaction.id} className={`flex items-start justify-between gap-3 ${card}`}>
                 <span className="flex min-w-0 items-start gap-2">
                   <TransactionGlyph transaction={transaction} />
                   <span className="flex min-w-0 flex-col">
@@ -454,10 +452,7 @@ function AccountCountRow({
   // card's edge. This keeps the grouping semantics a screen reader needs while
   // the name and the recorded figure form a real card header, above the input.
   return (
-    <fieldset
-      aria-labelledby={`reconcile-account-${account.id}`}
-      className="flex flex-col gap-3 overflow-hidden rounded-lg bg-card shadow-card ring-1 ring-foreground/10"
-    >
+    <fieldset aria-labelledby={`reconcile-account-${account.id}`} className={`flex flex-col gap-3 overflow-hidden ${cardSurface}`}>
       <div
         id={`reconcile-account-${account.id}`}
         className="flex items-baseline justify-between gap-3 border-b border-border bg-muted px-4 py-3"
@@ -479,11 +474,11 @@ function AccountCountRow({
         {/* A small grey button, not plain ink: as a link it read as a label
             (#747). The recorded figure is in the header above, and the field
             stays hers to change. The location rides in the name, since every
-            card has one; the invisible after: box is the 44px target. */}
+            card has one; touch-target gives it the 44px target. */}
         <Button
           type="button"
           variant="outline"
-          className="relative h-9 self-start px-3 text-sm after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+          className="touch-target h-9 self-start px-3 text-sm"
           disabled={disabled}
           onClick={() => onChange({ touched: true, actualAmount: recorded })}
         >
@@ -520,7 +515,7 @@ function AccountCountRow({
             />
 
             {showFixFields && (
-              <div className="flex flex-col gap-3 rounded-lg bg-muted p-3">
+              <div className={`flex flex-col gap-3 ${insetPanel}`}>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`reconcile-fix-direction-${account.id}`}>{copy.record.directionLabel}</Label>
                   <div

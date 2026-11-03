@@ -1,4 +1,5 @@
 import { PencilLine } from '@phosphor-icons/react'
+import SubsectionLabel from '@/components/SubsectionLabel'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
@@ -21,6 +22,7 @@ import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Member } from '@/lib/setup'
+import { cardSurface } from '@/components/cardClasses'
 
 const text = copy.dues.payment
 
@@ -306,7 +308,7 @@ export default function RecordDuesPayment({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">{text.periodsHeading}</h2>
+        <SubsectionLabel as="h2">{text.periodsHeading}</SubsectionLabel>
 
         {memberId === null && <p className="text-muted-foreground">{text.noMemberYet}</p>}
 
@@ -329,7 +331,7 @@ export default function RecordDuesPayment({
                   {text.selectAllArrears}
                 </Button>
               )}
-              <ul className="flex flex-col divide-y divide-foreground/10 rounded-lg bg-card shadow-card ring-1 ring-foreground/10">
+              <ul className={`flex flex-col divide-y divide-foreground/10 ${cardSurface}`}>
                 {periods.map((period) => {
                   const checked = selected.includes(period.period)
                   const name = formatPeriod(period.period)

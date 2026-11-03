@@ -19,6 +19,9 @@
 
 {{define "gridshape"}}<svg class="shape" viewBox="0 0 14 14" aria-hidden="true" focusable="false">{{if eq .Class "paid"}}<circle class="g-paid" cx="7" cy="7" r="6"/>{{else if eq .Class "partial"}}<circle class="g-ring" cx="7" cy="7" r="5.5"/><path class="g-half" d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z"/>{{else if eq .Class "unpaid"}}<circle class="g-hollow" cx="7" cy="7" r="5.5"/>{{else}}<line class="g-none" x1="3.5" y1="7" x2="10.5" y2="7"/>{{end}}</svg>{{end}}
 
+{{/* The app's Phosphor duotone glyphs, inlined: the page loads nothing but itself. Paths copied from @phosphor-icons/react; the 20% layer is the shade. */}}
+{{define "icon"}}<svg class="icon" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false">{{if eq . "in"}}<path d="M168,192H64V88Z" opacity="0.2"/><path d="M197.66,58.34a8,8,0,0,0-11.32,0L116,128.69,69.66,82.34A8,8,0,0,0,56,88V192a8,8,0,0,0,8,8H168a8,8,0,0,0,5.66-13.66L127.31,140l70.35-70.34A8,8,0,0,0,197.66,58.34ZM72,184V107.31l38.34,38.34h0L148.69,184Z"/>{{else if eq . "out"}}<path d="M192,64V168L88,64Z" opacity="0.2"/><path d="M192,56H88a8,8,0,0,0-5.66,13.66L128.69,116,58.34,186.34a8,8,0,0,0,11.32,11.32L140,127.31l46.34,46.35A8,8,0,0,0,200,168V64A8,8,0,0,0,192,56Zm-8,92.69-38.34-38.34h0L107.31,72H184Z"/>{{else if eq . "move"}}<path d="M208,80v96H48V80Z" opacity="0.2"/><path d="M213.66,181.66l-32,32a8,8,0,0,1-11.32-11.32L188.69,184H48a8,8,0,0,1,0-16H188.69l-18.35-18.34a8,8,0,0,1,11.32-11.32l32,32A8,8,0,0,1,213.66,181.66Zm-139.32-64a8,8,0,0,0,11.32-11.32L67.31,88H208a8,8,0,0,0,0-16H67.31L85.66,53.66A8,8,0,0,0,74.34,42.34l-32,32a8,8,0,0,0,0,11.32Z"/>{{else if eq . "check"}}<path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"/><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>{{else if eq . "circle"}}<path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"/><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Z"/>{{else if eq . "dashed"}}<path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"/><path d="M96.26,37A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37ZM53.79,55.14a104,104,0,0,0-26,45,8,8,0,1,0,15.42,4.26,87.91,87.91,0,0,1,22-38.08A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104,104,0,0,0,26,45,8,8,0,1,0,11.41-11.21A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.57,87.88,87.88,0,0,1-22,38.09,8,8,0,1,0,11.42,11.21,104.05,104.05,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.21A88.14,88.14,0,0,1,212.79,104.45Z"/>{{else if eq . "search"}}<path d="M192,112a80,80,0,1,1-80-80A80,80,0,0,1,192,112Z" opacity="0.2"/><path d="M229.66,218.34,179.6,168.28a88.21,88.21,0,1,0-11.32,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/>{{else if eq . "question"}}<path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"/><path d="M140,180a12,12,0,1,1-12-12A12,12,0,0,1,140,180ZM128,72c-22.06,0-40,16.15-40,36v4a8,8,0,0,0,16,0v-4c0-11,10.77-20,24-20s24,9,24,20-10.77,20-24,20a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-.72c18.24-3.35,32-17.9,32-35.28C168,88.15,150.06,72,128,72Zm104,56A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>{{else if eq . "dues"}}<path d="M216,48V88H40V48a8,8,0,0,1,8-8H208A8,8,0,0,1,216,48Z" opacity="0.2"/><path d="M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Zm-38.34-85.66a8,8,0,0,1,0,11.32l-48,48a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L116,164.69l42.34-42.35A8,8,0,0,1,169.66,122.34Z"/>{{else if eq . "opening"}}<path d="M224,56V176c-64,55.43-112-55.43-176,0V56C112,.57,160,111.43,224,56Z" opacity="0.2"/><path d="M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z"/>{{else if eq . "settlement"}}<path d="M16,152H48v56H16a8,8,0,0,1-8-8V160A8,8,0,0,1,16,152ZM192.54,40A39.12,39.12,0,0,0,156,64a39.12,39.12,0,0,0-36.54-24C97.67,40,80,58.31,80,80c0,14.56,7,27.71,16.73,40H140a20,20,0,0,1,0,40h4l37.78-8.68C203.82,135.07,232,109.23,232,80,232,58.31,214.33,40,192.54,40Z" opacity="0.2"/><path d="M230.33,141.06a24.34,24.34,0,0,0-18.61-4.77C230.5,117.33,240,98.48,240,80c0-26.47-21.29-48-47.46-48A47.58,47.58,0,0,0,156,48.75,47.58,47.58,0,0,0,119.46,32C93.29,32,72,53.53,72,80c0,11,3.24,21.69,10.06,33a31.87,31.87,0,0,0-14.75,8.4L44.69,144H16A16,16,0,0,0,0,160v40a16,16,0,0,0,16,16H120a7.93,7.93,0,0,0,1.94-.24l64-16a6.94,6.94,0,0,0,1.19-.4L226,182.82l.44-.2a24.6,24.6,0,0,0,3.93-41.56ZM119.46,48A31.15,31.15,0,0,1,148.6,67a8,8,0,0,0,14.8,0,31.15,31.15,0,0,1,29.14-19C209.59,48,224,62.65,224,80c0,19.51-15.79,41.58-45.66,63.9l-11.09,2.55A28,28,0,0,0,140,112H100.68C92.05,100.36,88,90.12,88,80,88,62.65,102.41,48,119.46,48ZM16,160H40v40H16Zm203.43,8.21-38,16.18L119,200H56V155.31l22.63-22.62A15.86,15.86,0,0,1,89.94,128H140a12,12,0,0,1,0,24H112a8,8,0,0,0,0,16h32a8.32,8.32,0,0,0,1.79-.2l67-15.41.31-.08a8.6,8.6,0,0,1,6.3,15.9Z"/>{{else if eq . "reversal"}}<path d="M80,40v96L32,88Z" opacity="0.2"/><path d="M168,80H88V40a8,8,0,0,0-13.66-5.66l-48,48a8,8,0,0,0,0,11.32l48,48A8,8,0,0,0,88,136V96h80a48,48,0,0,1,0,96H80a8,8,0,0,0,0,16h88a64,64,0,0,0,0-128ZM72,116.69,43.31,88,72,59.31Z"/>{{else if eq . "adjustment"}}<path d="M128,80a24,24,0,1,1-24-24A24,24,0,0,1,128,80Zm40,72a24,24,0,1,0,24,24A24,24,0,0,0,168,152Z" opacity="0.2"/><path d="M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z"/>{{else if eq . "contribution"}}<path d="M16,152H48v56H16a8,8,0,0,1-8-8V160A8,8,0,0,1,16,152ZM204,56a28,28,0,0,0-12,2.71h0A28,28,0,1,0,176,85.29h0A28,28,0,1,0,204,56Z" opacity="0.2"/><path d="M230.33,141.06a24.43,24.43,0,0,0-21.24-4.23l-41.84,9.62A28,28,0,0,0,140,112H89.94a31.82,31.82,0,0,0-22.63,9.37L44.69,144H16A16,16,0,0,0,0,160v40a16,16,0,0,0,16,16H120a7.93,7.93,0,0,0,1.94-.24l64-16a6.94,6.94,0,0,0,1.19-.4L226,182.82l.44-.2a24.6,24.6,0,0,0,3.93-41.56ZM16,160H40v40H16Zm203.43,8.21-38,16.18L119,200H56V155.31l22.63-22.62A15.86,15.86,0,0,1,89.94,128H140a12,12,0,0,1,0,24H112a8,8,0,0,0,0,16h32a8.32,8.32,0,0,0,1.79-.2l67-15.41.31-.08a8.6,8.6,0,0,1,6.3,15.9ZM164,96a36,36,0,0,0,5.9-.48,36,36,0,1,0,28.22-47A36,36,0,1,0,164,96Zm60-12a20,20,0,1,1-20-20A20,20,0,0,1,224,84ZM164,40a20,20,0,0,1,19.25,14.61,36,36,0,0,0-15,24.93A20.42,20.42,0,0,1,164,80a20,20,0,0,1,0-40Z"/>{{end}}</svg>{{end}}
+
 {{define "report"}}{{template "head" .}}
 <header>
   <p class="eyebrow">{{.Text.Eyebrow}}</p>
@@ -42,14 +45,15 @@
   </form>
 </nav>
 
+<div class="balance">
 <section class="hero" aria-label="{{.Text.BalanceLabel}}">
   <p class="label">{{.Text.BalanceLabel}}</p>
   <p class="amount tabular {{.BalanceSize}}">{{.Balance}}</p>
 </section>
-
 {{with .Check}}
-<p class="status {{.Class}}" role="status">{{.Message}}{{if .When}}<span class="when">{{.When}}</span>{{end}}{{if .Since}}<span class="when">{{.Since}}</span>{{end}}</p>
+<p class="status {{.Class}}" role="status">{{if eq .Class "matched"}}{{template "icon" "check"}}{{else if eq .Class "discrepancy"}}{{template "icon" "search"}}{{else}}{{template "icon" "question"}}{{end}}<span class="lines"><span>{{.Message}}</span>{{if .When}}<span class="when">{{.When}}</span>{{end}}{{if .Since}}<span class="when">{{.Since}}</span>{{end}}</span></p>
 {{end}}
+</div>
 
 {{if .Purposes}}
 <section>
@@ -110,14 +114,17 @@
   <ul class="rows txns">
     {{range .Rows}}
     <li>
-      <span class="what">
-        <span class="muted">{{.Date}}</span>
-        {{if .Label}}<span class="label-line">{{.Label}}</span>{{end}}
-        {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
-        <span class="muted">{{if .Purpose}}{{.Purpose}}{{end}}{{if .HasReceipt}}{{if .Purpose}} &middot; {{end}}{{$.Text.HasReceipt}}{{end}}</span>
-        {{if .Reversed}}<span class="muted">{{$.Text.RowReversed}}</span>{{end}}
+      <span class="lead">
+        <span class="glyph {{.Class}}">{{template "icon" .Class}}</span>
+        <span class="what{{if not .Purpose}} bare{{end}}">
+          {{if .Purpose}}<span class="title">{{.Purpose}}</span>{{end}}
+          {{if .Label}}{{if .KindIcon}}<span class="label-row">{{template "icon" .KindIcon}}{{if .KindSpoken}}<span class="sr-only">{{.Kind}} </span>{{end}}<span class="label-line">{{.Label}}</span></span>{{else}}<span class="label-line">{{.Label}}</span>{{end}}{{end}}
+          {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
+          <span class="muted">{{.Date}}{{if .HasReceipt}} &middot; {{$.Text.HasReceipt}}{{end}}</span>
+          {{if .Reversed}}<span class="muted">{{$.Text.RowReversed}}</span>{{end}}
+        </span>
       </span>
-      <span class="tabular amt {{.Class}}">{{.Amount}}</span>
+      <span class="tabular amt">{{if .DirectionWord}}<span class="sr-only">{{.DirectionWord}} </span>{{end}}{{.Figure}}</span>
     </li>
     {{end}}
   </ul>
@@ -128,7 +135,6 @@
   <h2 id="dues-heading">{{.Text.DuesLabel}}</h2>
   {{with .Grid}}
   <div class="grid">
-    <h3>{{.Heading}}</h3>
     <p class="muted">{{.Range}}</p>
     {{if .Caption}}<p class="muted">{{.Caption}}</p>{{end}}
     <table>
@@ -179,7 +185,7 @@
     <li>
       <div class="head">
         <span class="what"><span class="name">{{.Name}}</span><span class="tier">{{$.Text.DuesTier}} {{.Tier}}</span></span>
-        <span class="badge {{.Class}}">{{.Status}}</span>
+        <span class="badge {{.Class}}">{{if eq .Class "unpaid"}}{{template "icon" "circle"}}{{else if eq .Class "partial"}}{{template "icon" "dashed"}}{{else}}{{template "icon" "check"}}{{end}}{{.Status}}</span>
       </div>
       <div class="amounts tabular"><span>{{$.Text.DuesOwed}}: {{.Owed}}</span><span>{{$.Text.DuesPaid}}: {{.Paid}}</span></div>
       {{if .PaidThrough}}<p class="through">{{.PaidThrough}}</p>{{end}}

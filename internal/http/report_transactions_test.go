@@ -162,8 +162,10 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 		t.Fatalf("rows = %d, want 6 (4 entries, 2 moves; the August row and the location transfer are out)", got)
 	}
 	for _, want := range []string{
-		"3 September 2026", "September 2026 \u00b7 Ani", "Budi", "Dipindah: Kas Utama \u2192 Duka", "Dipindah: Duka \u2192 Kas Utama",
-		"+" + money.FormatIDR(200_000), "-" + money.FormatIDR(60_000),
+		"3 September 2026", "September 2026 \u00b7 Ani", "Budi",
+		// Each kind is spoken beside its icon: a dues payment, a contribution.
+		report.Text.KindDues + " </span>", report.Text.KindContribution + " </span>", "Dipindah: Kas Utama \u2192 Duka", "Dipindah: Duka \u2192 Kas Utama",
+		report.Text.DirectionIn + " </span>" + money.FormatIDR(200_000), report.Text.DirectionOut + " </span>" + money.FormatIDR(60_000),
 	} {
 		if !strings.Contains(txnSection(t, body), want) {
 			t.Errorf("list does not contain %q:\n%s", want, txnSection(t, body))

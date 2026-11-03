@@ -1,6 +1,7 @@
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { ReconciliationLine } from '@/lib/reconciliations'
+import { card } from '@/components/cardClasses'
 
 const text = copy.reconciliation
 
@@ -15,8 +16,8 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
   return (
     <ul className="flex flex-col gap-2">
       {lines.map((line) => (
-        <li key={line.id} className="flex flex-col gap-1 rounded-lg bg-card p-4 shadow-card ring-1 ring-foreground/10">
-          <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
+        <li key={line.id} className={`flex flex-col gap-1 ${card}`}>
+          <span>{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
           {/* The figures being compared each get a line of their own, label
               left and amount right, so the amounts line up to compare. */}
           <Figure label={text.recordedLabel} amount={line.recorded_amount} />

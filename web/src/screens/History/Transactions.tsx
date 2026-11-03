@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
-import { formatIDR } from '@/lib/money'
 import { listAccounts } from '@/lib/accounts'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
@@ -24,6 +23,8 @@ import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 import type { TransactionSummary, TransactionsPage } from '@/lib/transactions'
+import { card } from '@/components/cardClasses'
+import { FigureRow, Figures } from '@/components/Figures'
 
 const text = copy.history.transactions
 
@@ -394,16 +395,10 @@ function MonthSummary({ summary }: { summary: TransactionSummary }) {
     lines.push({ label: text.summaryBalance(formatIsoDate(summary.end_on)), amount: summary.end, last: true })
 
   return (
-    <dl className="flex flex-col gap-1.5 rounded-lg bg-card px-4 py-3 text-sm shadow-card ring-1 ring-foreground/10">
+    <Figures className={card}>
       {lines.map((line) => (
-        <div
-          key={line.label}
-          className={`flex items-baseline justify-between gap-3 ${line.last ? 'mt-1 border-t border-border pt-2 font-semibold' : ''}`}
-        >
-          <dt className={line.last ? '' : 'text-muted-foreground'}>{line.label}</dt>
-          <dd className="tabular font-medium">{formatIDR(line.amount)}</dd>
-        </div>
+        <FigureRow key={line.label} label={line.label} amount={line.amount} total={line.last} />
       ))}
-    </dl>
+    </Figures>
   )
 }

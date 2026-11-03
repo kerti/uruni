@@ -1,4 +1,3 @@
-import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
 import BackLink from '@/components/BackLink'
@@ -9,12 +8,13 @@ import { formatIsoDate } from '@/lib/dates'
 import { listIncidentals } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import type { Incidental } from '@/lib/incidentals'
+import { tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 const text = copy.incidentals
 
 /** A closed envelope's card box. */
-const cardClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
+const cardClass = `flex items-center justify-between gap-3 ${tappableCard}`
 
 /**
  * Every closed envelope, most recently closed first - the screen behind
@@ -52,10 +52,10 @@ export default function ClosedIncidentals({ onBack, onOpen }: { onBack: () => vo
               <button type="button" onClick={() => onOpen(envelope.purpose_id)} className={cardClass}>
                 <span className="sr-only">{text.cardVerb}</span>{' '}
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{envelope.occasion}</span>
+                  <span className="truncate">{envelope.occasion}</span>
                   <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>
                 </span>
-                <CaretRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                <RowChevron />
               </button>
             </li>
           ))}

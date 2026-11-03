@@ -129,9 +129,9 @@ func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
 		t.Errorf("members = %q, want %q (name order; Fina, Gita and Hadi do not owe September)", got, want)
 	}
 	for _, want := range []string{
-		`<span class="badge paid">Lunas</span>`,
-		`<span class="badge unpaid">Belum bayar</span>`,
-		`<span class="badge partial">Bayar sebagian</span>`,
+		`<span class="badge paid"><svg`, `</svg>Lunas</span>`,
+		`<span class="badge unpaid"><svg`, `</svg>Belum bayar</span>`,
+		`<span class="badge partial"><svg`, `</svg>Bayar sebagian</span>`,
 		"Lunas \u00b7 sudah bayar di muka",
 		"Kategori Senior",
 		"Iuran: Rp25.000",

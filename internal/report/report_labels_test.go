@@ -58,3 +58,62 @@ func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 		t.Errorf("move label = %q, want %q", got, want)
 	}
 }
+
+// Every row names its kind - the PDF's Jenis column, the page's icon and
+// sr-only word - so a dues payment, a contribution and her own row read apart.
+// The words are Riwayat's kind words (rowLabels.*.kind); an ordinary row is
+// Masuk or Keluar, and a label that already starts with its kind is not read
+// twice.
+func TestReportRowKindTellsDuesFromContributionFromAnOrdinaryRow(t *testing.T) {
+	t.Parallel()
+	str := func(s string) *string { return &s }
+	tests := []struct {
+		name         string
+		entry        ledger.ReportEntry
+		icon, word   string
+		spokenBeside bool
+	}{
+		{"dues", ledger.ReportEntry{Kind: "dues", MemberName: str("Ani"), DuesPeriod: str("2026-06")}, "dues", "Iuran", true},
+		{"contribution", ledger.ReportEntry{Kind: "normal", MemberName: str("Budi")}, "contribution", "Sumbangan", true},
+		{"settlement", ledger.ReportEntry{Kind: "reimbursement", MemberName: str("Citra")}, "settlement", "Talangan", true},
+		{"reversal", ledger.ReportEntry{Kind: "adjustment", IsReversal: true, MemberName: str("Budi")}, "reversal", "Pembatalan", false},
+		{"opening", ledger.ReportEntry{Kind: "opening"}, "opening", "Saldo awal", false},
+		{"adjustment", ledger.ReportEntry{Kind: "adjustment"}, "adjustment", "Penyesuaian", false},
+		{"own row in", ledger.ReportEntry{Kind: "normal", Direction: ledger.ReportDirectionIn}, "", "Masuk", false},
+		{"own row out", ledger.ReportEntry{Kind: "normal", Direction: ledger.ReportDirectionOut}, "", "Keluar", false},
+	}
+	for _, tt := range tests {
+		icon, word, spoken := Text.entryKind(tt.entry)
+		if icon != tt.icon || word != tt.word || spoken != tt.spokenBeside {
+			t.Errorf("%s: kind = (%q, %q, %v), want (%q, %q, %v)", tt.name, icon, word, spoken, tt.icon, tt.word, tt.spokenBeside)
+		}
+	}
+}
+
+// An unnamed gift into an amplop is a contribution, as Riwayat reads it: Tanpa
+// nama under the kind icon, Sumbangan in the PDF. The same money into Kas
+// Utama is her own Masuk.
+func TestReportUnnamedGiftIntoAnEnvelopeIsASumbangan(t *testing.T) {
+	t.Parallel()
+	gift := func(purposeID int64) *ledger.ReportEntry {
+		return &ledger.ReportEntry{Kind: "normal", Direction: ledger.ReportDirectionIn, Amount: 20_000, PurposeID: purposeID, PurposeName: "Pos"}
+	}
+	r := ledger.Report{
+		Month:     "2026-11",
+		Envelopes: []ledger.ReportEnvelope{{PurposeID: 7}},
+		Rows: []ledger.ReportRow{
+			{Date: "2026-11-02", Entry: gift(7)},
+			{Date: "2026-11-02", Entry: gift(1)},
+		},
+	}
+	rows := NewPage(r, false).Rows
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if got := rows[0]; got.Kind != Text.KindContribution || got.KindIcon != "contribution" || !got.KindSpoken || got.Label != Text.RowAnonymous {
+		t.Errorf("gift into the amplop = (%q, %q, %v, %q), want a Sumbangan labelled %q", got.Kind, got.KindIcon, got.KindSpoken, got.Label, Text.RowAnonymous)
+	}
+	if got := rows[1]; got.Kind != Text.KindIn || got.KindIcon != "" || got.Label != "" {
+		t.Errorf("money into Kas Utama = (%q, %q, %q), want a plain Masuk", got.Kind, got.KindIcon, got.Label)
+	}
+}

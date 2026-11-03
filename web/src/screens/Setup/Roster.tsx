@@ -116,7 +116,6 @@ export default function Roster({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-11"
                   aria-label={text.roster.removeMember}
                   onClick={() => removeMember(index)}
                   disabled={submitting}

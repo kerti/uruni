@@ -31,9 +31,11 @@ async function openFromBeranda(page: Page, name: string) {
 }
 
 // The line a label sits on, by its immediate parent: the totals card and the
-// rollover note put the label and its figure side by side in one div.
+// rollover note (Figures) put the label and its figure side by side in one
+// div. Scoped to #root, the screen itself: a dialog portals outside it and
+// its own record (DetailField) uses the same dt/dd pair.
 function labelledLine(page: Page, label: string) {
-  return page.locator(`div:has(> span:text-is(${JSON.stringify(label)}))`)
+  return page.locator(`#root div:has(> dt:text-is(${JSON.stringify(label)}))`)
 }
 
 // The detail's totals card: each figure on the line its label names.

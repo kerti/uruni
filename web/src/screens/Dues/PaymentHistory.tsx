@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, Camera, MagnifyingGlass } from '@phosphor-icons/react'
+import SectionLabel from '@/components/SectionLabel'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -17,6 +18,7 @@ import { formatIDR } from '@/lib/money'
 import { listDuesPayments } from '@/lib/dues'
 import { useApi } from '@/lib/useApi'
 import type { DuesPaymentHistoryRow, DuesPaymentsPage } from '@/lib/dues'
+import { card } from '@/components/cardClasses'
 
 const text = copy.history.dues
 // reversalRow/reversedBadge name these two facts on the period-scoped panel
@@ -174,7 +176,7 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
         {copy.dues.entryLink}
       </Button>
 
-      <h2 className="text-lg font-semibold">{text.heading}</h2>
+      <SectionLabel>{text.heading}</SectionLabel>
 
       <div className="relative">
         <Label htmlFor="dues-payment-search" className="sr-only">
@@ -205,7 +207,7 @@ function PaymentHistoryRow({ row, onOpen }: { row: DuesPaymentHistoryRow; onOpen
   const receiptCount = row.receipt_ids.length
 
   return (
-    <li className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+    <li className={`relative flex flex-col gap-2 ${card}`}>
       {/* The whole card is one tap target that opens the entry in full (#768),
           as on Transaksi: a full-card button underneath the content, which
           ignores pointer events so a tap anywhere falls through to it. Every

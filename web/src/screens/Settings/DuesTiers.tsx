@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import SectionLabel from '@/components/SectionLabel'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,8 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
 import { currentPeriod } from '@/lib/dates'
+import { tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 const text = copy.settings.tiers
 
@@ -85,7 +88,7 @@ export default function DuesTiers() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
@@ -104,14 +107,21 @@ export default function DuesTiers() {
                 <button
                   type="button"
                   onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
-                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                  className={`flex items-center justify-between gap-3 ${tappableCard}`}
                 >
-                  <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{tier.name}</span>
+                  <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate">{tier.name}</span>
                   {/* What it costs this month, which is the one number she
-                      came to check. A tier with no rate yet says so rather
-                      than showing a zero it does not mean. */}
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    {current === null ? text.noRates : <span className="tabular">{formatIDR(current.amount)}</span>}
+                      came to check - an amount on a row reads as Beranda's
+                      do. A tier with no rate yet says so, small and grey,
+                      rather than showing a zero it does not mean. The
+                      chevron: the row opens the tier's own screen. */}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {current === null ? (
+                      <span className="text-sm text-muted-foreground">{text.noRates}</span>
+                    ) : (
+                      <span className="tabular font-medium">{formatIDR(current.amount)}</span>
+                    )}
+                    <RowChevron />
                   </span>
                 </button>
               </li>

@@ -24,13 +24,13 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 
 | Token | Hex | Use |
 |---|---|---|
-| `--background` | `#F6F4EF` | app background (warm cream) |
+| `--background` | `#F3F3F2` | app background (near-grey, barely warm: lets Forest stand out) |
 | `--card` | `#FFFFFF` | surfaces, cards |
 | `--foreground` | `#22323A` | primary text (soft ink) |
-| `--muted` | `#EEEBE3` | subtle fills |
-| `--muted-foreground` | `#5E6B71` | secondary text - 5.0:1 on the page, 4.62:1 on `--muted` (AA; was `#67757C`, [#508](https://github.com/kerti/uruni/issues/508)) |
+| `--muted` | `#EAE9E7` | subtle fills (near-grey, like the page) |
+| `--muted-foreground` | `#5E6B71` | secondary text - 4.95:1 on the page, 4.53:1 on `--muted` (AA; was `#67757C`, [#508](https://github.com/kerti/uruni/issues/508)) |
 | `--border` | `#E4E0D7` | hairlines |
-| `--input` | `#998A6C` | field borders - 3.08:1 on the page, 3.38:1 on a card, AA's 3:1 for a control's boundary (was `#CFC8BA`, [#508](https://github.com/kerti/uruni/issues/508)) |
+| `--input` | `#998A6C` | field borders - 3.05:1 on the page, 3.38:1 on a card, AA's 3:1 for a control's boundary (was `#CFC8BA`, [#508](https://github.com/kerti/uruni/issues/508)) |
 | `--ring` | `#2F6F60` | focus ring |
 
 **Brand**
@@ -50,11 +50,11 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 
 | Token | Hex | Use |
 |---|---|---|
-| `--success` | `#2C7756` | reconciled "cocok"; positive confirmations - 4.65:1 on `--success-soft`, 4.92:1 on the page (AA; was `#2E7D5B`, [#526](https://github.com/kerti/uruni/issues/526)) |
+| `--success` | `#2C7756` | reconciled "cocok"; positive confirmations - 4.65:1 on `--success-soft`, 4.87:1 on the page (AA; was `#2E7D5B`, [#526](https://github.com/kerti/uruni/issues/526)) |
 | `--success-soft` | `#E3F1E9` | success backgrounds |
 | `--attention` | `#C96C4A` | "selisih" / discrepancy — warm terracotta, **not** alarm-red |
 | `--attention-soft` | `#F6E6DD` | attention backgrounds |
-| `--attention-text` | `#A55031` | attention **text** - the same terracotta darkened to 4.56:1 on `--attention-soft` and 5.04:1 on the page; `--attention` stays for icons and fills ([#508](https://github.com/kerti/uruni/issues/508)) |
+| `--attention-text` | `#A55031` | attention **text** - the same terracotta darkened to 4.56:1 on `--attention-soft` and 4.99:1 on the page; `--attention` stays for icons and fills ([#508](https://github.com/kerti/uruni/issues/508)) |
 | `--destructive` | `#B4453C` | destructive actions only (delete) |
 | `--destructive-foreground` | `#FFFFFF` | text on destructive |
 
@@ -77,11 +77,12 @@ All monetary numbers use **tabular-nums** so columns align.
 
 ## Shape, elevation, spacing
 
-- **Radius:** `--radius: 0.5rem` (8px) — cards `rounded-2xl` (~14px), buttons `rounded-xl` (~11px), inputs `rounded-lg` (8px), chips pill. Reduced from 14px in [#319](https://github.com/kerti/uruni/issues/319): the larger value made cards ~25px round, which read bubbly rather than soft on a phone. **One exception:** Beranda's balance hero is `rounded-3xl` (24px), the one glass panel on the page, rounded like an iOS glass panel so it stands apart from the cards around it.
+- **Radius:** `--radius: 0.5rem` (8px) — cards `rounded-lg` (8px, every card alike, sign-in and setup included), buttons `rounded-xl` (~11px), inputs `rounded-lg` (8px), status badges `rounded-lg` (8px, a soft tag rather than a pill), Riwayat's removable filter chips pill. Reduced from 14px in [#319](https://github.com/kerti/uruni/issues/319): the larger value made cards ~25px round, which read bubbly rather than soft on a phone. **One exception:** Beranda's balance hero is `rounded-3xl` (24px), the one glass panel on the page, rounded like an iOS glass panel so it stands apart from the cards around it.
 - **Elevation (soft, warm):** sm `0 1px 2px rgba(34,50,58,.06)` · card `0 1px 2px rgba(34,50,58,.06), 0 4px 12px rgba(34,50,58,.08)` (every white card surface, over its hairline ring) · button `inset 0 1px 0 rgba(255,255,255,.2), 0 1px 2px rgba(34,50,58,.12), 0 2px 6px rgba(34,50,58,.08)` (filled buttons only; `sm` when pressed, none when disabled; ghost and link stay flat) · floating `0 8px 24px rgba(34,50,58,.10)` · bar `0 -4px 16px rgba(34,50,58,.08)` (the fixed bottom nav, cast upward so content reads as passing beneath it) · fab `0 3px 6px rgba(34,50,58,.22), 0 10px 24px rgba(34,50,58,.24)` (Catat's circle only, the one control above the bar). No harsh shadows.
-- **Glass (the bars, Catat and the balance hero):** the sticky header and bottom nav are the page's cream at 60% over a `blur(20px) saturate(1.6)` backdrop, with a bright 1px rim just inside the hairline on the edge facing the content and a soft glow falling from it (`header-glass`, `bar-glass` in `index.css`). Catat and Beranda's balance hero keep their solid Forest fill (over a flat cream page, see-through would only read as a paler green) and take glass's light rather than a bevel: a soft highlight pooling at the upper left, a faint inner glow and a light shadow (`fab-glass`, `hero-glass`, sized to each surface), and a shared 2px rim that catches light at two opposite corners - bright at the top left, back at the bottom right, nearly gone along the sides - as on an iOS glass panel (`glass-rim`). No shade along the bottom: that read as raised plastic. White and ink only - no coloured glow.
-- **Segmented controls and fields:** a segmented track is a shallow well (`well`, `inset 0 1px 3px rgba(34,50,58,.10)`), and its active option rises out of it with a light top-down sheen, a top highlight and a bottom inner shade (`segment`) - inset only, since the flush track clips anything outside. Fields stay flat; their border is `--input` `#CFC8BA`, a step darker than the `--border` hairline, so an empty field still shows its edge on the cream.
+- **Glass (the bars, Catat and the balance hero):** the sticky header and bottom nav are the page colour at 60% over a `blur(20px) saturate(1.6)` backdrop, with a bright 1px rim just inside the hairline on the edge facing the content and a soft glow falling from it (`header-glass`, `bar-glass` in `index.css`). Catat and Beranda's balance hero keep their solid Forest fill (over a flat page, see-through would only read as a paler green) and take glass's light rather than a bevel: a soft highlight pooling at the upper left, a faint inner glow and a light shadow (`fab-glass`, `hero-glass`, sized to each surface), and a shared 2px rim that catches light at two opposite corners - bright at the top left, back at the bottom right, nearly gone along the sides - as on an iOS glass panel (`glass-rim`). No shade along the bottom: that read as raised plastic. White and ink only - no coloured glow.
+- **Segmented controls and fields:** a segmented track is a shallow well (`well`, `inset 0 1px 3px rgba(34,50,58,.10)`), and its active option rises out of it with a light top-down sheen, a top highlight and a bottom inner shade (`segment`) - inset only, since the flush track clips anything outside. Fields stay flat; their border is `--input` `#998A6C`, a step darker than the `--border` hairline, so an empty field still shows its edge on the page.
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Generous padding inside cards (16–20px).
+- **Cards, badges, row ends — one look each:** a card's surface and padding come from `components/cardClasses.ts`, and a card that is itself the control answers hover, press and keyboard focus the same way on every screen. A status word sits in the one `Badge` (Label size, three tones: success, attention, neutral; an icon only where it carries meaning, as on the dues statuses). A row's title is regular weight and an amount at its end reads as on Beranda (tabular, medium, ink): weight marks the figure, never the name; a row that goes to another screen ends in the one `RowChevron`, a row that opens a dialog in none. Icon-only buttons are the `icon` Button size, 44px; a control drawn smaller than that gets its 44px from `touch-target`. Amounts that add up to a total are `Figures` (grey label, medium amount, total semibold over a hairline); a grey well inside a card or dialog is `insetPanel`.
 - **Section dividers:** a `--border` hairline between a screen's independent sections — Pengaturan's settings, Beranda's current state from its recent activity ([#319](https://github.com/kerti/uruni/issues/319)). Never inside a section and never inside a form, so the line keeps meaning "a new subject starts here".
 
 ## Controls
@@ -101,8 +102,8 @@ Selects are the design system's own control (`components/ui/select.tsx`, Radix `
 - Amount inputs use `inputmode="numeric"` and format to `Rp` on blur.
 - **Date and month fields are the app's own pickers, full-width like every other field.** `DateField` and `MonthField` open a popover (a calendar, a month grid) from a trigger the same `h-11` height as `Input` and the select, replacing the native `<input type="date">` whose iOS chrome ignored the width rule and whose picker was the OS's (#197). Full width holds the longest case written out in full (*September 2026*; September is the longest Indonesian month name at 9 characters), so no month name is ever abbreviated; formatting comes from `lib/dates`. **One exception:** the dues grid's column heads (*Jan ... Des*), where twelve columns share a phone's width; each head carries the full name for assistive technology, and the range line above the grid spells both ends out ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
 - **One column, phones and tablets.** Every screen, the header's contents and the bottom nav's five buttons sit in one centred 576px column (`max-w-xl`, set once in `Shell`); the bars' glass still spans the screen. A screen never sets its own width. On a phone the column is the whole width. Login, register and setup keep their own 384px card. A desktop layout is deferred.
-- Home layout: **balance is the hero**, reconciliation status directly beneath, recent activity below.
-- **Section labels on reading screens** (Beranda, an amplop) are small semibold Forest, led by the logo's Sage dot (`SectionLabel`), as the landing page opens its sections; no rings, which there play once on scroll. A list's month divider is quieter on purpose: the month in small grey and a hairline to the edge, since it starts a stretch of one list, not a section. Settings-type screens keep their `text-base` ink headings.
+- Home layout: **balance is the hero**, reconciliation status directly beneath, tucked under the hero's lower edge as one object (a white card, so the status colour never sits on Forest; "last checked" inside it), recent activity below.
+- **Section labels**: every section, on every screen, the public report and its PDF, opens with the same label: `text-base` semibold Forest, led by the logo's Sage dot (`SectionLabel`), as the landing page opens its sections; no rings, which there play once on scroll. A list's month divider is quieter on purpose: the month in small grey and a hairline to the edge, since it starts a stretch of one list, not a section. **Subsection labels** (`SubsectionLabel`): every stretch inside a section, a field group in a form included, is small semibold grey, the same on the report; one look each, so a reader learns it once.
 
 ## Dates
 
@@ -136,7 +137,7 @@ The mark is the **U-vessel**: a rounded "u" that reads as a small bowl, with a S
 Asset files live in [`/brand`](./brand):
 
 - `uruni-logomark.svg` — primary mark (Forest vessel, Sage dot).
-- `uruni-logomark-reversed.svg` — for dark/Forest backgrounds (Cream vessel, Sage dot).
+- `uruni-logomark-reversed.svg` — for dark/Forest backgrounds (near-grey vessel, Sage dot).
 - `uruni-appicon.svg` — Forest rounded-square icon with the knockout vessel.
 - `uruni-lockup-horizontal.svg` / `uruni-lockup-stacked.svg` — mark + wordmark.
 

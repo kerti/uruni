@@ -1,4 +1,3 @@
-import { CaretRight } from '@phosphor-icons/react'
 import { useEffect } from 'react'
 
 import OpenIncidentalDialog from '@/components/OpenIncidentalDialog'
@@ -24,6 +23,8 @@ import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
 import type { IncidentalListItem } from '@/lib/incidentals'
 import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
+import { card, tappableCard } from '@/components/cardClasses'
+import RowChevron from '@/components/RowChevron'
 
 /** How many of the most recent transactions the recent-activity list shows -
  * a client-side slice of GET /api/transactions's first page, which is already
@@ -31,8 +32,7 @@ import type { Transaction } from '@/lib/transactions'
 const RECENT_ACTIVITY_COUNT = 5
 
 /** A Saldo per pos row's box. */
-const rowClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none'
+const rowClass = `flex items-center justify-between gap-3 ${tappableCard}`
 
 interface HomeData {
   balances: Balances
@@ -214,13 +214,39 @@ export default function Home({
           Not `--secondary` (#E7F1EA), the soft-sage highlight surface: it is
           a shade away from success-soft (#E3F1E9) and would collide with
           the reconciliation banner directly beneath it. */}
-      <section
-        aria-label={copy.home.balanceHeading}
-        className="relative flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
-      >
-        <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
-        <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
-      </section>
+      {/* The hero and its reconciliation status are one statement - the
+          balance, and whether it matches the money - so the banner tucks
+          under the hero's lower edge, ahead of everything else (ADR-038's
+          2026-11-02 amendment; Design-System.md's home layout). */}
+      <div className="flex flex-col">
+        <section
+          aria-label={copy.home.balanceHeading}
+          className="relative z-10 flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
+        >
+          <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
+          <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
+        </section>
+        {/* A 404 from /api/reconciliations/latest is the only signal that no
+            count has ever been taken - open-lines answers [] either way, so
+            the banner cannot tell "nothing open" from "never looked" on its
+            own. The banner is the reconcile screen's entry point (M6.10):
+            no separate button anywhere else on this screen. onReconcile is
+            App.tsx's navigate('/reconcile'); Home stays router-agnostic. */}
+        <ReconciliationBanner
+          openLines={openLines}
+          everReconciled={latest !== null}
+          onClick={onReconcile}
+          tucked
+          footnotes={
+            latest
+              ? [
+                  copy.home.lastChecked(formatUnixSeconds(latest.performed_at)),
+                  ...(latest.has_new_entries ? [copy.home.newEntriesSince] : []),
+                ]
+              : []
+          }
+        />
+      </div>
 
       <section className="flex flex-col gap-2">
         <SectionLabel>{copy.home.locationsHeading}</SectionLabel>
@@ -236,33 +262,12 @@ export default function Home({
                 <span className="min-w-0 truncate">{account.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <span className="tabular font-medium">{formatIDR(account.balance)}</span>
-                  <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                  <RowChevron />
                 </span>
               </button>
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="flex flex-col gap-2">
-        {/* A 404 from /api/reconciliations/latest is the only signal that no
-            count has ever been taken - open-lines answers [] either way, so
-            the banner cannot tell "nothing open" from "never looked" on its
-            own. */}
-        {/* The reconcile screen's entry point (M6.10) - the banner itself is
-            the natural affordance, per the orchestrator's own ruling, so
-            there is no separate button anywhere else on this screen.
-            onReconcile is App.tsx's navigate('/reconcile'), the same
-            caller-owns-navigation contract RecordTransaction.tsx's
-            onRecorded/onCancel already use - Home stays router-agnostic,
-            same as every other screen in this app. */}
-        <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
-        {latest && (
-          <p className="flex flex-col text-sm text-muted-foreground">
-            <span>{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</span>
-            {latest.has_new_entries && <span>{copy.home.newEntriesSince}</span>}
-          </p>
-        )}
       </section>
 
       {/* Incidentals are not history, they are a live balance sitting in the
@@ -302,7 +307,7 @@ export default function Home({
                         directly above. */}
                     <span className="flex shrink-0 items-center gap-2">
                       <PurposeAmount balance={purpose.balance} />
-                      <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                      <RowChevron />
                     </span>
                   </button>
                 </li>
@@ -316,7 +321,7 @@ export default function Home({
                   <span className="min-w-0 truncate">{copy.incidentals.closedRow}</span>
                   <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
                     <span className="tabular">{closedIncidentalCount}</span>
-                    <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+                    <RowChevron />
                   </span>
                 </button>
               </li>
@@ -339,15 +344,11 @@ export default function Home({
           is still inside the balance above, so this is a plain row beside
           it, never a subtraction and never an alarm - and absent at zero. */}
       {balances.owed_to_members > 0 && (
-        <button
-          type="button"
-          onClick={onViewOwed}
-          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
-        >
+        <button type="button" onClick={onViewOwed} className={`flex items-center justify-between gap-3 ${tappableCard}`}>
           <span>{copy.home.owedToMembers}</span>
           <span className="flex items-center gap-2">
             <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
-            <CaretRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+            <RowChevron />
           </span>
         </button>
       )}
@@ -364,7 +365,7 @@ export default function Home({
           a month is not a verdict. */}
       <section className="flex flex-col gap-2">
         <SectionLabel>{copy.home.cashflowHeading}</SectionLabel>
-        <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+        <div className={card}>
           {/* Two columns while both figures are short; one under the other when
               either is wide enough to crowd its half (a whole figure to its
               own line, never a clipped or wrapped number). */}
@@ -384,21 +385,9 @@ export default function Home({
       </section>
 
       <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <SectionLabel>{copy.home.recentActivityHeading}</SectionLabel>
-          {/* 44px to the thumb, not to the layout (#319): an invisible hit area
-              centred on the link - ReceiptRowButton's technique - so the row
-              is only as tall as its small heading, rather than min-h-11
-              pushing the heading 12px further from what is above it. */}
-          <Button
-            type="button"
-            variant="link"
-            className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
-            onClick={onViewHistory}
-          >
-            {copy.home.recentActivityViewAll}
-          </Button>
-        </div>
+        <SectionLabel action={{ label: copy.home.recentActivityViewAll, onClick: onViewHistory }}>
+          {copy.home.recentActivityHeading}
+        </SectionLabel>
         <TransactionList
           transactions={recentTransactions}
           purposeNames={purposeNames}

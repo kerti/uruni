@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import SubsectionLabel from '@/components/SubsectionLabel'
+import SectionLabel from '@/components/SectionLabel'
 
 import BackLink from '@/components/BackLink'
 import MonthField from '@/components/MonthField'
@@ -19,6 +21,8 @@ import { useApi } from '@/lib/useApi'
 import { errorCode } from '@/lib/api'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
+import { card } from '@/components/cardClasses'
+import { Badge } from '@/components/Badge'
 
 const text = copy.settings.tiers
 
@@ -141,7 +145,7 @@ function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () 
 
   return (
     <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-      <h2 className="text-base font-semibold">{text.nameHeading}</h2>
+      <SectionLabel>{text.nameHeading}</SectionLabel>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="tier-name">{text.nameLabel}</Label>
         <Input id="tier-name" type="text" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
@@ -182,7 +186,7 @@ function TierRates({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{text.ratesHeading}</h2>
+      <SectionLabel>{text.ratesHeading}</SectionLabel>
       {superseded && (
         <p role="alert" className="text-sm text-attention-text">
           {copy.common.errors.dues_rate_superseded}
@@ -280,7 +284,7 @@ function RateRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+    <li className={`flex flex-col gap-2 ${card}`}>
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
           <AmountInput
@@ -354,7 +358,7 @@ function RateRow({
           <span className="flex min-w-0 flex-col">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
-              {inForce && <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.inForce}</span>}
+              {inForce && <Badge tone="success">{text.inForce}</Badge>}
             </span>
             <span className="text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
           </span>
@@ -399,7 +403,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
 
   return (
     <form aria-label={text.addRate} className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-      <h3 className="text-sm font-medium text-muted-foreground">{text.addRateHeading}</h3>
+      <SubsectionLabel>{text.addRateHeading}</SubsectionLabel>
       <AmountInput id={`new-rate-amount-${tierId}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`new-rate-from-${tierId}`}>{text.effectiveFromLabel}</Label>

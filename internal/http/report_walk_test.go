@@ -211,7 +211,7 @@ func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(
 		t.Errorf("the reversal is listed under dir=out:\n%s", out)
 	}
 	// Its amount is still the money that left the fund.
-	if !strings.Contains(in, "-"+money.FormatIDR(20_000)) {
+	if !strings.Contains(in, report.Text.DirectionOut+" </span>"+money.FormatIDR(20_000)) {
 		t.Errorf("the reversal row does not read as money out of the fund:\n%s", in)
 	}
 
@@ -238,7 +238,7 @@ func TestReportStandaloneAdjustmentIsLabelledPenyesuaian(t *testing.T) {
 	if n := strings.Count(section, `<span class="label-line">Penyesuaian</span>`); n != 1 {
 		t.Errorf("Penyesuaian rows = %d, want 1:\n%s", n, section)
 	}
-	if !strings.Contains(section, "-"+money.FormatIDR(4_000)) {
+	if !strings.Contains(section, report.Text.DirectionOut+" </span>"+money.FormatIDR(4_000)) {
 		t.Errorf("the adjustment's amount is missing:\n%s", section)
 	}
 }

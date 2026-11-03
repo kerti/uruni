@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import SectionLabel from '@/components/SectionLabel'
 
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
@@ -15,6 +16,7 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Fund } from '@/lib/setup'
 import { EditTimeZoneDialog } from '@/screens/Settings/FundTimeZone'
+import { tappableCard } from '@/components/cardClasses'
 
 const text = copy.settings.fund
 
@@ -73,7 +75,7 @@ export default function FundName({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">{text.heading}</h2>
+        <SectionLabel>{text.heading}</SectionLabel>
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
@@ -117,16 +119,12 @@ export default function FundName({
  * edit affordance. */
 function SettingCard({ verb, label, value, onClick }: { verb: string; label: string; value: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex min-h-11 w-full flex-col items-start rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-    >
+    <button type="button" onClick={onClick} className={`flex flex-col items-start ${tappableCard}`}>
       {/* The verb is visually hidden text, first in the button, so the
           accessible name is built from the content and holds every visible
           word (WCAG 2.5.3) - an aria-label would replace it. */}
       <span className="sr-only">{verb}</span> <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="w-full min-w-0 truncate font-medium">{value}</span>
+      <span className="w-full min-w-0 truncate">{value}</span>
     </button>
   )
 }
