@@ -44,6 +44,7 @@ test.describe('receipt photos', () => {
 
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill('12000')
 
     // The optional photo field - a hidden <input type="file"> named "Tambah foto

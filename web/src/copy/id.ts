@@ -219,6 +219,9 @@ export const copy = {
     // Every location picker starts blank unless the fund has one location
     // (lib/accountDefault.ts), so she names where the money is each time.
     locationPlaceholder: 'Pilih lokasi',
+    // Pos too: blank unless the fund has one, or the form was opened from an
+    // amplop (lib/accountDefault.ts).
+    purposePlaceholder: 'Pilih pos',
     // The way out of a full-screen form, which has no X and, installed to a
     // home screen, no browser back button.
     back: 'Kembali',

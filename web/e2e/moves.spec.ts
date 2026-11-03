@@ -91,11 +91,11 @@ test.describe('moves and corrections', () => {
     await logIn(page)
     await page.goto('/')
 
-    // A spend tagged Kas Utama (the form's default pos) that belonged to the
-    // amplop.
+    // A spend tagged Kas Utama that belonged to the amplop.
     await openRecord(page)
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()

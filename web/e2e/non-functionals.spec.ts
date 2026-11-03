@@ -196,6 +196,7 @@ test.describe('browser-only non-functionals', () => {
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill('77000')
     await page.context().setOffline(true)
     await page.getByRole('button', { name: copy.record.submit }).click()

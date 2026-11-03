@@ -21,6 +21,7 @@ async function recordClaim(page: Page, amount: string): Promise<string> {
   // No location while a member's own money paid: nothing leaves the kas yet.
   await expect(page.getByLabel(copy.record.locationLabel, { exact: true })).toHaveCount(0)
   const name = await chooseOption(page, copy.reimbursements.record.memberLabel)
+  await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
   await page.getByLabel(copy.record.amountLabel).fill(amount)
   await page.getByRole('button', { name: copy.record.submit }).click()
   await expect(page.getByText(copy.record.successFronted)).toBeVisible()
@@ -196,6 +197,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.reimbursements.record.heading, exact: true }).click()
     await expect(page.getByLabel(copy.record.frontedLabel)).toBeChecked()
     await chooseOption(page, copy.reimbursements.record.memberLabel)
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill('30000')
     await page.getByRole('button', { name: copy.record.submit }).click()
 

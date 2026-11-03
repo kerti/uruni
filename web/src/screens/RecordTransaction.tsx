@@ -158,8 +158,8 @@ export default function RecordTransaction({
   const [purposeId, setPurposeId] = useState<number | null>(null)
   // Only used by 'purpose' (ADR-036): where the money is for now, and where it
   // should be for. purposeId above is the ordinary entry's one tag.
-  const [fromPurposeId, setFromPurposeId] = useState<number | null>(null)
-  const [toPurposeId, setToPurposeId] = useState<number | null>(null)
+  const [pickedFromPurposeId, setFromPurposeId] = useState<number | null>(null)
+  const [pickedToPurposeId, setToPurposeId] = useState<number | null>(null)
   const [amount, setAmount] = useState(initialAmount ?? 0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
@@ -206,26 +206,10 @@ export default function RecordTransaction({
       // longer exists would leave the picker on an id nothing matches, and the
       // form unsubmittable for no visible reason.
       const seeded = initialPurposeId == null ? undefined : loadState.data.purposes.find((p) => p.id === initialPurposeId)
-      if (seeded) {
-        setPurposeId(seeded.id)
-      } else {
-        const main = loadState.data.purposes.find((p) => p.kind === 'main')
-        if (main) setPurposeId(main.id)
-      }
-    }
-
-    // Pindah pos opens with the source on Kas Utama (ADR-036), the usual
-    // giver. The destination is never preselected (#737): it starts blank
-    // and is filled only when there is exactly one pos it could be. Never a
-    // Titipan: it is not offered at all (movablePurposes below).
-    if (fromPurposeId === null && toPurposeId === null) {
-      const movable = loadState.data.purposes.filter((p) => p.kind !== 'pass_through')
-      const main = movable.find((p) => p.kind === 'main')
-      if (main) {
-        setFromPurposeId(main.id)
-        const onlyOther = soleCandidateId(movable.filter((p) => p.id !== main.id))
-        if (onlyOther !== null) setToPurposeId(onlyOther)
-      }
+      // Opened from an amplop, its pos; otherwise blank unless the fund has
+      // only the one pos (lib/accountDefault.ts's rule, for pos too).
+      const startId = seeded?.id ?? soleCandidateId(loadState.data.purposes)
+      if (startId !== null) setPurposeId(startId)
     }
 
     // "Dari siapa?" (ADR-034) - the same "only honour a real one" guard as
@@ -267,6 +251,12 @@ export default function RecordTransaction({
   // there is nowhere for it to move to, so say so instead of leaving "Ke"
   // empty.
   const hasOpenEnvelope = movablePurposes.some((p) => p.kind === 'incidental')
+  // Both sides start blank and each fills itself only when one pos is the
+  // only answer: Dari when the fund has one movable pos, Ke once Dari leaves
+  // just one other. Never a Titipan (movablePurposes). Once she picks, her
+  // choice stands.
+  const fromPurposeId = pickedFromPurposeId ?? soleCandidateId(movablePurposes)
+  const toPurposeId = pickedToPurposeId ?? soleCandidateId(movablePurposes.filter((p) => p.id !== fromPurposeId))
   const samePurpose = isPurposeMove && fromPurposeId !== null && fromPurposeId === toPurposeId
   // The source cannot give more than it holds, read from the balance fetched
   // with the form (the ledger re-checks at posting time, so a stale figure

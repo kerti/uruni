@@ -102,6 +102,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     // where the money is, every time.
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
 
@@ -116,12 +117,13 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expect(recent.getByText(formatIDR(spent))).toBeVisible()
     await expectBalances(page, opening - spent, 0)
 
-    // Money in, to Kas Utama: the form's default purpose, so only the direction
-    // and amount are touched.
+    // Money in, to Kas Utama. Location and pos are both picked: neither has a
+    // default with more than one to choose from.
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionIn }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill(String(received))
     await page.getByRole('button', { name: copy.record.submit }).click()
 

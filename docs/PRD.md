@@ -79,7 +79,7 @@ Key entities:
 
 ### 7.2 Record a transaction (the everyday action)
 - A prominent "add" action reachable in one tap from the home screen.
-- Minimum fields with smart defaults: amount, in/out, location (blank until she picks, unless the fund has only one: a remembered location once let a bank deposit be saved as cash, and a wrong location is the error cek kas exists to catch), purpose (defaults to Kas Utama), date (defaults to today). Note and photo optional.
+- Minimum fields: amount, in/out (defaults to out), location and purpose, date (defaults to today). Note and photo optional. **Nothing is chosen for her but the only choice:** location and purpose start blank unless the fund has just one, or the form was opened from somewhere that already says (an amplop's own pos, a member's dues). A remembered location once let a bank deposit be saved as cash, and a wrong location is the error cek kas exists to catch.
 - Money that only changes place (cash to the bank, "Pindah lokasi") or purpose ("Pindah pos") is recorded as a value-neutral transfer, and a posted row's pos can be corrected after the fact ("Perbaiki pos") - neither moves the fund's balance.
 - A transaction recorded in error is reversed by a new entry, never edited away: the reversal is dated the original's date, unless a cek kas has counted the original since, and then today.
 - Recording should feel responsive; the server is the single source of truth and confirms the write quickly.

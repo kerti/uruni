@@ -92,6 +92,7 @@ test.describe('first run and access', () => {
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await chooseOption(page, copy.record.locationLabel, 'Tunai')
+    await chooseOption(page, copy.record.purposeLabel, 'Kas Utama')
     await page.getByLabel(copy.record.amountLabel).fill(String(spent))
     await page.getByRole('button', { name: copy.record.submit }).click()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()

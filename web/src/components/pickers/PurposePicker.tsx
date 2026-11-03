@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { copy } from '@/copy/id'
 import type { Purpose } from '@/lib/purposes'
 
 /**
@@ -56,7 +57,7 @@ export default function PurposePicker({
         disabled={disabled || purposes.length === 0}
       >
         <SelectTrigger id={selectId} aria-label={label}>
-          <SelectValue>{purposes.find((purpose) => purpose.id === value)?.name}</SelectValue>
+          <SelectValue>{purposes.find((purpose) => purpose.id === value)?.name ?? copy.common.purposePlaceholder}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {purposes.map((purpose) => (

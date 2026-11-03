@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/App'
-import { selectedOptionName } from '@/test/select'
+import { chooseOption, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { resetFundTimeZone } from '@/lib/dates'
 import type { SessionStatus } from '@/lib/auth'
@@ -422,15 +422,15 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('falls back to the main purpose when ?purpose= is malformed', async () => {
+  it('treats a malformed ?purpose= as absent: the pos starts blank', async () => {
     // Number('') is 0 and finite, so an empty param must not read as a
-    // purpose id; the default is the fund's main row, as if absent.
+    // purpose id; the pos starts blank, as if absent (lib/accountDefault.ts).
     window.history.pushState({}, '', '/record?purpose=')
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
 
     await screen.findByRole('heading', { name: copy.record.headingOut })
-    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Kas utama'))
+    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe(copy.common.purposePlaceholder))
     window.history.pushState({}, '', '/')
   })
 
@@ -521,6 +521,8 @@ describe('App (record loop)', () => {
     await screen.findByRole('heading', { name: copy.record.headingOut })
 
     await userEvent.type(screen.getByLabelText(copy.record.amountLabel), '50000')
+    // Pos starts blank with more than one (lib/accountDefault.ts).
+    await chooseOption(copy.record.purposeLabel, 'Kas utama')
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
 
     expect(await screen.findByText(copy.record.successOut)).toBeInTheDocument()
@@ -539,6 +541,8 @@ describe('App (record loop)', () => {
 
     await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await userEvent.type(await screen.findByLabelText(copy.record.amountLabel), '50000')
+    // Pos starts blank with more than one (lib/accountDefault.ts).
+    await chooseOption(copy.record.purposeLabel, 'Kas utama')
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
     // Tapping the toast puts it away; going round again must not bring it back.
     await userEvent.click(await screen.findByRole('button', { name: copy.record.successOut }))
