@@ -330,7 +330,7 @@
    vanishing, and a bright 1px line just inside the hairline border on the
    edge that faces the content, with a soft glow falling from it. Each casts
    its lift toward the content: up for the bottom nav (--shadow-bar), down for
-   the sticky header. */
+   the header. Both bars are fixed (Shell.tsx). */
 @utility bar-glass {
   background-color: color-mix(in srgb, var(--background) 60%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);

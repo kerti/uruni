@@ -217,8 +217,11 @@ export default function Home({
       {/* The hero and its reconciliation status are one statement - the
           balance, and whether it matches the money - so the banner tucks
           under the hero's lower edge, ahead of everything else (ADR-038's
-          2026-11-02 amendment; Design-System.md's home layout). */}
-      <div className="flex flex-col">
+          2026-11-02 amendment; Design-System.md's home layout). `isolate`
+          keeps the hero's z-10 inside this pair: it lifts the hero over the
+          banner only, never over the fixed header (also z-10, earlier in
+          the page) as the page scrolls beneath it. */}
+      <div className="isolate flex flex-col">
         <section
           aria-label={copy.home.balanceHeading}
           className="relative z-10 flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
