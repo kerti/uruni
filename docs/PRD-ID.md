@@ -92,6 +92,7 @@ Entitas utama:
 - Menandai pembayaran iuran (nominal terisi otomatis dari kategori anggota, dapat diubah; lokasi; tunai/transfer).
 - Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
 - Status tiap anggota selama dua belas bulan terakhir dalam sekali lihat - hanya status, tanpa hitungan atau nominal ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
+- **Memutihkan** iuran anggota untuk satu bulan atau lebih saat kelompok memutuskan ia tidak perlu membayar (rumah terbakar, kemalingan, keluarga berduka) - kata di antarmuka adalah **"Putihkan"**, sama seperti untuk talangan. Tidak ada uang yang bergerak; bulan itu terbaca *Diputihkan*, tidak pernah lunas, keluar dari tunggakan, dan dapat dibatalkan. Catatannya hanya untuk bendahara, tidak pernah tampil di laporan publik ([ADR-050](./ADR/050-waiving-a-members-dues.md)).
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
 
 ### 7.4 Talangan (reimbursement)

@@ -196,6 +196,16 @@
       "created_at": 1700000110
     }
   ],
+  "dues_waivers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "member_id": 1,
+      "dues_period": "2026-09",
+      "note": "Rumah kebakaran",
+      "created_at": 1700000120
+    }
+  ],
   "reimbursements": [
     {
       "id": 1,

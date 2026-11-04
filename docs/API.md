@@ -43,6 +43,8 @@ Anything not listed falls through to the SPA (outside `/api` and `/report`) or a
 | POST | `/api/members` | required |
 | DELETE | `/api/members/{id}` | required |
 | PATCH | `/api/members/{id}` | required |
+| POST | `/api/members/{id}/dues-waivers` | required |
+| DELETE | `/api/members/{id}/dues-waivers/{period}` | required |
 | GET | `/api/members/{id}/outstanding-dues` | required |
 | POST | `/api/pass-through-purposes` | required |
 | POST | `/api/purpose-moves` | required |

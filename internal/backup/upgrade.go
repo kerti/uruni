@@ -340,6 +340,7 @@ func upgradeV2(v2 documentV2) (Document, error) {
 		MemberTiers:          v2.MemberTiers,
 		Transfers:            v2.Transfers,
 		DuesPayments:         []DuesPayment{},
+		DuesWaivers:          []DuesWaiver{},
 		Reimbursements:       v2.Reimbursements,
 		Transactions:         make([]Transaction, 0, len(v2.Transactions)),
 		Receipts:             v2.Receipts,

@@ -34,6 +34,12 @@ package backup
 // of each kind='dues' row (null on every other kind). Version 1 and 2 files are
 // upgraded in ParseUpload: the 2-to-3 step binds the dues rows by the rule in
 // upgrade.go.
+//
+// Still 3, with no bump, for the dues_waivers array (ADR-050): format 3 has not
+// been released, so no binary yet reads a 3 that lacks the array, and a file
+// without it decodes to no waivers, which is what every older file means. Like
+// transfers[].reason, an addition an older file reads as absent is no format
+// change. If format 3 ships before the array does, the array needs a 3-to-4 step.
 const FormatVersion int64 = 3
 
 // Document is uruni.json's root object: every table but session and
@@ -77,7 +83,10 @@ type Document struct {
 
 	Transfers []Transfer `json:"transfers"`
 	// DuesPayments binds each payment's dues rows (ADR-048).
-	DuesPayments   []DuesPayment   `json:"dues_payments"`
+	DuesPayments []DuesPayment `json:"dues_payments"`
+	// DuesWaivers holds every waived member-month (ADR-050), note included: the
+	// note is the treasurer's, kept in the backup and never on the public report.
+	DuesWaivers    []DuesWaiver    `json:"dues_waivers"`
 	Reimbursements []Reimbursement `json:"reimbursements"`
 	Transactions   []Transaction   `json:"transactions"`
 	Receipts       []Receipt       `json:"receipts"`
@@ -199,6 +208,17 @@ type DuesPayment struct {
 	ID        int64 `json:"id"`
 	FundID    int64 `json:"fund_id"`
 	CreatedAt int64 `json:"created_at"`
+}
+
+// DuesWaiver mirrors the "dues_waiver" table verbatim: one member's dues for one
+// month, waived (ADR-050).
+type DuesWaiver struct {
+	ID         int64   `json:"id"`
+	FundID     int64   `json:"fund_id"`
+	MemberID   int64   `json:"member_id"`
+	DuesPeriod string  `json:"dues_period"`
+	Note       *string `json:"note"`
+	CreatedAt  int64   `json:"created_at"`
 }
 
 // Reimbursement mirrors the "reimbursement" table verbatim: a member's claim,

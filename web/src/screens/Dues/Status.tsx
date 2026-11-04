@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CaretDown, CheckCircle, Circle, CircleDashed, type Icon } from '@phosphor-icons/react'
+import { CaretDown, CheckCircle, Circle, CircleDashed, RadioButton, type Icon } from '@phosphor-icons/react'
 
 import { Badge, type BadgeTone } from '@/components/Badge'
 import BackLink from '@/components/BackLink'
@@ -41,24 +41,29 @@ const UNPAID_STATUSES: readonly DuesStatusKind[] = ['unpaid', 'partial']
 
 /** Tone for one status badge - no `--destructive` red anywhere on this
  * screen. `paid_in_advance` reuses `paid`'s success tone but adds a ring, so
- * it reads as a variant of "lunas" while staying distinguishable. */
+ * it reads as a variant of "lunas" while staying distinguishable. `waived`
+ * (ADR-050) is neutral: not green, because no money came in, and not terracotta,
+ * because nothing is left to do. */
 const badgeTone: Record<DuesStatusKind, BadgeTone> = {
   unpaid: 'neutral',
   partial: 'attention',
   paid: 'success',
   paid_in_advance: 'success',
+  waived: 'neutral',
 }
 
 /** Icons stay as calm as the tones: an empty circle for what is not paid yet,
  * a dashed one for a part-payment in progress, a check for settled. No alert
  * triangle - Reconcile.tsx uses that shape for a selisih, and an ordinary
  * unpaid or half-paid month is not a discrepancy (Design-System.md: gentle
- * semantic states). */
+ * semantic states). A waived month is a ring with a dot, the grid's own shape
+ * for it. */
 const badgeIcon: Record<DuesStatusKind, Icon> = {
   unpaid: Circle,
   partial: CircleDashed,
   paid: CheckCircle,
   paid_in_advance: CheckCircle,
+  waived: RadioButton,
 }
 
 function StatusBadge({ status }: { status: DuesStatusKind }) {

@@ -198,6 +198,29 @@ WHERE mt.correction = (
   WHERE c.member_id = mt.member_id AND c.effective_from = mt.effective_from
 );
 
+CREATE TABLE dues_waiver (                -- a member's dues for one month, waived (ADR-050)
+  -- The group decided that a member's dues for a month stop being owed. It is not
+  -- a ledger fact: no money moves, so it posts no transaction and no balance or
+  -- reconciliation reads it. One row per waived member-month; undoing it deletes
+  -- the row, as un-waiving a talangan clears waived_on, so it is not insert-only.
+  -- Whether a month MAY be waived (inside the member's window, still owed) needs
+  -- the dues computation, so Ledger.WaiveDues enforces it, not this table.
+  -- The note is the treasurer's only: never on the public report (ADR-050).
+  id          INTEGER PRIMARY KEY,
+  fund_id     INTEGER NOT NULL,
+  member_id   INTEGER NOT NULL,
+  dues_period TEXT    NOT NULL CHECK (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
+                                      AND date(dues_period||'-01') IS NOT NULL
+                                      AND dues_period >= '2000-01'),
+  note        TEXT,
+  created_at  INTEGER NOT NULL,
+  UNIQUE (fund_id, member_id, dues_period),
+  FOREIGN KEY (fund_id) REFERENCES fund(id),
+  -- No cascade: a member a waiver names is not a setup duplicate, so deleting
+  -- them is refused like a posted row's would be.
+  FOREIGN KEY (fund_id, member_id) REFERENCES member(fund_id, id)
+) STRICT;
+
 CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpose reclass
   -- Value-neutral movements are two transactions of equal amount and opposite
   -- direction, bound by one of these rows (ADR-024). A single row would change
@@ -657,6 +680,7 @@ DROP TRIGGER transaction_named_row_shape;
 DROP TABLE "transaction";
 DROP TABLE dues_payment;
 DROP TABLE reimbursement;
+DROP TABLE dues_waiver;
 DROP TABLE transfer;
 DROP VIEW member_tier_standing;
 DROP TABLE member_tier;

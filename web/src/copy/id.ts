@@ -292,6 +292,16 @@ export const copy = {
       // ADR-040: a rate a correction has since replaced or deleted (a stale screen).
       // The list reloads when this arrives, so the sentence says to look again.
       dues_rate_superseded: 'Nominal ini sudah diperbaiki atau dihapus. Daftarnya sudah dimuat ulang, silakan periksa lagi.',
+      // ADR-050, waiving a member's dues. The payment form never offers a waived
+      // month, so dues_period_waived is the stale-form fallback (it is waived
+      // from another device, or the form was left open): the fix is to un-waive
+      // it first, which the sentence need not spell out. The other three are the
+      // waiver dialog's: a month that is no longer owed, one already waived, and
+      // un-waiving one that is not.
+      dues_period_waived: 'Bulan ini sudah diputihkan.',
+      dues_already_waived: 'Bulan ini sudah diputihkan.',
+      dues_not_owed: 'Tidak ada iuran bulan ini yang perlu diputihkan.',
+      dues_not_waived: 'Bulan ini belum diputihkan.',
       // Renaming the fund's kas utama through this route - the one purpose it
       // refuses. A titipan and an amplop are renameable.
       purpose_not_renameable: 'Nama kas utama tidak bisa diganti.',
@@ -833,14 +843,16 @@ export const copy = {
     paidLabel: 'Dibayar',
     empty: 'Belum ada anggota dengan iuran untuk periode ini.',
     emptyFiltered: 'Semua anggota sudah bayar untuk periode ini.',
-    // Keyed by the schema's four status values (internal/ledger's
-    // MemberDuesStatus) so the badge and any other lookup share one map, as
-    // reconciliation.resolutionOptions does.
+    // Keyed by the schema's status values (internal/ledger's MemberDuesStatus)
+    // so the badge and any other lookup share one map, as
+    // reconciliation.resolutionOptions does. Diputihkan (ADR-050) is talangan's
+    // word for the same idea: an amount really owed that stops being owed.
     statuses: {
       unpaid: 'Belum bayar',
       partial: 'Bayar sebagian',
       paid: 'Lunas',
       paid_in_advance: 'Lunas · sudah bayar di muka',
+      waived: 'Diputihkan',
     },
     // Paid ahead with a known end: its own line under the amounts, naming the
     // last paid month, while the badge reads a plain "Lunas". The

@@ -143,6 +143,7 @@ ul.dues li{flex-direction:column;gap:6px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .badge.unpaid{background:var(--muted);color:var(--muted-foreground)}
 .badge.partial{background:var(--attention-soft);color:var(--attention-text)}
+.badge.waived{background:var(--muted);color:var(--muted-foreground)}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
 .grid{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
@@ -162,6 +163,8 @@ ul.dues li{flex-direction:column;gap:6px}
 .g-ring{fill:none;stroke:var(--attention);stroke-width:1.5}
 .g-half{fill:var(--attention)}
 .g-hollow{fill:none;stroke:var(--muted-foreground);stroke-width:1.5}
+.g-waived-ring{fill:none;stroke:var(--muted-foreground);stroke-width:1.5}
+.g-waived-dot{fill:var(--muted-foreground)}
 .g-none{stroke:var(--muted-foreground);stroke-width:1.5;stroke-linecap:round}
 .legend{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--muted-foreground)}
 .legend li{display:flex;align-items:center;gap:6px}

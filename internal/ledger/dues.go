@@ -61,6 +61,11 @@ type PostDuesPaymentsParams struct {
 // zone, a dues_period past the current month plus duesMonthsAhead, either
 // before the floor (ErrDateOutOfRange).
 //
+// A period the member's dues are waived for (ADR-050) is ErrDuesPeriodWaived,
+// and so is a batch with any such period: a month is owed or waived, never both,
+// and to take money for it anyway the waiver is undone first. Checked inside the
+// transaction, before the first row is written.
+//
 // A retired AccountID is ErrAccountInactive, checked once for the batch inside
 // the transaction. Every row's purpose is Kas Utama, looked up once there:
 // never a closed envelope, never a titipan.
@@ -95,6 +100,9 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return nil, err
 		}
+		if err := refuseWaivedPeriods(ctx, q, p); err != nil {
+			return nil, err
+		}
 		mainID, err := mainPurposeID(ctx, q, p.FundID)
 		if err != nil {
 			return nil, err
@@ -120,6 +128,22 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		return nil, fmt.Errorf("posting dues payments: %w", err)
 	}
 	return posted, nil
+}
+
+// refuseWaivedPeriods is ErrDuesPeriodWaived for a payment that names a month
+// its member's dues are waived for (ADR-050).
+func refuseWaivedPeriods(ctx context.Context, q store.Querier, p PostDuesPaymentsParams) error {
+	rows, err := q.ListDuesWaiversByMember(ctx, store.ListDuesWaiversByMemberParams{FundID: p.FundID, MemberID: p.MemberID})
+	if err != nil {
+		return fmt.Errorf("listing dues waivers: %w", err)
+	}
+	waived := foldWaivers(rows)[p.MemberID]
+	for _, period := range p.Periods {
+		if _, ok := waived[period.DuesPeriod]; ok {
+			return ErrDuesPeriodWaived
+		}
+	}
+	return nil
 }
 
 // postDuesPaymentTx inserts one period's row on the caller's open querier

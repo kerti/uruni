@@ -340,7 +340,7 @@ type GridRow struct {
 }
 
 // GridCell is one shape. Class is the ledger's cell value ("paid",
-// "partial", "unpaid", "none"), which picks the shape and the tone; Label is
+// "partial", "unpaid", "waived", "none"), which picks the shape and the tone; Label is
 // the month and status as text for assistive technology (the legend's is the
 // bare word). Start marks the first column of a year.
 type GridCell struct {
@@ -383,7 +383,7 @@ func buildGrid(r ledger.Report) *Grid {
 		}
 		out.Rows = append(out.Rows, GridRow{Name: row.Name, Cells: cells})
 	}
-	for _, c := range []ledger.DuesGridCell{ledger.DuesCellPaid, ledger.DuesCellPartial, ledger.DuesCellUnpaid, ledger.DuesCellNone} {
+	for _, c := range []ledger.DuesGridCell{ledger.DuesCellPaid, ledger.DuesCellPartial, ledger.DuesCellUnpaid, ledger.DuesCellWaived, ledger.DuesCellNone} {
 		out.Legend = append(out.Legend, GridCell{Class: string(c), Label: Text.gridWord(c)})
 	}
 	return out
@@ -568,7 +568,7 @@ func readFilter(query url.Values, fundID int64, purposes []store.Purpose, member
 
 	wantDues := query.Get("dues")
 	switch wantDues {
-	case ledger.ReportDuesUnpaid, ledger.ReportDuesPartial, ledger.ReportDuesPaid:
+	case ledger.ReportDuesUnpaid, ledger.ReportDuesPartial, ledger.ReportDuesPaid, ledger.ReportDuesWaived:
 		params.DuesStatus = wantDues
 		filter.Active.Set("dues", wantDues)
 	}
@@ -576,6 +576,7 @@ func readFilter(query url.Values, fundID int64, purposes []store.Purpose, member
 		{Value: ledger.ReportDuesUnpaid, Label: Text.DuesUnpaid, Selected: params.DuesStatus == ledger.ReportDuesUnpaid},
 		{Value: ledger.ReportDuesPartial, Label: Text.DuesPartial, Selected: params.DuesStatus == ledger.ReportDuesPartial},
 		{Value: ledger.ReportDuesPaid, Label: Text.DuesPaidStatus, Selected: params.DuesStatus == ledger.ReportDuesPaid},
+		{Value: ledger.ReportDuesWaived, Label: Text.DuesWaived, Selected: params.DuesStatus == ledger.ReportDuesWaived},
 	}
 	return params, filter
 }

@@ -55,10 +55,17 @@ function member(id: number, name: string): Member {
 // no dues tier, so this suite proves the exclusion by never including "Tanpa
 // tier" in the stubbed response and asserting it never renders.
 const rows = [
-  { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid', paid_through: null },
-  { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null },
-  { member: member(3, 'Warga Tiga'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid', paid_through: null },
-  { member: member(4, 'Warga Empat'), owed_amount: 50_000, paid_amount: 100_000, status: 'paid_in_advance', paid_through: null },
+  { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid', paid_through: null, waiver_note: null },
+  { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null, waiver_note: null },
+  { member: member(3, 'Warga Tiga'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid', paid_through: null, waiver_note: null },
+  {
+    member: member(4, 'Warga Empat'),
+    owed_amount: 50_000,
+    paid_amount: 100_000,
+    status: 'paid_in_advance',
+    paid_through: null,
+    waiver_note: null,
+  },
 ] satisfies DuesStatusRow[]
 
 // December to January crosses a year, so both year markers are on screen.
@@ -82,7 +89,14 @@ function stubDuesStatus(body: DuesStatusRow[] = rows, grid: DuesGrid = twoMonthG
 describe('DuesStatus', () => {
   it('names the last paid month for a member paid ahead (#357)', async () => {
     const ahead = [
-      { member: member(5, 'Warga Lima'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid_in_advance', paid_through: '2027-02' },
+      {
+        member: member(5, 'Warga Lima'),
+        owed_amount: 50_000,
+        paid_amount: 50_000,
+        status: 'paid_in_advance',
+        paid_through: '2027-02',
+        waiver_note: null,
+      },
     ] satisfies DuesStatusRow[]
     vi.stubGlobal('fetch', stubDuesStatus(ahead))
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
@@ -127,6 +141,52 @@ describe('DuesStatus', () => {
 
     // PRD section 7.3's explicit rule: a list and nothing more.
     expect(screen.queryByRole('button', { name: /ingat|kirim|notif/i })).not.toBeInTheDocument()
+  })
+
+  describe('a waived month (ADR-050)', () => {
+    const waivedRows = [
+      rows[0],
+      {
+        member: { ...member(6, 'Warga Enam'), arrears_months: 0 },
+        owed_amount: 50_000,
+        paid_amount: 20_000,
+        status: 'waived',
+        paid_through: null,
+        waiver_note: 'Rumah kebakaran',
+      },
+    ] satisfies DuesStatusRow[]
+
+    it('reads Diputihkan in the neutral tone, keeping what was paid, never as Lunas', async () => {
+      vi.stubGlobal('fetch', stubDuesStatus(waivedRows))
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+      await screen.findByText('Warga Enam')
+      const badge = screen.getByText(text.statuses.waived)
+      expect(badge).toHaveClass('bg-muted', 'text-muted-foreground')
+      expect(screen.queryByText(text.statuses.paid)).not.toBeInTheDocument()
+      const card = screen.getByText('Warga Enam').closest('li') as HTMLElement
+      expect(within(card).getByText(`${text.paidLabel}: ${formatIDR(20_000)}`)).toBeInTheDocument()
+    })
+
+    it('offers no Catat iuran on a waived card: nothing is owed', async () => {
+      vi.stubGlobal('fetch', stubDuesStatus(waivedRows))
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+      await screen.findByText('Warga Enam')
+      expect(screen.queryByRole('button', { name: text.recordForMemberAria('Warga Enam') })).not.toBeInTheDocument()
+      // The unpaid card beside it still does.
+      expect(screen.getByRole('button', { name: text.recordForMemberAria('Warga Satu') })).toBeInTheDocument()
+    })
+
+    it('is not "belum bayar": the filter leaves it out', async () => {
+      vi.stubGlobal('fetch', stubDuesStatus(waivedRows))
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+      await screen.findByText('Warga Enam')
+      await userEvent.click(screen.getByLabelText(text.unpaidFilterLabel))
+      expect(screen.getByText('Warga Satu')).toBeInTheDocument()
+      expect(screen.queryByText('Warga Enam')).not.toBeInTheDocument()
+    })
   })
 
   it('names itself and has one way back, at the top (#745)', async () => {
@@ -338,7 +398,28 @@ describe('DuesStatus', () => {
         within(legend)
           .getAllByRole('listitem')
           .map((li) => li.textContent),
-      ).toEqual([text.statuses.paid, text.statuses.partial, text.statuses.unpaid, gridText.none])
+      ).toEqual([text.statuses.paid, text.statuses.partial, text.statuses.unpaid, text.statuses.waived, gridText.none])
+    })
+
+    it('draws a waived month as a ring with a centre dot, labelled Diputihkan', async () => {
+      const waivedGrid: DuesGrid = {
+        periods: ['2026-01', '2026-02'],
+        members: [{ id: 1, name: 'Warga Satu', cells: ['paid', 'waived'] }],
+      }
+      vi.stubGlobal('fetch', stubDuesStatus(rows, waivedGrid))
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: GridRouter })
+
+      const table = await screen.findByRole('table')
+      const row = within(table).getByRole('row', { name: /Warga Satu/ })
+      expect(within(row).getByText('Februari 2026: Diputihkan')).toBeInTheDocument()
+      // The waived cell is the second: a ring (r 5.5) and a filled dot (r 2), both muted.
+      const shape = row.querySelectorAll('td')[1].querySelector('svg') as SVGElement
+      const [ring, dot] = Array.from(shape.querySelectorAll('circle'))
+      expect(shape.querySelectorAll('circle')).toHaveLength(2)
+      expect(ring.getAttribute('r')).toBe('5.5')
+      expect(ring).toHaveClass('fill-none', 'stroke-muted-foreground')
+      expect(dot.getAttribute('r')).toBe('2')
+      expect(dot).toHaveClass('fill-muted-foreground')
     })
 
     it('says so calmly when nobody owes dues, with no table', async () => {

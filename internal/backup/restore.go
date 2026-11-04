@@ -506,6 +506,9 @@ func newestMoment(doc Document) (string, error) {
 	for _, x := range doc.DuesPayments {
 		consider(x.CreatedAt)
 	}
+	for _, x := range doc.DuesWaivers {
+		consider(x.CreatedAt)
+	}
 	for _, x := range doc.Reimbursements {
 		consider(x.CreatedAt)
 	}
@@ -744,6 +747,7 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 		{"transaction", q.DeleteAllTransactions},
 		{"reimbursement", q.DeleteAllReimbursements},
 		{"dues_payment", q.DeleteAllDuesPayments},
+		{"dues_waiver", q.DeleteAllDuesWaivers},
 		{"transfer", q.DeleteAllTransfers},
 		{"member_tier", q.DeleteAllMemberTiers},
 		{"member", q.DeleteAllMembers},
@@ -833,6 +837,13 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 			ID: dp.ID, FundID: dp.FundID, CreatedAt: dp.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring dues payment %d: %w", dp.ID, err)
+		}
+	}
+	for _, dw := range doc.DuesWaivers {
+		if err := q.RestoreDuesWaiver(ctx, store.RestoreDuesWaiverParams{
+			ID: dw.ID, FundID: dw.FundID, MemberID: dw.MemberID, DuesPeriod: dw.DuesPeriod, Note: dw.Note, CreatedAt: dw.CreatedAt,
+		}); err != nil {
+			return fmt.Errorf("backup: restoring dues waiver %d: %w", dw.ID, err)
 		}
 	}
 	for _, rb := range doc.Reimbursements {

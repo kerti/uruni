@@ -93,6 +93,10 @@ type Copy struct {
 	DuesPartial       string
 	DuesPaidStatus    string
 	DuesPaidInAdvance string
+	// DuesWaived is a month the group decided is no longer owed (ADR-050): the
+	// status word, the filter's option and the grid's legend. The waiver's note is
+	// the treasurer's and appears nowhere in this package.
+	DuesWaived string
 
 	// The twelve-month dues grid (ADR-044). The status words are the dues
 	// section's own above. GridCellLabel is the hidden per-cell label; GridAsOf
@@ -256,6 +260,7 @@ var Text = Copy{
 	DuesPartial:       "Bayar sebagian",
 	DuesPaidStatus:    "Lunas",
 	DuesPaidInAdvance: "Lunas \u00b7 sudah bayar di muka",
+	DuesWaived:        "Diputihkan",
 
 	GridHeading:   "12 bulan",
 	GridRange:     func(from, to string) string { return from + " \u2013 " + to },
@@ -443,6 +448,8 @@ func (c Copy) duesStatus(s ledger.DuesStatus) string {
 		return c.DuesPaidStatus
 	case ledger.DuesStatusPaidInAdvance:
 		return c.DuesPaidInAdvance
+	case ledger.DuesStatusWaived:
+		return c.DuesWaived
 	default:
 		return c.DuesUnpaid
 	}
@@ -470,6 +477,8 @@ func (c Copy) gridWord(cell ledger.DuesGridCell) string {
 		return c.DuesPartial
 	case ledger.DuesCellUnpaid:
 		return c.DuesUnpaid
+	case ledger.DuesCellWaived:
+		return c.DuesWaived
 	default:
 		return c.GridNone
 	}

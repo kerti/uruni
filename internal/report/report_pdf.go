@@ -766,7 +766,8 @@ func (d *pdfDoc) duesGrid(p Page) {
 
 // gridShape draws one cell's mark centred on (cx, cy): a filled disc for
 // Lunas, a ring with its left half filled for Bayar sebagian, a bare ring for
-// Belum bayar, and a short dash for no obligation. Tones as the page's.
+// Belum bayar, a ring with a centre dot for Diputihkan, and a short dash for no
+// obligation. Tones as the page's.
 func (d *pdfDoc) gridShape(class string, cx, cy, r float64) {
 	d.SetLineWidth(0.4)
 	defer d.SetLineWidth(pdfRuleWidthMM)
@@ -789,6 +790,13 @@ func (d *pdfDoc) gridShape(class string, cx, cy, r float64) {
 	case string(ledger.DuesCellUnpaid):
 		d.rule("muted-foreground")
 		d.Circle(cx, cy, r, "D")
+	case string(ledger.DuesCellWaived):
+		// A ring with a dot at its centre, in the muted ink: owed nothing, and
+		// not paid either.
+		d.rule("muted-foreground")
+		d.fill("muted-foreground")
+		d.Circle(cx, cy, r, "D")
+		d.Circle(cx, cy, r*0.36, "F")
 	default:
 		d.rule("muted-foreground")
 		d.SetLineCapStyle("round")
@@ -798,7 +806,7 @@ func (d *pdfDoc) gridShape(class string, cx, cy, r float64) {
 }
 
 // duesColor is the page's badge colouring: paid is green, partial terracotta,
-// unpaid neutral - never alarm-red.
+// unpaid and waived neutral - never alarm-red.
 func duesColor(class string) string {
 	switch class {
 	case string(ledger.DuesStatusPaid), string(ledger.DuesStatusPaidInAdvance):

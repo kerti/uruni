@@ -13,7 +13,7 @@ import (
 const duesGridMonths = 12
 
 // DuesGridCell is one member's standing for one month of the grid: what
-// DuesStatusForPeriod says, drawn as three states and the absence of a due.
+// DuesStatusForPeriod says, drawn as four states and the absence of a due.
 type DuesGridCell string
 
 const (
@@ -29,6 +29,9 @@ const (
 	// DuesStatusPaidInAdvance collapses into it: in a row of months, paying ahead
 	// is already visible as the paid cells to its right.
 	DuesCellPaid DuesGridCell = "paid"
+	// DuesCellWaived is a month the group waived (ADR-050): owed nothing more,
+	// whatever was paid toward it. Never "paid".
+	DuesCellWaived DuesGridCell = "waived"
 )
 
 // DuesGridRow is one member's cells, parallel to DuesGrid.Periods.
@@ -60,8 +63,8 @@ type DuesGrid struct {
 // A member with no obligation in any shown month has no row.
 //
 // A fixed handful of reads however many members or months there are (#532):
-// the fund, the members, the tier timelines, the rates, and the payments of the
-// window, folded in memory with the rules DuesStatusForPeriod owns
+// the fund, the members, the tier timelines, the rates, and the payments and
+// waivers of the window, folded in memory with the rules DuesStatusForPeriod owns
 // (memberOwesPeriod, pricing.priceAt, classifyDuesStatus). The paid-in-advance
 // upgrade and its paidThrough walk are not needed: the grid draws both as paid.
 // Like it, this uses l.q directly (ADR-027).
@@ -117,6 +120,11 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 	if err != nil {
 		return DuesGrid{}, fmt.Errorf("dues paid by period range: %w", err)
 	}
+	waiverRows, err := l.q.ListDuesWaiversInRange(ctx, store.ListDuesWaiversInRangeParams{FundID: fundID, FromPeriod: from, ToPeriod: to})
+	if err != nil {
+		return DuesGrid{}, fmt.Errorf("listing dues waivers: %w", err)
+	}
+	waivers := foldWaivers(waiverRows)
 	paid := make(map[int64]map[string]money.Amount)
 	for _, row := range paidRows {
 		if row.MemberID == nil {
@@ -136,7 +144,8 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 		cells := make([]DuesGridCell, len(periods))
 		owes := false
 		for i, period := range periods {
-			cells[i] = duesGridCell(m, prices, paid[m.ID][period], period)
+			_, waived := waivers[m.ID][period]
+			cells[i] = duesGridCell(m, prices, paid[m.ID][period], waived, period)
 			if cells[i] != DuesCellNone {
 				owes = true
 				first = min(first, i)
@@ -157,8 +166,9 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 
 // duesGridCell is DuesStatusForPeriod's per-member decision for one month,
 // reduced to a grid cell: the same checks in the same order, over rows already
-// in memory. paid is what the member paid toward the month (zero if nothing).
-func duesGridCell(m store.Member, prices pricing, paid money.Amount, period string) DuesGridCell {
+// in memory. paid is what the member paid toward the month (zero if nothing);
+// waived says the month has a waiver.
+func duesGridCell(m store.Member, prices pricing, paid money.Amount, waived bool, period string) DuesGridCell {
 	if !memberOwesPeriod(m, period) {
 		return DuesCellNone
 	}
@@ -166,7 +176,9 @@ func duesGridCell(m store.Member, prices pricing, paid money.Amount, period stri
 	if !ok {
 		return DuesCellNone
 	}
-	switch classifyDuesStatus(money.FromDB(rate), paid) {
+	switch classifyDuesMonth(money.FromDB(rate), paid, waived) {
+	case DuesStatusWaived:
+		return DuesCellWaived
 	case DuesStatusPartial:
 		return DuesCellPartial
 	case DuesStatusUnpaid:

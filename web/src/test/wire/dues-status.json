@@ -14,7 +14,8 @@
     "owed_amount": 50000,
     "paid_amount": 50000,
     "paid_through": null,
-    "status": "paid"
+    "status": "paid",
+    "waiver_note": null
   },
   {
     "member": {
@@ -31,6 +32,7 @@
     "owed_amount": 50000,
     "paid_amount": 0,
     "paid_through": null,
-    "status": "unpaid"
+    "status": "waived",
+    "waiver_note": "Kena musibah"
   }
 ]

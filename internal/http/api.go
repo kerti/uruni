@@ -237,6 +237,11 @@ func (a *api) routes(r chi.Router) {
 		// Which periods one member still owes (#186), so the record-a-dues-payment
 		// screen has a server-side answer instead of one request per month.
 		r.Get("/members/{id}/outstanding-dues", a.getOutstandingDues)
+		// Waiving a member's dues for months they still owe (ADR-050): a decision,
+		// not money, so no ledger row. The waiver is undone by month. Not keyed: a
+		// waiver is undoable, unlike the immutable routes ADR-043 keys.
+		r.Post("/members/{id}/dues-waivers", a.createDuesWaivers)
+		r.Delete("/members/{id}/dues-waivers/{period}", a.deleteDuesWaiver)
 
 		// A one-off collection for an occasion, tracked apart from the general fund
 		// and closed when over (PRD section 7.5). Addressed by purpose id. There is

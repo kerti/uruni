@@ -78,8 +78,9 @@ test.describe('report, twelve months of dues', () => {
     })
     expect(order).toBeTruthy()
 
-    // The legend's four words; status only - no figure anywhere in the grid.
-    for (const word of ['Lunas', 'Bayar sebagian', unpaid, none]) {
+    // The legend's five words (Diputihkan since ADR-050); status only - no
+    // figure anywhere in the grid.
+    for (const word of ['Lunas', 'Bayar sebagian', unpaid, none, 'Diputihkan']) {
       await expect(grid(page).locator('ul.legend li').filter({ hasText: word })).toBeVisible()
     }
     await expect(grid(page)).not.toContainText('Rp')

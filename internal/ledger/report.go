@@ -28,6 +28,9 @@ const (
 	ReportDuesPartial = "partial"
 	// ReportDuesPaid also matches DuesStatusPaidInAdvance: paying ahead is paid.
 	ReportDuesPaid = "paid"
+	// ReportDuesWaived is the dues filter's value for DuesStatusWaived (ADR-050).
+	// Paid never includes a waived month.
+	ReportDuesWaived = "waived"
 )
 
 // ReportParams is what MonthlyReport needs. Every filter is optional and the
@@ -73,8 +76,8 @@ type ReportParams struct {
 	// move is neither, so a direction filter hides moves.
 	Direction Direction
 
-	// DuesStatus is ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid or
-	// "". It filters the dues table only, never the transactions (ADR-035).
+	// DuesStatus is ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid,
+	// ReportDuesWaived or "". It filters the dues table only, never the transactions (ADR-035).
 	DuesStatus string
 }
 
@@ -405,9 +408,9 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("%w: direction %q is not \"in\" or \"out\"", ErrInvalidArgument, p.Direction)
 	}
 	switch p.DuesStatus {
-	case "", ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid:
+	case "", ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid, ReportDuesWaived:
 	default:
-		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial or paid", ErrInvalidArgument, p.DuesStatus)
+		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial, paid or waived", ErrInvalidArgument, p.DuesStatus)
 	}
 
 	if p.AccountID != nil {
