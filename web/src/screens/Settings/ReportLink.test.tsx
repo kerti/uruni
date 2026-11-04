@@ -40,7 +40,7 @@ const fund: Fund = {
 const PDF_PATH = '/report/oldoldoldoldoldoldoldoldoldoldol/pdf'
 const PDF_NAME = 'laporan-kas-2026-10.pdf'
 // The report's months: the first transaction's (June) through the current one.
-const REPORT_MONTHS = { min: '2026-06', max: '2026-10' }
+const REPORT_MONTHS = { min: '2026-06', max: '2026-10', first_day: '2026-06-20', today: '2026-10-15' }
 
 function pdfResponse() {
   // A string body: Node's Response cannot read a jsdom Blob.
@@ -145,9 +145,11 @@ describe('ReportLink', () => {
     expect(pdfGets).toEqual([])
     expect(screen.getByTestId('location-search')).toHaveTextContent('?edit=report%3Apdf')
     const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    // Periode is the first field and takes the opening focus, as in every
+    // dialog; it opens on Bulanan, and Bulan on the current month.
+    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: text.pdfPeriodLabel })).toHaveFocus())
+    expect(within(dialog).getByRole('combobox', { name: text.pdfPeriodLabel })).toHaveTextContent(text.pdfPeriodMonth)
     const field = within(dialog).getByRole('button', { name: text.pdfMonthLabel })
-    // Bulan is the first field and takes the opening focus, as in every dialog.
-    await waitFor(() => expect(field).toHaveFocus())
     await waitFor(() => expect(field).toHaveTextContent('Oktober 2026'))
 
     await user.click(within(dialog).getByRole('button', { name: text.downloadPdf }))
@@ -203,6 +205,26 @@ describe('ReportLink', () => {
     await user.click(download)
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
     expect(pdfGets).toEqual([`${PDF_PATH}?month=2026-10&group=month`])
+  })
+
+  it('saves a date range, opening on the 1st of this month through today', async () => {
+    const { pdfGets } = stubFund()
+    stubNavigator({})
+    const user = userEvent.setup()
+    renderCard('/settings?edit=report:pdf')
+
+    const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    const download = within(dialog).getByRole('button', { name: text.downloadPdf })
+    await waitFor(() => expect(download).toBeEnabled())
+    await chooseOption(text.pdfPeriodLabel, text.pdfPeriodRange, within(dialog))
+
+    expect(within(dialog).queryByRole('button', { name: text.pdfMonthLabel })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: text.pdfFromLabel })).toHaveTextContent('1 Oktober 2026')
+    expect(within(dialog).getByRole('button', { name: text.pdfToLabel })).toHaveTextContent('15 Oktober 2026')
+
+    await user.click(download)
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
+    expect(pdfGets).toEqual([`${PDF_PATH}?from=2026-10-01&to=2026-10-15`])
   })
 
   it('says why when the PDF cannot be fetched, and tries again on the next tap', async () => {

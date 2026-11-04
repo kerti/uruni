@@ -24,6 +24,7 @@ import (
 	"embed"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,18 +54,31 @@ const (
 	pdfPointMM     = 25.4 / 72 // one point of type, in millimetres
 )
 
-// PDF assembles the month as the page does (same bad-month fallback, same
-// shaping) and draws it, with no filters. It returns the month it rendered
-// (the ledger's validated "YYYY-MM"), for the filename.
-func PDF(ctx context.Context, l *ledger.Ledger, fundID int64, month, group string) ([]byte, string, error) {
-	report, err := monthlyOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month})
+// PDF assembles the period as the page does (same bad-month fallback, same
+// range clamping, same shaping) and draws it, with no filters: query's month,
+// or from and to, and group. It returns the file's name, from the period the
+// ledger validated ("laporan-kas-2026-10.pdf", or the range's two days), never
+// from the raw query.
+func PDF(ctx context.Context, l *ledger.Ledger, fundID int64, query url.Values) ([]byte, string, error) {
+	params := ledger.ReportParams{FundID: fundID, Month: query.Get("month")}
+	first, today, err := l.ReportDays(ctx, fundID)
+	if err != nil {
+		return nil, "", err
+	}
+	if from, to, ok := readRange(query, first, today); ok {
+		params.From, params.To = from, to
+	}
+	report, err := monthlyOrCurrent(ctx, l, params)
 	if err != nil {
 		return nil, "", err
 	}
 	page := NewPage(report, false)
-	page.GroupRows(group, report.Walk)
+	page.GroupRows(query.Get("group"), report.Walk)
 	body, err := RenderPDF(page)
-	return body, report.Month, err
+	if report.IsRange {
+		return body, Text.PDFFilenameRange(report.From, report.To), err
+	}
+	return body, Text.PDFFilename(report.Month), err
 }
 
 // pdfLine is one line of text inside a cell; a cell stacks them.
@@ -168,7 +182,7 @@ func RenderPDF(page Page) ([]byte, error) {
 	d.SetCellMargin(0)
 	d.SetAutoPageBreak(false, 0)
 	d.SetLineWidth(pdfRuleWidthMM)
-	d.SetTitle(Text.PDFStatement(Text.monthName(page.Month))+" - "+page.FundName, true)
+	d.SetTitle(pdfStatement(page)+" - "+page.FundName, true)
 	d.SetCreator("Uruni", true)
 	d.SetLang("id")
 	d.AliasNbPages("{nb}")
@@ -402,8 +416,12 @@ func (d *pdfDoc) mark(x, y, size float64) {
 // under the title says.
 func (d *pdfDoc) header(p Page) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
-	d.text(pdfLine{text: Text.PDFStatement(Text.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
-	d.text(pdfLine{text: p.AsOf, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+	d.text(pdfLine{text: pdfStatement(p), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
+	// In a range the statement already names it, and the date line is the same
+	// words: not printed twice.
+	if !p.IsRange {
+		d.text(pdfLine{text: p.AsOf, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+	}
 	d.section(Text.PDFSummary, false)
 	d.SetY(d.GetY() + 2)
 
@@ -484,6 +502,15 @@ func (d *pdfDoc) header(p Page) {
 	}
 }
 
+// pdfStatement is the statement's line under the fund's name, and the file's
+// title: the month, or the range.
+func pdfStatement(p Page) string {
+	if p.IsRange {
+		return Text.PDFStatementRange(p.RangeText)
+	}
+	return Text.PDFStatement(Text.monthName(p.Month))
+}
+
 func (d *pdfDoc) transactions(p Page) {
 	d.section(Text.TransactionsLabel, true)
 	// The app's Figures: every amount in ink, the closing balance set apart
@@ -494,7 +521,11 @@ func (d *pdfDoc) transactions(p Page) {
 
 	if len(p.Rows) == 0 {
 		d.SetY(d.GetY() + 3)
-		d.text(pdfLine{text: Text.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+		none := Text.PDFNoRows
+		if p.IsRange {
+			none = Text.PDFNoRowsRange
+		}
+		d.text(pdfLine{text: none, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		return
 	}
 	for _, g := range p.Groups {
@@ -592,6 +623,11 @@ func (d *pdfDoc) dues(p Page) {
 		return
 	}
 	d.section(Text.DuesLabel, true)
+	if p.IsRange {
+		// The table is monthly: it reads the month that holds the range's last day.
+		d.text(pdfLine{text: p.DuesCaption, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+		d.SetY(d.GetY() + 2)
+	}
 	const amountW, statusW = 38.0, 54.0
 	nameW := pdfContentW - 2*amountW - statusW
 	d.tableHead([]pdfCell{

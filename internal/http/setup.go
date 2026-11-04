@@ -192,9 +192,14 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 // the public report offers ("YYYY-MM", inclusive). The list has no gaps - the
 // first transaction's month through the current one - so its two ends are
 // the whole of it, and exactly the bounds the app's month picker takes.
+// FirstDay and Today ("YYYY-MM-DD", the fund's zone) bound the date range the
+// report offers (ADR-049): the first transaction's day (today for an empty
+// fund) and today, the bounds of the app's two date fields.
 type reportMonthsResponse struct {
-	Min string `json:"min"`
-	Max string `json:"max"`
+	Min      string `json:"min"`
+	Max      string `json:"max"`
+	FirstDay string `json:"first_day"`
+	Today    string `json:"today"`
 }
 
 // getReportMonths is GET /api/report/months, for the PDF download's month
@@ -210,8 +215,13 @@ func (a *api) getReportMonths(w http.ResponseWriter, r *http.Request) {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
+	first, today, err := a.ledger.ReportDays(r.Context(), fund.ID)
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
 	// Never empty: an empty fund still offers the current month.
-	writeJSON(w, http.StatusOK, reportMonthsResponse{Min: months[0], Max: months[len(months)-1]})
+	writeJSON(w, http.StatusOK, reportMonthsResponse{Min: months[0], Max: months[len(months)-1], FirstDay: first, Today: today})
 }
 
 // fundLocation is the fund's time zone as a *time.Location, the only way a

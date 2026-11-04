@@ -1,12 +1,12 @@
 # ADR-037 — The report shows each month as it ended
 
-**Status:** Accepted · implemented at M7 ([#408](https://github.com/kerti/uruni/issues/408)) — supersedes [ADR-035](./035-public-report.md) on one point, named below · superseded in part by [ADR-038](./038-the-month-as-a-balance-walk.md) and [ADR-041](./041-the-funds-time-zone.md) · change only by adding a superseding ADR · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#408](https://github.com/kerti/uruni/issues/408)) — supersedes [ADR-035](./035-public-report.md) on one point, named below · superseded in part by [ADR-038](./038-the-month-as-a-balance-walk.md), [ADR-041](./041-the-funds-time-zone.md) and [ADR-049](./049-the-reports-period-and-grouping.md) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** ADR-035 made the report's header current whatever month was selected: a September page showed today's balance above September's rows. On the page that reads as "the fund now, then what happened in September". The PDF made the split visible: it is titled "Laporan kas bulan September 2026" and is printed and passed round the group chat as a monthly statement, so a copy made in December showed December's balance under a September title, and nothing on it said why. A monthly report, to the people who read one, states the fund as the month left it - which is also how Balances v2 treats its dashboard and its downloadable monthly report. Raised by the maintainer while reviewing #406, ruled 2026-10-05.
 
 ## Decision
 
-**The report, page and PDF alike, states every figure for its selected month** - the month as it ended, or the running month as it stands.
+**The report, page and PDF alike, states every figure for its selected month** - the month as it ended, or the running month as it stands. (**Superseded in part by [ADR-049](./049-the-reports-period-and-grouping.md)**: or for a selected date range, as of its last day - the same rule, for a period that is not a month.)
 
 - **A past month** is as of its **last day**: Saldo kas, Saldo per pos, the latest *cek kas* and whether it matched, Talangan belum dibayar, and each envelope card (saldo, terkumpul, who gave). The date line reads "per 30 September 2026".
 - **The running month** - the one a bare link opens - is as of today, and its date line says so: "Bulan berjalan · per 5 Oktober 2026". A neighbour who opens the link to see the fund now still does.

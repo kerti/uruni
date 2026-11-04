@@ -1104,7 +1104,14 @@ export const copy = {
       // The monthly PDF, the words of the link in the report's footer: the
       // button, and the title and action of the dialog that picks its month.
       downloadPdf: 'Unduh PDF',
+      // The period first, as on the report page: Bulanan shows Bulan, Rentang
+      // tanggal shows Dari and Sampai (ADR-049).
+      pdfPeriodLabel: 'Periode',
+      pdfPeriodMonth: 'Bulanan',
+      pdfPeriodRange: 'Rentang tanggal',
       pdfMonthLabel: 'Bulan',
+      pdfFromLabel: 'Dari',
+      pdfToLabel: 'Sampai',
       // The PDF's list, laid out as the report page's Kelompokkan: by kind
       // (Uang masuk, Uang keluar, Lainnya) or by month.
       pdfGroupLabel: 'Kelompokkan',

@@ -42,9 +42,12 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		// The link is to the month the page shows, the ledger's validated "YYYY-MM",
-		// never the raw query value.
+		// The link is to the period the page shows - the ledger's validated
+		// "YYYY-MM", or the range's two clamped days - never the raw query value.
 		page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?month=" + url.QueryEscape(page.Month)
+		if page.IsRange {
+			page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?from=" + url.QueryEscape(page.From) + "&to=" + url.QueryEscape(page.To)
+		}
 		// The file is laid out as the page is: a by-month page links a by-month
 		// PDF. Filters stay the page's alone (the PDF is the whole month).
 		if page.Group != report.GroupByKind {
@@ -58,8 +61,9 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.
 
 // reportPDFHandler serves GET /report/{slug}/pdf with the page's edge: the
 // same headers, the same 404 for an unknown slug, a missing or malformed month
-// is the current one. ?group=month lays the list out by month, as the page
-// does; anything else is by kind.
+// is the current one, and ?from= with ?to= a date range, clamped as the page's
+// is (both must be real days, else the month). ?group=month lays the list out
+// by month, as the page does; anything else is by kind.
 func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
@@ -70,7 +74,7 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) ht
 			return
 		}
 
-		body, month, err := report.PDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"), r.URL.Query().Get("group"))
+		body, filename, err := report.PDF(r.Context(), l, fund.ID, r.URL.Query())
 		if err != nil {
 			logger.Error("report: rendering the pdf", "fund_id", fund.ID, "error", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -79,8 +83,8 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) ht
 
 		h := w.Header()
 		h.Set("Content-Type", "application/pdf")
-		// month is the ledger's validated "YYYY-MM", never the raw query value.
-		h.Set("Content-Disposition", `attachment; filename="`+report.Text.PDFFilename(month)+`"`)
+		// filename is built from the ledger's validated period, never the raw query.
+		h.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 		h.Set("Content-Length", strconv.Itoa(len(body)))
 		//nolint:gosec // G705 is an HTML-injection rule; this body is application/pdf bytes drawn by fpdf, served as an attachment, never parsed as markup
 		_, _ = w.Write(body)
