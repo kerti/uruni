@@ -512,7 +512,10 @@ func (d *pdfDoc) transactions(p Page) {
 	for _, r := range p.Rows {
 		note := pdfCell{w: noteW, align: "L"}
 		if r.Label != "" {
-			note.lines = append(note.lines, pdfLine{text: r.Label, size: pdfBodySize, color: "foreground"})
+			// The page's non-breaking hyphen (PeriodHyphen) is written plain:
+			// the column never wraps a label mid-range, and the font is not
+			// trusted with U+2011.
+			note.lines = append(note.lines, pdfLine{text: strings.ReplaceAll(r.Label, PeriodHyphen, "-"), size: pdfBodySize, color: "foreground"})
 		}
 		// Her note, line breaks kept, between the label and the meta line.
 		for _, line := range strings.Split(r.Note, "\n") {
@@ -532,6 +535,9 @@ func (d *pdfDoc) transactions(p Page) {
 		}
 		if r.Reversed {
 			note.lines = append(note.lines, pdfLine{text: Text.RowReversed, size: pdfSmallSize, color: "muted-foreground"})
+		}
+		if r.PartlyReversed {
+			note.lines = append(note.lines, pdfLine{text: Text.RowPartlyReversed, size: pdfSmallSize, color: "muted-foreground"})
 		}
 		if len(note.lines) == 0 {
 			note.lines = []pdfLine{{text: "", size: pdfBodySize, color: "foreground"}}

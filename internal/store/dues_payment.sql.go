@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"strings"
 )
 
 const createDuesPayment = `-- name: CreateDuesPayment :one
@@ -27,6 +28,98 @@ func (q *Queries) CreateDuesPayment(ctx context.Context, arg CreateDuesPaymentPa
 	var i DuesPayment
 	err := row.Scan(&i.ID, &i.FundID, &i.CreatedAt)
 	return i, err
+}
+
+const listDuesGroupRows = `-- name: ListDuesGroupRows :many
+WITH payment_rows AS (
+  SELECT x.id, x.dues_payment_id AS payment_id
+  FROM "transaction" x
+  WHERE x.fund_id = ?1 AND x.dues_payment_id IN (/*SLICE:payment_ids*/?)
+)
+SELECT t.id, t.kind, t.occurred_on, t.dues_period, t.amount,
+       pr.payment_id,
+       t.reversed,
+       CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
+                    WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       ei.closed_on AS effective_closed_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation rc
+                    WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
+FROM ledger_entry t
+LEFT JOIN "transaction" o ON o.id = t.reverses_transaction_id
+JOIN payment_rows pr ON pr.id = t.id OR pr.id = o.id
+LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
+`
+
+type ListDuesGroupRowsParams struct {
+	FundID     int64
+	PaymentIds []*int64
+}
+
+type ListDuesGroupRowsRow struct {
+	ID                  int64
+	Kind                string
+	OccurredOn          string
+	DuesPeriod          *string
+	Amount              int64
+	PaymentID           *int64
+	Reversed            int64
+	IsReconciliationFix int64
+	EffectiveClosedOn   *string
+	Counted             int64
+}
+
+// Every row of the dues payments a list page shows, for the group items of
+// GET /api/transactions (ADR-048): the payments' own dues rows AND the reversal
+// rows that undo them, each tagged with the payment it belongs to
+// (payment_id: the row's own, or - on a reversal - its original's). The Go side
+// builds the periods of a payment item from the first and of a reversal group
+// from the second (grouped by payment and date), and decides the payment's
+// reversibility from the same facts as GetReversalTarget. A reversal of a
+// non-dues row has no payment and is never returned. Fund-scoped; the order is
+// the Go side's job (it sorts by month), not an id order.
+func (q *Queries) ListDuesGroupRows(ctx context.Context, arg ListDuesGroupRowsParams) ([]ListDuesGroupRowsRow, error) {
+	query := listDuesGroupRows
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FundID)
+	if len(arg.PaymentIds) > 0 {
+		for _, v := range arg.PaymentIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:payment_ids*/?", strings.Repeat(",?", len(arg.PaymentIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:payment_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDuesGroupRowsRow{}
+	for rows.Next() {
+		var i ListDuesGroupRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.OccurredOn,
+			&i.DuesPeriod,
+			&i.Amount,
+			&i.PaymentID,
+			&i.Reversed,
+			&i.IsReconciliationFix,
+			&i.EffectiveClosedOn,
+			&i.Counted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listDuesPaymentReversalTargets = `-- name: ListDuesPaymentReversalTargets :many

@@ -219,6 +219,18 @@ type ReportEntry struct {
 
 	// HasReceipt is whether a photo exists, never the photo.
 	HasReceipt bool
+
+	// DuesPeriods is every month a dues row stands for, oldest first (ADR-048):
+	// the listed row of a dues payment, or of a dues-reversal group, is ONE
+	// entry for all its months, with Amount their sum. One month for a
+	// single-month payment, nil on every other row. The walk counts the group's
+	// rows one by one, whatever the list folds.
+	DuesPeriods []string
+
+	// PartlyReversed marks a dues payment some of whose months, and not all, are
+	// reversed (data from before ADR-048 only): Sebagian dibatalkan. Reversed is
+	// then false, and true only when every month is reversed.
+	PartlyReversed bool
 }
 
 // ReportMove is a reclass_purpose pair folded into one row: an envelope's
@@ -790,6 +802,9 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 		walk          = ReportWalk{Full: p.MemberID == nil && p.Direction == ""}
 		moveSeen      = make(map[int64]bool)
 		correctedSeen = make(map[int64]bool)
+		// groups folds a dues payment's rows, and a reversal group's, into the one
+		// listed row they are (ADR-048); see duesGroupKey.
+		groups = make(map[string]*duesGroup)
 	)
 	for _, row := range rows {
 		if row.Kind == string(TransactionKindTransfer) {
@@ -862,13 +877,90 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 		if !entryMatches(p, row, entry) {
 			continue
 		}
-		out = append(out, ReportRow{Date: row.OccurredOn, Entry: &entry})
 
+		// The walk counts every row on its own; only the list folds a group.
 		if err := walk.add(entry); err != nil {
 			return nil, ReportWalk{}, fmt.Errorf("totalling report rows: %w", err)
 		}
+
+		key := duesGroupKey(row)
+		if g, ok := groups[key]; ok && key != "" {
+			if err := g.add(entry, row.Reversed != 0); err != nil {
+				return nil, ReportWalk{}, fmt.Errorf("folding dues payment rows: %w", err)
+			}
+			continue
+		}
+		if key != "" {
+			g := &duesGroup{entry: &entry}
+			if err := g.add(entry, row.Reversed != 0); err != nil {
+				return nil, ReportWalk{}, fmt.Errorf("folding dues payment rows: %w", err)
+			}
+			groups[key] = g
+		}
+		out = append(out, ReportRow{Date: row.OccurredOn, Entry: &entry})
+	}
+	for _, g := range groups {
+		g.finish()
 	}
 	return out, walk, nil
+}
+
+// duesGroupKey is the key a dues row folds under in the report's list (ADR-048),
+// "" for every row that stands alone: "p<payment>" for a payment's month and
+// "r<payment>:<date>" for a reversal of one, the reversed row's payment and the
+// reversal's date, the same key ListTransactionsPage groups by.
+func duesGroupKey(row store.ListReportTransactionsRow) string {
+	switch {
+	case row.Kind == string(TransactionKindDues) && row.DuesPaymentID != nil:
+		return fmt.Sprintf("p%d", *row.DuesPaymentID)
+	case row.ReversesDuesPaymentID != nil:
+		return fmt.Sprintf("r%d:%s", *row.ReversesDuesPaymentID, row.OccurredOn)
+	}
+	return ""
+}
+
+// duesGroup accumulates one listed row for a payment's (or a reversal group's)
+// rows: Amount is the sum, DuesPeriods the months, HasReceipt any photo, and
+// Reversed / PartlyReversed what the months' own flags say once all are in.
+type duesGroup struct {
+	entry    *ReportEntry
+	first    bool
+	months   int
+	reversed int
+}
+
+func (g *duesGroup) add(e ReportEntry, reversed bool) error {
+	g.months++
+	if reversed {
+		g.reversed++
+	}
+	if e.DuesPeriod != nil {
+		g.entry.DuesPeriods = append(g.entry.DuesPeriods, *e.DuesPeriod)
+	}
+	if !g.first {
+		// The first row is the entry itself, already counted in its own amount.
+		g.first = true
+		return nil
+	}
+	sum, err := g.entry.Amount.Add(e.Amount)
+	if err != nil {
+		return err
+	}
+	g.entry.Amount = sum
+	g.entry.HasReceipt = g.entry.HasReceipt || e.HasReceipt
+	return nil
+}
+
+func (g *duesGroup) finish() {
+	sort.Strings(g.entry.DuesPeriods)
+	if len(g.entry.DuesPeriods) > 0 {
+		g.entry.DuesPeriod = &g.entry.DuesPeriods[0]
+	}
+	if g.entry.IsReversal {
+		return
+	}
+	g.entry.Reversed = g.reversed == g.months
+	g.entry.PartlyReversed = g.reversed > 0 && g.reversed < g.months
 }
 
 // legMoves is whether one transfer leg touches the balance the filters walk: it

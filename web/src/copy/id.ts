@@ -666,6 +666,9 @@ export const copy = {
   // non-ASCII character in a .tsx file (rule 10 - this file is the one
   // designated exception).
   rowLabels: {
+    // The three-letter months a multi-month dues payment's row is written in
+    // (ADR-048), Jan to Des. The server prints the same in the public report.
+    monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
     dues: {
       kind: 'Iuran',
       text: (period: string, memberName: string) => `${period} · ${memberName}`,
@@ -921,6 +924,8 @@ export const copy = {
       // The reversal row, listed alongside the payment it undoes.
       reversalRow: 'Pembatalan',
       reversedBadge: 'Sudah dibatalkan',
+      // A payment of several months of which only some were undone (ADR-048).
+      partlyReversedBadge: 'Sebagian dibatalkan',
       reverse: 'Batalkan',
       noteLabel: 'Alasan (opsional)',
       // A yes to the question the open card is asking - short enough to share

@@ -1,4 +1,5 @@
 import { copy } from '../src/copy/id'
+import { formatPeriods } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
 import { chooseOption } from './popper'
@@ -62,11 +63,7 @@ test.describe('dues status', () => {
 
     const periods = page.getByRole('checkbox')
     await expect(periods.first()).toBeVisible()
-    // Captured before checking, for the label assertion below: the oldest
-    // outstanding period is never a fixed month, so the label text expected on
-    // home is read off the form just paid, not hardcoded.
-    // nth: the form lists periods oldest first; the first two are the ones paid.
-    const firstPeriodText = (await periods.nth(0).evaluate((el) => el.closest('label')?.textContent ?? '')).trim()
+    // The form lists periods oldest first; the first two are the ones paid.
     await periods.nth(0).check()
     await periods.nth(1).check()
     await expectAccessible(page)
@@ -116,7 +113,9 @@ test.describe('dues status', () => {
     // time, never stored text).
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
-    await expect(page.getByText(copy.rowLabels.dues.text(firstPeriodText, 'Warga Satu')).first()).toBeVisible()
+    // Two months paid in one sitting are one row (ADR-048): the oldest two
+    // outstanding periods are 2024-01 and 2024-02, so the row reads as a range.
+    await expect(page.getByText(copy.rowLabels.dues.text(formatPeriods(['2024-01', '2024-02']), 'Warga Satu')).first()).toBeVisible()
   })
 
   // Undoing one of the payments the spec above posted (serial mode guarantees

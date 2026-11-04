@@ -13,8 +13,31 @@ import {
 import type { Icon } from '@phosphor-icons/react'
 
 import { copy } from '@/copy/id'
-import { formatIsoDate, formatPeriod } from '@/lib/dates'
+import { formatIsoDate, formatPeriods } from '@/lib/dates'
 import type { Transaction } from '@/lib/transactions'
+
+/** The months a dues row names: its group's, or its own period when the row
+ * carries no group (a row from an endpoint that predates ADR-048). */
+export function duesPeriodsText(transaction: Transaction): string {
+  const periods = transaction.periods?.map((part) => part.dues_period) ?? []
+  if (periods.length === 0 && transaction.dues_period) periods.push(transaction.dues_period)
+  return formatPeriods(periods)
+}
+
+/** The grey note under a reversed dues payment: Sebagian dibatalkan while some
+ * of its months stand, Sudah dibatalkan once none do (ADR-048). null otherwise. */
+export function reversalBadge(transaction: Transaction): string | null {
+  if (transaction.reversal_state === 'partial') return copy.dues.history.partlyReversedBadge
+  return transaction.reversed ? copy.dues.history.reversedBadge : null
+}
+
+/** What a dues payment still counts for: the sum of its months not undone, or
+ * the row's own amount when it carries no months. */
+export function standingAmount(transaction: Transaction): number {
+  const periods = transaction.periods ?? []
+  if (periods.length === 0 || transaction.reversal_state !== 'partial') return transaction.amount
+  return periods.reduce((sum, part) => (part.reversed ? sum : sum + part.amount), 0)
+}
 
 /**
  * The kind -> icon/copy map for a row the app itself created (see
@@ -40,7 +63,11 @@ export function rowLabelFor(transaction: Transaction): { Icon: Icon; srWord: str
       return {
         Icon: CalendarCheck,
         srWord: copy.rowLabels.dues.kind,
-        text: copy.rowLabels.dues.text(formatPeriod(transaction.dues_period ?? ''), transaction.member_name ?? ''),
+        text: copy.rowLabels.dues.text(duesPeriodsText(transaction), transaction.member_name ?? ''),
+        // A payment of several months wraps, as a reversal's row does: a year
+        // paid ahead ("Des 2026-Nov 2027 - <member>") is wider than a phone's
+        // row, and truncating it would cut off who paid.
+        wraps: (transaction.periods?.length ?? 0) > 1,
       }
     case 'opening':
       return {
@@ -91,7 +118,7 @@ export function rowLabelFor(transaction: Transaction): { Icon: Icon; srWord: str
         // (ADR-042).
         let reversalText: string
         if (transaction.dues_period !== null) {
-          reversalText = copy.rowLabels.duesReversal.text(formatPeriod(transaction.dues_period), transaction.member_name ?? '')
+          reversalText = copy.rowLabels.duesReversal.text(duesPeriodsText(transaction), transaction.member_name ?? '')
         } else if (transaction.member_name) {
           reversalText = copy.rowLabels.contributionReversal.text(transaction.member_name)
         } else {

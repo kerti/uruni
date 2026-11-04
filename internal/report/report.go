@@ -152,6 +152,9 @@ type Row struct {
 	HasReceipt    bool
 	// Reversed marks the original of a pair: Sudah dibatalkan (ADR-042).
 	Reversed bool
+	// PartlyReversed marks a dues payment with only some months reversed:
+	// Sebagian dibatalkan (ADR-048, data from before it only).
+	PartlyReversed bool
 }
 
 // noteText is a row's note as the report prints it: trimmed, "" for none.
@@ -572,7 +575,7 @@ func NewPage(r ledger.Report, empty bool) Page {
 				Date: date, Label: label, Note: noteText(e.Note), Purpose: e.PurposeName,
 				Amount: sign + figure, Figure: figure, DirectionWord: word,
 				Kind: kind, KindIcon: icon, KindSpoken: spoken,
-				Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed,
+				Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed, PartlyReversed: e.PartlyReversed,
 			})
 		case row.Move != nil:
 			figure := money.FormatIDR(row.Move.Amount)

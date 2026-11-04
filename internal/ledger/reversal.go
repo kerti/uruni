@@ -97,6 +97,30 @@ func ReversalDate(occurredOn string, counted bool, today string) string {
 	return occurredOn
 }
 
+// DuesPaymentRefusal answers whether a dues payment can be reversed now (ADR-048):
+// nil when it can, otherwise the named error ReverseDuesPayment returns. months
+// are the facts of every dues row of the payment. A month an earlier reversal
+// already took back is skipped, never refused; the first standing month
+// ReversalRefusal refuses refuses the whole act; a payment with no month
+// standing is ErrAlreadyReversed. The write and the list's reversible flag both
+// ask it, so they share one rule.
+func DuesPaymentRefusal(months []ReversalFacts, today string) error {
+	standing := 0
+	for _, m := range months {
+		if m.Reversed {
+			continue
+		}
+		if err := ReversalRefusal(m, today); err != nil {
+			return err
+		}
+		standing++
+	}
+	if standing == 0 {
+		return ErrAlreadyReversed
+	}
+	return nil
+}
+
 // reversalTarget is one row as a reversal needs it: the facts ReversalRefusal
 // decides on, plus the fields a reversal row copies from it. GetReversalTarget
 // and ListDuesPaymentReversalTargets read the same columns into two generated
@@ -300,19 +324,21 @@ func (l *Ledger) reverseDuesPaymentTx(ctx context.Context, q store.Querier, fund
 		return nil, err
 	}
 
-	var standing []reversalTarget
+	targets := make([]reversalTarget, 0, len(rows))
+	facts := make([]ReversalFacts, 0, len(rows))
 	for _, row := range rows {
 		t := targetOfPaymentRow(row)
-		if t.reversed {
-			continue
-		}
-		if err := ReversalRefusal(t.facts(), window.today); err != nil {
-			return nil, err
-		}
-		standing = append(standing, t)
+		targets = append(targets, t)
+		facts = append(facts, t.facts())
 	}
-	if len(standing) == 0 {
-		return nil, ErrAlreadyReversed
+	if err := DuesPaymentRefusal(facts, window.today); err != nil {
+		return nil, err
+	}
+	var standing []reversalTarget
+	for _, t := range targets {
+		if !t.reversed {
+			standing = append(standing, t)
+		}
 	}
 
 	posted := make([]store.Transaction, 0, len(standing))

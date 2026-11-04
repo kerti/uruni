@@ -28,7 +28,12 @@ func (c Copy) entryLabel(e ledger.ReportEntry) string {
 		member = *e.MemberName
 	}
 	period := ""
-	if e.DuesPeriod != nil {
+	switch {
+	case len(e.DuesPeriods) > 0:
+		// One entry for all of a payment's months (ADR-048); a single month reads
+		// as it always did.
+		period = c.periodsText(e.DuesPeriods)
+	case e.DuesPeriod != nil:
 		period = c.monthName(*e.DuesPeriod)
 	}
 
