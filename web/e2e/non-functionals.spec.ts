@@ -120,7 +120,14 @@ async function expectOneColumn(page: Page, path: string) {
   expect(overflow.scroll, `${where}: scrollWidth ${overflow.scroll} > clientWidth ${overflow.client}`).toBeLessThanOrEqual(overflow.client)
 
   const column = await box(page.getByRole('main').locator('> div'))
-  const header = await box(page.getByRole('banner').locator('> div'))
+  // The header's row - the one holding the fund's name - not the banner slot
+  // beneath it (#797), which is empty unless an offline or update banner shows.
+  const header = await box(
+    page
+      .getByRole('banner')
+      .locator('> div')
+      .filter({ has: page.getByRole('heading', { level: 1 }) }),
+  )
   const nav = await box(page.getByRole('navigation', { name: copy.shell.nav.label }).locator('ul'))
 
   expect(column.width, `${where}: column ${column.width}px`).toBeLessThanOrEqual(576.5)
