@@ -72,6 +72,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [045](./045-a-public-demo-on-fly.md) | A public demo on Fly.io: the shipped image plus `URUNI_DEMO`, reset on every start | implemented |
 | [046](./046-confirms-on-one-record-are-dialogs.md) | A confirm on one record is a dialog, even when it posts | implemented |
 | [047](./047-amplop-opens-from-beranda.md) | Amplop opens from Beranda | `draft` |
+| [048](./048-a-dues-payment-is-one-row.md) | A dues payment is one row | `draft` |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
