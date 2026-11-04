@@ -167,10 +167,7 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 		in, out int64
 	}{
 		{"member", "&member=" + itoa(w.budi), -20_000, 0},
-		{"direction in", "&dir=in", 180_000, 0},
-		{"direction out", "&dir=out", 0, 6_000},
 		{"member with a purpose", "&member=" + itoa(w.budi) + "&purpose=" + itoa(w.duka), -20_000, 0},
-		{"direction with a purpose", "&dir=in&purpose=" + itoa(w.mainID), 200_000, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -191,24 +188,23 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 	}
 }
 
-// A reversal filters as Uang masuk (counting there as a minus), no longer under
-// Uang keluar. An opening and a Penyesuaian are neither, so a direction or
-// member filter hides them.
-func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(t *testing.T) {
+// A reversal is grouped under Uang masuk (counting there as a minus), not
+// under Uang keluar. An opening and a Penyesuaian are neither: by kind they
+// are under Lainnya, and a member filter hides them.
+func TestReportReversalGroupsAsMasukAndOpeningAndPenyesuaianAreLainnya(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)
 	reversal := "Pembatalan \u00b7 Budi"
 
-	all := txnSection(t, w.get(t, w.base).Body.String())
-	in := txnSection(t, w.get(t, w.base+"&dir=in").Body.String())
-	out := txnSection(t, w.get(t, w.base+"&dir=out").Body.String())
+	body := w.get(t, w.base).Body.String()
+	in, out, other := groupSection(t, body, "in"), groupSection(t, body, "out"), groupSection(t, body, "other")
 	byMember := txnSection(t, w.get(t, w.base+"&member="+itoa(w.budi)).Body.String())
 
-	if !strings.Contains(all, reversal) || !strings.Contains(in, reversal) {
-		t.Errorf("the reversal is missing from the unfiltered list or under dir=in:\n%s", in)
+	if !strings.Contains(in, reversal) {
+		t.Errorf("the reversal is missing from Uang masuk:\n%s", in)
 	}
-	if strings.Contains(out, reversal) {
-		t.Errorf("the reversal is listed under dir=out:\n%s", out)
+	if strings.Contains(out, reversal) || strings.Contains(other, reversal) {
+		t.Errorf("the reversal is listed outside Uang masuk:\n%s\n%s", out, other)
 	}
 	// Its amount is still the money that left the fund.
 	if !strings.Contains(in, report.Text.DirectionOut+" </span>"+money.FormatIDR(20_000)) {
@@ -216,14 +212,13 @@ func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(
 	}
 
 	for _, want := range []string{report.Text.RowOpening, report.Text.RowAdjustment} {
-		if !strings.Contains(all, `<span class="label-line">`+want+`</span>`) {
-			t.Errorf("unfiltered list has no %q row:\n%s", want, all)
+		row := `<span class="label-line">` + want + `</span>`
+		if !strings.Contains(other, row) {
+			t.Errorf("Lainnya has no %q row:\n%s", want, other)
 		}
-	}
-	for name, section := range map[string]string{"dir=in": in, "dir=out": out, "member": byMember} {
-		for _, hidden := range []string{report.Text.RowOpening, report.Text.RowAdjustment} {
-			if strings.Contains(section, `<span class="label-line">`+hidden+`</span>`) {
-				t.Errorf("%s list shows a %q row, want it hidden:\n%s", name, hidden, section)
+		for name, section := range map[string]string{"Uang masuk": in, "Uang keluar": out, "member": byMember} {
+			if strings.Contains(section, row) {
+				t.Errorf("%s shows a %q row, want it under Lainnya only:\n%s", name, want, section)
 			}
 		}
 	}

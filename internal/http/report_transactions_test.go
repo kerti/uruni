@@ -109,13 +109,32 @@ func newTxnScenario(t *testing.T) txnScenario {
 
 // txnSection is the transactions list's markup alone, so a row assertion is
 // never satisfied by the header or filter form.
+// txnSection is every group's list of the transactions section, in page
+// order, unescaped: the month's rows whatever the grouping.
 func txnSection(t *testing.T, body string) string {
 	t.Helper()
-	i := strings.Index(body, `<ul class="rows txns">`)
+	var out strings.Builder
+	for {
+		i := strings.Index(body, `<ul class="rows txns">`)
+		if i < 0 {
+			return html.UnescapeString(out.String())
+		}
+		j := strings.Index(body[i:], "</ul>")
+		out.WriteString(body[i : i+j])
+		body = body[i+j:]
+	}
+}
+
+// groupSection is one group of the transactions list - heading, subtotal and
+// rows, or its empty line - by its id ("in", "out", "other" or "YYYY-MM"),
+// unescaped; "" when the page has no such group.
+func groupSection(t *testing.T, body, id string) string {
+	t.Helper()
+	i := strings.Index(body, `<section class="group" aria-labelledby="group-`+id+`">`)
 	if i < 0 {
 		return ""
 	}
-	j := strings.Index(body[i:], "</ul>")
+	j := strings.Index(body[i:], "</section>")
 	return html.UnescapeString(body[i : i+j])
 }
 
@@ -214,11 +233,10 @@ func TestReportFilters(t *testing.T) {
 		{"purpose Duka: its entry and both moves", "&purpose=" + id(s.duka), 3, 15_000, 0, true},
 		{"member Ani", "&member=" + id(s.ani), 1, 25_000, 0, false},
 		{"member Budi", "&member=" + id(s.budi), 1, 15_000, 0, false},
-		{"direction in hides moves", "&dir=in", 3, 240_000, 0, false},
-		{"direction out", "&dir=out", 1, 0, 60_000, false},
-		{"purpose and direction together", "&purpose=" + id(s.duka) + "&dir=in", 1, 15_000, 0, false},
 		{"a purpose that is not the fund's is no filter", "&purpose=99999", 6, 240_000, 60_000, true},
-		{"a bad direction is no filter", "&dir=sideways", 6, 240_000, 60_000, true},
+		// The page's direction filter is retired (the by-kind groups replace it):
+		// an old link's ?dir= is ignored, never an error.
+		{"a retired direction filter is ignored", "&dir=in", 6, 240_000, 60_000, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -230,8 +248,8 @@ func TestReportFilters(t *testing.T) {
 			if got := rowCount(t, body); got != tt.rows {
 				t.Errorf("rows = %d, want %d:\n%s", got, tt.rows, txnSection(t, body))
 			}
-			// A member or direction filter keeps only Total masuk and Total keluar. A
-			// purpose alone, or no usable filter (stale purpose, bad direction), walks, so
+			// A member filter keeps only Total masuk and Total keluar. A purpose
+			// alone, or no usable filter (stale purpose, a retired ?dir=), walks, so
 			// those check the two lines they share.
 			got := totalsOf(t, body)
 			if tt.walks {
@@ -263,14 +281,15 @@ func TestReportPurposeMoveMatchesEitherSideOfThePurposeFilter(t *testing.T) {
 func TestReportFilterFormIsAPlainGetCarryingTheMonth(t *testing.T) {
 	t.Parallel()
 	s := newTxnScenario(t)
-	body := s.get(t, s.base+"&purpose="+itoa(s.duka)+"&member="+itoa(s.budi)+"&dir=in").Body.String()
+	body := s.get(t, s.base+"&purpose="+itoa(s.duka)+"&member="+itoa(s.budi)+"&group=month").Body.String()
 
 	for _, want := range []string{
 		`<form class="filters" method="get" action="#transactions">`,
 		`<input type="hidden" name="month" value="2026-09">`,
 		`<option value="` + itoa(s.duka) + `" selected>Duka</option>`,
 		`<option value="` + itoa(s.budi) + `" selected>Budi</option>`,
-		`<option value="in" selected>`,
+		`<option value="month" selected>Per bulan</option>`,
+		`<option value="">Per jenis</option>`,
 		`<option value="` + itoa(s.ani) + `">Ani</option>`,
 		`<option value="` + itoa(s.mainID) + `">Kas Utama</option>`,
 		`<button type="submit">Tampilkan</button>`,
@@ -283,7 +302,7 @@ func TestReportFilterFormIsAPlainGetCarryingTheMonth(t *testing.T) {
 	for _, want := range []string{
 		`<input type="hidden" name="purpose" value="` + itoa(s.duka) + `">`,
 		`<input type="hidden" name="member" value="` + itoa(s.budi) + `">`,
-		`<input type="hidden" name="dir" value="in">`,
+		`<input type="hidden" name="group" value="month">`,
 	} {
 		if strings.Count(body, want) != 1 {
 			t.Errorf("body should carry %q once, in the month form", want)
@@ -316,8 +335,8 @@ func TestReportReceiptIsAMarkerNeverALink(t *testing.T) {
 func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
 	t.Parallel()
 	s := newTxnScenario(t)
-	// Budi gave to Duka only; filtered to money out there is nothing.
-	body := s.get(t, s.base+"&member="+itoa(s.budi)+"&dir=out").Body.String()
+	// Budi gave to Duka only; filtered to Kas Utama there is nothing.
+	body := s.get(t, s.base+"&member="+itoa(s.budi)+"&purpose="+itoa(s.mainID)).Body.String()
 
 	if !strings.Contains(body, report.Text.NoRows) {
 		t.Errorf("body does not carry %q", report.Text.NoRows)

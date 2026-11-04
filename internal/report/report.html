@@ -95,10 +95,9 @@
         {{end}}
       </select>
     </label>
-    <label>{{.Text.FilterDirection}}
-      <select name="dir">
-        <option value="">{{.Text.FilterAll}}</option>
-        {{range .Filter.Directions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+    <label>{{.Text.FilterGroup}}
+      <select name="group">
+        {{range .Filter.Groups}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
         {{end}}
       </select>
     </label>
@@ -111,6 +110,10 @@
   </dl>
 
   {{if .NoRows}}<p class="empty">{{.Text.NoRows}}</p>{{else}}
+  {{range .Groups}}
+  <section class="group" aria-labelledby="group-{{.ID}}">
+  <h3 class="group-head" id="group-{{.ID}}"><span>{{.Heading}}</span>{{if .Subtotal}} <span class="tabular">{{.Subtotal}}</span>{{end}}</h3>
+  {{if .Rows}}
   <ul class="rows txns">
     {{range .Rows}}
     <li>
@@ -129,6 +132,9 @@
     </li>
     {{end}}
   </ul>
+  {{else}}<p class="empty">{{.NoRows}}</p>{{end}}
+  </section>
+  {{end}}
   {{end}}
 </section>
 {{if or .HasDues .Grid}}

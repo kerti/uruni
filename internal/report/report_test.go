@@ -203,8 +203,8 @@ func TestReportMonthStepKeepsTheFilters(t *testing.T) {
 		t.Errorf("unfiltered: got %q, want %q", got, want)
 	}
 	active.Set("purpose", "3")
-	active.Set("dir", "out")
-	if got, want := monthHref("2026-08", active), "?month=2026-08&dir=out&purpose=3#months"; got != want {
+	active.Set("group", "month")
+	if got, want := monthHref("2026-08", active), "?month=2026-08&group=month&purpose=3#months"; got != want {
 		t.Errorf("filtered: got %q, want %q", got, want)
 	}
 }
@@ -235,7 +235,7 @@ func TestPDFFontsAreReadOnceAcrossConcurrentRenders(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
-			if _, _, err := PDF(ctx, l, res.Fund.ID, ""); err != nil {
+			if _, _, err := PDF(ctx, l, res.Fund.ID, "", ""); err != nil {
 				t.Errorf("PDF() = %v, want no error", err)
 			}
 		})
@@ -268,5 +268,47 @@ func TestReportSourcesHaveNoEmDash(t *testing.T) {
 		if s := string(src); strings.Contains(s, `\u2014`) || strings.Contains(s, "&mdash;") {
 			t.Errorf("%s has an em dash: use a full stop, comma, colon or middle dot", name)
 		}
+	}
+}
+
+// By month, a list that crosses a month boundary splits there, in the order
+// the rows meet the months; by kind the same rows split by walk line. The
+// one-month report never crosses a boundary; a date range will.
+func TestGroupRowsSplitsAtEachMonthAndByLine(t *testing.T) {
+	t.Parallel()
+	p := Page{Rows: []Row{
+		{Label: "a", line: "out", month: "2026-11"},
+		{Label: "b", line: "in", month: "2026-11"},
+		{Label: "c", line: "other", month: "2026-10"},
+		{Label: "d", line: "in", month: "2026-10"},
+	}}
+	labels := func(rows []Row) string {
+		var out []string
+		for _, r := range rows {
+			out = append(out, r.Label)
+		}
+		return strings.Join(out, ",")
+	}
+
+	p.GroupRows(GroupByMonth, ledger.ReportWalk{})
+	if len(p.Groups) != 2 || p.Groups[0].Heading != "November 2026" || p.Groups[1].Heading != "Oktober 2026" {
+		t.Fatalf("by month = %+v, want November 2026 then Oktober 2026", p.Groups)
+	}
+	if got := labels(p.Groups[0].Rows) + "|" + labels(p.Groups[1].Rows); got != "a,b|c,d" {
+		t.Errorf("by month rows = %s, want a,b|c,d", got)
+	}
+	if p.Groups[0].Subtotal != "" {
+		t.Errorf("a month carries a subtotal %q", p.Groups[0].Subtotal)
+	}
+
+	p.GroupRows("", ledger.ReportWalk{In: 5_000, Out: 2_000})
+	if p.Group != GroupByKind || len(p.Groups) != 3 {
+		t.Fatalf("by kind = %+v, want Uang masuk, Uang keluar, Lainnya", p.Groups)
+	}
+	if got := labels(p.Groups[0].Rows) + "|" + labels(p.Groups[1].Rows) + "|" + labels(p.Groups[2].Rows); got != "b,d|a|c" {
+		t.Errorf("by kind rows = %s, want b,d|a|c", got)
+	}
+	if p.Groups[0].Subtotal != "Rp5.000" || p.Groups[1].Subtotal != "Rp2.000" {
+		t.Errorf("subtotals = %q, %q, want the walk's Rp5.000 and Rp2.000", p.Groups[0].Subtotal, p.Groups[1].Subtotal)
 	}
 }

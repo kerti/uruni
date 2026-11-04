@@ -47,7 +47,12 @@ type Copy struct {
 	TransactionsLabel string
 	FilterPurpose     string
 	FilterMember      string
-	FilterDirection   string
+	FilterGroup       string
+	GroupByKind       string
+	GroupByMonth      string
+	GroupOther        string
+	NoRowsIn          string
+	NoRowsOut         string
 	FilterAll         string
 	DirectionIn       string
 	DirectionOut      string
@@ -194,7 +199,12 @@ var Text = Copy{
 	TransactionsLabel: "Transaksi",
 	FilterPurpose:     "Pos",
 	FilterMember:      "Anggota",
-	FilterDirection:   "Jenis",
+	FilterGroup:       "Kelompokkan",
+	GroupByKind:       "Per jenis",
+	GroupByMonth:      "Per bulan",
+	GroupOther:        "Lainnya",
+	NoRowsIn:          "Tidak ada uang masuk.",
+	NoRowsOut:         "Tidak ada uang keluar.",
 	FilterAll:         "Semua",
 	DirectionIn:       "Uang masuk",
 	DirectionOut:      "Uang keluar",
