@@ -12,6 +12,10 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
+import { UnwaiveDialog, WaiveDialog } from '@/screens/Dues/WaiverDialogs'
+import { useToast } from '@/components/toast/useToast'
+import { parseDialogTarget } from '@/lib/dialogTarget'
+import { useDialogParam } from '@/lib/useDialogParam'
 import DuesStatusGrid from '@/screens/Dues/StatusGrid'
 import { getDuesStatus } from '@/lib/dues'
 import { currentPeriod, formatPeriod, periodBounds } from '@/lib/dates'
@@ -23,6 +27,7 @@ import { card, insetPanel } from '@/components/cardClasses'
 const text = copy.dues
 const gridText = copy.dues.grid
 const historyText = copy.dues.history
+const waiverText = copy.dues.waiver
 const arrearsText = copy.members.roster
 
 /** A period read from the URL: "YYYY-MM" inside the selector's bounds, else
@@ -147,6 +152,24 @@ export default function DuesStatus({
   }, [run, period, refetchKey])
 
   const rows = state.data ?? []
+
+  // Putihkan and Batalkan pemutihan (ADR-050) are dialogs addressed by the URL,
+  // `?edit=waive:<memberId>` / `?edit=unwaive:<memberId>`, like the reversal's
+  // (ADR-046): back closes them, and a reload reopens the same one.
+  const toast = useToast()
+  const dialog = useDialogParam()
+  const waiveTarget = parseDialogTarget('waive', dialog.value)
+  const unwaiveTarget = parseDialogTarget('unwaive', dialog.value)
+  const waiveRow =
+    waiveTarget.kind === 'edit' ? (rows.find((r) => r.member.id === waiveTarget.id && UNPAID_STATUSES.includes(r.status)) ?? null) : null
+  const unwaiveRow =
+    unwaiveTarget.kind === 'edit' ? (rows.find((r) => r.member.id === unwaiveTarget.id && r.status === 'waived') ?? null) : null
+  function afterWaiver(message: string) {
+    toast.success(message)
+    dialog.close()
+    void run(() => getDuesStatus(period))
+  }
+
   const visibleRows = unpaidOnly ? rows.filter((row) => UNPAID_STATUSES.includes(row.status)) : rows
 
   return (
@@ -250,16 +273,49 @@ export default function DuesStatus({
                       )}
 
                       {UNPAID_STATUSES.includes(row.status) && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="lg"
-                          className="w-full"
-                          aria-label={text.recordForMemberAria(row.member.name)}
-                          onClick={() => onRecordPayment({ memberId: row.member.id, period })}
-                        >
-                          {text.recordForMember}
-                        </Button>
+                        // Two short labels on one row (M11): what she does with
+                        // money owed - collect it, or let it go (ADR-050).
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            aria-label={text.recordForMemberAria(row.member.name)}
+                            onClick={() => onRecordPayment({ memberId: row.member.id, period })}
+                          >
+                            {text.recordForMember}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            aria-label={waiverText.actionAria(row.member.name)}
+                            onClick={() => dialog.open(`waive:${row.member.id}`)}
+                          >
+                            {waiverText.action}
+                          </Button>
+                        </div>
+                      )}
+                      {row.status === 'waived' && (
+                        <>
+                          {/* Her note, for her eyes: the public report never
+                              carries it (ADR-050). */}
+                          {row.waiver_note && (
+                            <p className="text-sm text-pretty wrap-anywhere text-muted-foreground">
+                              {waiverText.noteLine(row.waiver_note)}
+                            </p>
+                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            className="w-full"
+                            aria-label={waiverText.undoAria(row.member.name)}
+                            onClick={() => dialog.open(`unwaive:${row.member.id}`)}
+                          >
+                            {waiverText.undo}
+                          </Button>
+                        </>
                       )}
 
                       {/* A disclosure, not a link: the panel opens in place
@@ -313,6 +369,9 @@ export default function DuesStatus({
       <Button type="button" size="lg" className="w-full" onClick={() => onRecordPayment()}>
         {text.recordLink}
       </Button>
+
+      <WaiveDialog row={waiveRow} period={period} onClose={dialog.close} onWaived={() => afterWaiver(waiverText.success)} />
+      <UnwaiveDialog row={unwaiveRow} period={period} onClose={dialog.close} onUnwaived={() => afterWaiver(waiverText.undoSuccess)} />
     </div>
   )
 }

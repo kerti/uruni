@@ -178,6 +178,97 @@ describe('DuesStatus', () => {
       expect(screen.getByRole('button', { name: text.recordForMemberAria('Warga Satu') })).toBeInTheDocument()
     })
 
+    it('Putihkan waives the ticked months with her note, then reloads the roster', async () => {
+      const now = currentPeriod()
+      const [y, m] = now.split('-').map(Number)
+      const prev = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`
+      const posts: { url: string; body: unknown }[] = []
+      const base = stubDuesStatus(rows)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === 'string' ? input : input.toString()
+          if (url.includes('/outstanding-dues')) {
+            return Promise.resolve(
+              jsonResponse([
+                { period: prev, owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
+                { period: now, owed_amount: 50_000, paid_amount: 20_000, status: 'partial' },
+              ]),
+            )
+          }
+          if (url.includes('/dues-waivers') && init?.method === 'POST') {
+            posts.push({ url, body: JSON.parse(init.body as string) })
+            return Promise.resolve(jsonResponse([], 201))
+          }
+          return base(input)
+        }),
+      )
+      const user = userEvent.setup()
+      render(
+        <>
+          <DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />
+          <Where />
+        </>,
+        { wrapper: ListRouter },
+      )
+
+      await screen.findByText('Warga Dua')
+      await user.click(screen.getByRole('button', { name: text.waiver.actionAria('Warga Dua') }))
+      expect(screen.getByTestId('where')).toHaveTextContent('edit=waive%3A2')
+      const dialog = await screen.findByRole('dialog', { name: text.waiver.heading })
+
+      // The member first, then what is still owed: the card's month ticked, the
+      // remainder read-only, and the arrears one tap away.
+      expect(within(dialog).getByText('Warga Dua')).toBeInTheDocument()
+      const current = await within(dialog).findByRole('checkbox', { name: new RegExp(formatPeriod(now)) })
+      expect(current).toBeChecked()
+      expect(within(dialog).getByRole('checkbox', { name: new RegExp(formatPeriod(prev)) })).not.toBeChecked()
+      expect(within(dialog).getByText(`${text.waiver.totalLabel}`).parentElement).toHaveTextContent(formatIDR(30_000))
+      await user.click(within(dialog).getByRole('button', { name: text.payment.selectAllArrears }))
+      expect(within(dialog).getByText(`${text.waiver.totalLabel}`).parentElement).toHaveTextContent(formatIDR(80_000))
+      await user.type(within(dialog).getByLabelText(text.waiver.noteLabel), '  Rumah kebakaran  ')
+
+      await user.click(within(dialog).getByRole('button', { name: text.waiver.submit }))
+      await vi.waitFor(() => expect(posts).toHaveLength(1))
+      expect(posts[0].url).toContain('/api/members/2/dues-waivers')
+      expect(posts[0].body).toEqual({ periods: [prev, now], note: 'Rumah kebakaran' })
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('shows her note on the waived card, and Batalkan pemutihan confirms before deleting', async () => {
+      const deletes: string[] = []
+      const base = stubDuesStatus(waivedRows)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === 'string' ? input : input.toString()
+          if (url.includes('/dues-waivers/') && init?.method === 'DELETE') {
+            deletes.push(url)
+            return Promise.resolve(new Response(null, { status: 204 }))
+          }
+          return base(input)
+        }),
+      )
+      const user = userEvent.setup()
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+      await screen.findByText('Warga Enam')
+      const card = screen.getByText('Warga Enam').closest('li') as HTMLElement
+      expect(within(card).getByText(text.waiver.noteLine('Rumah kebakaran'))).toBeInTheDocument()
+      // An owing card offers both actions; a waived one only the take-back.
+      expect(within(card).queryByRole('button', { name: text.waiver.actionAria('Warga Enam') })).toBeNull()
+      expect(screen.getByRole('button', { name: text.waiver.actionAria('Warga Satu') })).toBeInTheDocument()
+
+      await user.click(within(card).getByRole('button', { name: text.waiver.undoAria('Warga Enam') }))
+      const dialog = await screen.findByRole('dialog', { name: text.waiver.undoHeading })
+      expect(within(dialog).getByText('Rumah kebakaran')).toBeInTheDocument()
+      expect(within(dialog).getByText(formatPeriod(currentPeriod()))).toBeInTheDocument()
+      expect(deletes).toEqual([])
+
+      await user.click(within(dialog).getByRole('button', { name: text.waiver.undoConfirm }))
+      await vi.waitFor(() => expect(deletes).toEqual([`/api/members/6/dues-waivers/${currentPeriod()}`]))
+    })
+
     it('is not "belum bayar": the filter leaves it out', async () => {
       vi.stubGlobal('fetch', stubDuesStatus(waivedRows))
       render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })

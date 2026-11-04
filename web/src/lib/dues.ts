@@ -93,6 +93,22 @@ export function getOutstandingDues(memberId: number, through: string): Promise<O
   return apiFetch<OutstandingDuesPeriod[]>(`/api/members/${memberId}/outstanding-dues?through=${encodeURIComponent(through)}`)
 }
 
+/** POST /api/members/{id}/dues-waivers (ADR-050) - waives each of `periods`
+ * (months the member still owes), sharing one optional note. All or nothing on
+ * the server; moves no money. */
+export function waiveDues(memberId: number, periods: string[], note: string | null): Promise<DuesWaiver[]> {
+  return apiFetch<DuesWaiver[]>(`/api/members/${memberId}/dues-waivers`, {
+    method: 'POST',
+    body: JSON.stringify({ periods, note }),
+  })
+}
+
+/** DELETE /api/members/{id}/dues-waivers/{period} - the month is owed again,
+ * less anything already paid toward it. */
+export function unwaiveDues(memberId: number, period: string): Promise<void> {
+  return apiFetch<void>(`/api/members/${memberId}/dues-waivers/${encodeURIComponent(period)}`, { method: 'DELETE' })
+}
+
 /** One period being paid in a POST /api/dues-payments body. */
 export interface DuesPaymentPeriod {
   dues_period: string

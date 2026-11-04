@@ -886,6 +886,31 @@ export const copy = {
     // card, with the arrears months already ticked.
     recordForMember: 'Catat iuran',
     recordForMemberAria: (memberName: string) => `Catat iuran dari ${memberName}`,
+    // Waiving a member's dues (ADR-050): talangan's words, Putihkan /
+    // Diputihkan - an amount really owed that stops being owed, kept, undoable.
+    waiver: {
+      action: 'Putihkan',
+      actionAria: (memberName: string) => `Putihkan iuran ${memberName}`,
+      heading: 'Putihkan iuran',
+      memberLabel: 'Anggota',
+      monthsLabel: 'Bulan',
+      totalLabel: 'Total diputihkan',
+      noteLabel: 'Catatan (opsional)',
+      submit: 'Putihkan',
+      submitting: 'Memutihkan…',
+      success: 'Iuran sudah diputihkan.',
+      // The waived card's line: her note, under the badge, for her eyes only.
+      noteLine: (note: string) => `Catatan: ${note}`,
+      undo: 'Batalkan pemutihan',
+      undoAria: (memberName: string) => `Batalkan pemutihan iuran ${memberName}`,
+      undoHeading: 'Batalkan pemutihan',
+      undoMonthLabel: 'Bulan',
+      undoNoteLabel: 'Catatan',
+      undoBody: 'Bulan ini kembali ditagih, dikurangi yang sudah dibayar.',
+      undoConfirm: 'Ya, batalkan',
+      undoing: 'Membatalkan…',
+      undoSuccess: 'Pemutihan dibatalkan. Iuran kembali ditagih.',
+    },
     payment: {
       heading: 'Catat pembayaran iuran',
       memberLabel: 'Anggota',
