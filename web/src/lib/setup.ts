@@ -3,7 +3,7 @@
 // dues_rates.go, members.go).
 
 import { apiFetch, fetchBlob } from '@/lib/api'
-import { setFundTimeZone } from '@/lib/dates'
+import { setFundTimeZone, type DateBounds } from '@/lib/dates'
 import type { AccountKind, Direction, PurposeKind, TransactionKind, TransferKind } from '@/lib/enums'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
@@ -401,16 +401,24 @@ export function deleteDuesRate(id: number): Promise<void> {
 /** What the PDF is saved as when the server's Content-Disposition names nothing. */
 const REPORT_PDF_FALLBACK_NAME = 'laporan-kas.pdf'
 
+/** GET /api/report/months - the first and last month ("YYYY-MM", inclusive)
+ * the public report offers: the first transaction's month through the current
+ * one, with no gaps, so the two ends are MonthField's bounds as they stand. */
+export function getReportMonths(): Promise<DateBounds> {
+  return apiFetch<DateBounds>('/api/report/months')
+}
+
 /**
- * GET /report/{slug}/pdf - the current month's statement, as a File ready for
- * saveBlob, named by the server's Content-Disposition. Fetched by path, never
- * by the absolute report_url: URUNI_BASE_URL may name another origin than the
- * one the app is open on (a tunnel in dev), and the request must stay
- * same-origin.
+ * GET /report/{slug}/pdf?month=YYYY-MM - that month's statement, as a File
+ * ready for saveBlob, named by the server's Content-Disposition. Fetched by
+ * path, never by the absolute report_url: URUNI_BASE_URL may name another
+ * origin than the one the app is open on (a tunnel in dev), and the request
+ * must stay same-origin. A month the report does not offer draws the current
+ * month, as the page does.
  */
-export async function fetchReportPdf(reportUrl: string): Promise<File> {
+export async function fetchReportPdf(reportUrl: string, month: string): Promise<File> {
   const path = reportUrl.startsWith('/') ? reportUrl : new URL(reportUrl).pathname
-  const { blob, res } = await fetchBlob(`${path}/pdf`)
+  const { blob, res } = await fetchBlob(`${path}/pdf?month=${encodeURIComponent(month)}`)
   const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
   return new File([blob], named?.[1] ?? REPORT_PDF_FALLBACK_NAME, { type: 'application/pdf' })
 }

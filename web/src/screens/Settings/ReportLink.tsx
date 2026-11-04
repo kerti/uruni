@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import SectionLabel from '@/components/SectionLabel'
 import { ArrowSquareOut, Check, Copy, DownloadSimple, ShareNetwork } from '@phosphor-icons/react'
 
+import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/toast/useToast'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ErrorState from '@/components/states/ErrorState'
@@ -10,7 +12,8 @@ import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { saveBlob } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
-import { fetchReportPdf, replaceReportSlug } from '@/lib/setup'
+import { fetchReportPdf, getReportMonths, replaceReportSlug } from '@/lib/setup'
+import type { DateBounds } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
@@ -32,12 +35,13 @@ function absoluteUrl(reportUrl: string): string {
 
 /**
  * The Laporan publik card (ADR-035; ADR-032 allotted it to Pengaturan): the
- * report's link with Salin, Bagikan, a way to open it and the current
- * month's PDF, and "Buat tautan baru" behind a confirm, the escape hatch for a
- * link that leaked.
+ * report's link with Salin, Bagikan, a way to open it, a month's PDF, and
+ * "Buat tautan baru" behind a confirm, the escape hatch for a link that
+ * leaked.
  *
  * The confirm is a dialog addressed by `?edit=report:new` like every other
- * Pengaturan dialog (ADR-032: the URL is the source of truth). Replacing the
+ * Pengaturan dialog (ADR-032: the URL is the source of truth); the PDF's month
+ * picker is `?edit=report:pdf`. Replacing the
  * link posts no ledger entry and edits no row a reader can see, so it is a
  * dialog rather than a screen.
  *
@@ -62,14 +66,15 @@ export default function ReportLink({
   // 'report' is this section's prefix (dialogTarget.ts); `new` is its only
   // value. Anything else carrying the prefix is cleared once, and a sibling's
   // value is never touched.
-  const target = parseDialogTarget('report', value)
+  const target = parseDialogTarget('report', value, ['pdf'])
   const isOwn = target.kind !== 'foreign'
   const confirming = target.kind === 'new'
+  const choosingPdf = target.kind === 'named' && target.name === 'pdf'
 
   useEffect(() => {
-    if (!isOwn || confirming) return
+    if (!isOwn || confirming || choosingPdf) return
     clear()
-  }, [value, isOwn, confirming, clear])
+  }, [value, isOwn, confirming, choosingPdf, clear])
 
   return (
     <section className="flex flex-col gap-3">
@@ -78,7 +83,9 @@ export default function ReportLink({
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
-      <LinkActions url={absoluteUrl(fund.report_url)} reportUrl={fund.report_url} onRenew={() => open('report:new')} />
+      <LinkActions url={absoluteUrl(fund.report_url)} onPdf={() => open('report:pdf')} onRenew={() => open('report:new')} />
+
+      <PdfDialog open={choosingPdf} onClose={close} reportUrl={fund.report_url} />
 
       <RenewDialog
         open={confirming}
@@ -96,7 +103,7 @@ export default function ReportLink({
   )
 }
 
-function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: string; onRenew: () => void }) {
+function LinkActions({ url, onPdf, onRenew }: { url: string; onPdf: () => void; onRenew: () => void }) {
   // Which link was copied, not a bare flag: a new link is a new thing to copy,
   // so `copied` falls back to false by itself when the url changes.
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
@@ -157,7 +164,10 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
         </a>
       </Button>
 
-      <PdfButton reportUrl={reportUrl} />
+      <Button type="button" variant="outline" size="lg" className="w-full justify-center gap-2" onClick={onPdf}>
+        <DownloadSimple aria-hidden="true" className="size-4" />
+        {text.downloadPdf}
+      </Button>
 
       <Button type="button" variant="ghost" size="lg" className="w-full justify-center" onClick={onRenew}>
         {text.renew}
@@ -167,24 +177,68 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
 }
 
 /**
- * Unduh PDF. Never a link to /report/.../pdf: an installed PWA's scope is `/`,
- * so iOS opens that path inside the app's window - `download` and `target`
- * both ignored - and the PDF replaces the shell with no way back. The app
- * fetches the file and saves it from a `blob:` URL, which sits outside the
- * scope: the installed iOS app shows it in its file viewer (close, back, and
- * Share for Files, Print, WhatsApp) and returns to Uruni on close; a desktop
- * browser simply downloads it.
+ * Unduh PDF's dialog: which month the statement is for. The months on offer
+ * are the public report's own (GET /api/report/months): the first
+ * transaction's month through the current one, opening on the current one.
+ *
+ * Never a link to /report/.../pdf: an installed PWA's scope is `/`, so iOS
+ * opens that path inside the app's window - `download` and `target` both
+ * ignored - and the PDF replaces the shell with no way back. The app fetches
+ * the file and saves it from a `blob:` URL, which sits outside the scope: the
+ * installed iOS app shows it in its file viewer (close, back, and Share for
+ * Files, Print, WhatsApp) and returns to Uruni on close; a desktop browser
+ * simply downloads it.
  */
-function PdfButton({ reportUrl }: { reportUrl: string }) {
+function PdfDialog({ open, onClose, reportUrl }: { open: boolean; onClose: () => void; reportUrl: string }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{text.downloadPdf}</DialogTitle>
+        </DialogHeader>
+        {/* Mounted with each opening (DialogContent unmounts on close), so
+            every opening starts clean and reads the months afresh: a row
+            recorded since may have moved the first month, and the current
+            month turns over. */}
+        <PdfMonthForm onClose={onClose} reportUrl={reportUrl} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: string }) {
+  const [months, loadMonths] = useApi<DateBounds>()
+  // '' until the months arrive; then the newest the report offers, the current one.
+  const [month, setMonth] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
 
-  async function handleTap() {
+  const load = useCallback(
+    () =>
+      loadMonths(async () => {
+        const bounds = await getReportMonths()
+        setMonth(bounds.max)
+        return bounds
+      }),
+    [loadMonths],
+  )
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function handleDownload() {
     setError(null)
     setBusy(true)
     try {
-      const pdf = await fetchReportPdf(reportUrl)
+      const pdf = await fetchReportPdf(reportUrl, month)
       saveBlob(pdf, pdf.name)
+      onClose()
     } catch (err) {
       setError(err as ApiError)
     } finally {
@@ -192,21 +246,35 @@ function PdfButton({ reportUrl }: { reportUrl: string }) {
     }
   }
 
+  const bounds = months.status === 'success' ? months.data : undefined
+
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        type="button"
-        variant="outline"
-        size="lg"
-        className="w-full justify-center gap-2"
-        disabled={busy}
-        onClick={() => void handleTap()}
-      >
-        <DownloadSimple aria-hidden="true" className="size-4" />
-        {text.downloadPdf}
-      </Button>
+    <>
+      {months.status === 'error' && months.error ? (
+        <ErrorState error={months.error} onRetry={() => void load()} />
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="report-pdf-month">{text.pdfMonthLabel}</Label>
+          <MonthField
+            id="report-pdf-month"
+            value={month}
+            onChange={setMonth}
+            bounds={bounds ?? { min: month, max: month }}
+            disabled={!bounds || busy}
+          />
+        </div>
+      )}
       {error && <ErrorState error={error} />}
-    </div>
+      <DialogFooter className="mt-1">
+        <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
+          {copy.common.close}
+        </Button>
+        <Button type="button" size="lg" className="gap-2" disabled={!bounds || month === '' || busy} onClick={() => void handleDownload()}>
+          <DownloadSimple aria-hidden="true" className="size-4" />
+          {text.downloadPdf}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 

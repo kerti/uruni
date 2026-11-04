@@ -188,6 +188,32 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toFundResponse(updated, a.baseURL))
 }
 
+// reportMonthsResponse is GET /api/report/months: the first and last month
+// the public report offers ("YYYY-MM", inclusive). The list has no gaps - the
+// first transaction's month through the current one - so its two ends are
+// the whole of it, and exactly the bounds the app's month picker takes.
+type reportMonthsResponse struct {
+	Min string `json:"min"`
+	Max string `json:"max"`
+}
+
+// getReportMonths is GET /api/report/months, for the PDF download's month
+// picker: it offers the months the report's own selector does, no more - a
+// month outside them would draw the current month's statement anyway.
+func (a *api) getReportMonths(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+	months, err := a.ledger.ReportMonths(r.Context(), fund.ID)
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+	// Never empty: an empty fund still offers the current month.
+	writeJSON(w, http.StatusOK, reportMonthsResponse{Min: months[0], Max: months[len(months)-1]})
+}
+
 // fundLocation is the fund's time zone as a *time.Location, the only way a
 // handler comes by one (ADR-041): never from a request, never a fallback. A zone
 // that fails to load means a broken database, so the request answers 500.

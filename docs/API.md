@@ -63,6 +63,7 @@ Anything not listed falls through to the SPA (outside `/api` and `/report`) or a
 | PATCH | `/api/reimbursements/{id}` | required |
 | POST | `/api/reimbursements/{id}/receipts` | required |
 | POST | `/api/reimbursements/{id}/settle` | required |
+| GET | `/api/report/months` | required |
 | POST | `/api/restore/confirm` | required |
 | POST | `/api/restore/inspect` | required |
 | POST | `/api/restore/inspect-stored/{name}` | required |
