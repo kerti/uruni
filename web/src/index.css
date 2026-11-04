@@ -214,6 +214,11 @@
   }
   html {
     @apply font-sans;
+    /* Shell's bars are fixed (Shell.tsx measures them). Without this, a field
+       that focus, scrollIntoView or an anchor brings into view stops at the
+       viewport's edge - under the header or the tab bar. Unset outside Shell. */
+    scroll-padding-top: var(--shell-header, 0px);
+    scroll-padding-bottom: var(--shell-nav, 0px);
   }
   body {
     @apply bg-background text-foreground;

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { ClockCounterClockwise, GearSix, House, Plus, SignOut, Users } from '@phosphor-icons/react'
 import { Link, NavLink } from 'react-router-dom'
 
@@ -6,6 +6,7 @@ import AppVersion from '@/components/AppVersion'
 import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
+import { useBannerSlot } from '@/components/states/bannerSlot'
 import { copy } from '@/copy/id'
 import { logout } from '@/lib/auth'
 import { useApi } from '@/lib/useApi'
@@ -83,13 +84,40 @@ export default function Shell({
 
   const loggingOut = state.status === 'loading'
 
+  // Both bars are fixed, so nothing in the page's flow can push them - or be
+  // pushed by them. The header's height varies (the notch inset, a banner in
+  // the slot below its row), so both are measured onto the root:
+  // --shell-header is what main's top padding and the toast read (each falls
+  // back to the bare header's height while it is unset), and the pair is
+  // index.css's scroll-padding, so focus never parks a field under a bar.
+  const header = useRef<HTMLElement>(null)
+  const nav = useRef<HTMLElement>(null)
+  const bannerSlot = useBannerSlot()
+  useLayoutEffect(() => {
+    const bars = [
+      [header.current, '--shell-header'],
+      [nav.current, '--shell-nav'],
+    ] as const
+    const root = document.documentElement
+    const measure = () => {
+      for (const [el, name] of bars) if (el) root.style.setProperty(name, `${el.getBoundingClientRect().height}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    for (const [el] of bars) if (el) observer.observe(el)
+    return () => {
+      observer.disconnect()
+      for (const [, name] of bars) root.style.removeProperty(name)
+    }
+  }, [])
+
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       {/* Fixed, like the footer, not sticky: a sticky header belongs to the
           page, so iOS's bounce past the top pulled it down with the content
           while the fixed footer stayed put. Pinned, the page bounces beneath
           both bars, as a native app's does. main reserves its height. */}
-      <header className="fixed inset-x-0 top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
+      <header ref={header} className="fixed inset-x-0 top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
         {/* One column for every screen (max-w-xl, 576px): on a phone it is
             the whole width; on a tablet the header, each screen and the
             footer's buttons line up in it, while the bars' glass still spans
@@ -129,15 +157,21 @@ export default function Shell({
             <SignOut aria-hidden="true" />
           </Button>
         </div>
+        {/* The offline and update banners land here while Shell is up
+            (StatusBanners.tsx): in the page's flow they would sit beneath
+            this fixed header, hidden. Below the row, so the fund's name keeps
+            the top; pinned with it, so a waiting update stays in view. */}
+        <div ref={bannerSlot} />
       </header>
 
-      {/* Both bars are fixed, so main reserves them. Top: the notch inset,
-          the header (its 2.75rem row - the 44px logout button sets it - plus
-          py-2 and the 1px border) and the page's own 1rem. Bottom: the bar
+      {/* Both bars are fixed, so main reserves them. Top: the measured
+          header (--shell-header, above; the fallback is the bare header: the
+          notch inset, its 2.75rem row - the 44px logout button sets it -
+          plus py-2 and the 1px border) and the page's own 1rem. Bottom: the bar
           (3.75rem), Catat's circle rising 1.75rem above it, and the
           home-indicator inset - otherwise the first and last rows of every
           screen sit under a bar. */}
-      <main className="flex-1 pt-[calc(env(safe-area-inset-top)+4.75rem+1px)] pb-[calc(env(safe-area-inset-bottom)+6rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+      <main className="flex-1 pt-[calc(var(--shell-header,calc(env(safe-area-inset-top)+3.75rem+1px))+1rem)] pb-[calc(env(safe-area-inset-bottom)+6rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
         <div className="mx-auto w-full max-w-xl">
           {state.status === 'error' && state.error && (
             <div className="mb-4">
@@ -149,6 +183,7 @@ export default function Shell({
       </main>
 
       <nav
+        ref={nav}
         aria-label={copy.shell.nav.label}
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border pb-[env(safe-area-inset-bottom)] bar-glass"
       >

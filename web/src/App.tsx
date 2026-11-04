@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
-import OfflineBanner from '@/components/states/OfflineBanner'
-import UpdateBanner from '@/components/states/UpdateBanner'
+import StatusBanners, { BannerSlotProvider } from '@/components/states/StatusBanners'
+import { UpdateProvider } from '@/components/states/UpdateBanner'
 import Shell from '@/components/Shell'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import { useArrivalToast } from '@/components/toast/useArrivalToast'
@@ -89,21 +89,24 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <OfflineBanner />
-      <UpdateBanner />
-      <Routes>
-        <Route
-          path="*"
-          element={
-            <AuthGate
-              state={state}
-              onRetry={() => void run(getSession)}
-              onAuthenticated={handleAuthenticated}
-              onLoggedOut={handleLoggedOut}
+      <UpdateProvider>
+        <BannerSlotProvider>
+          <StatusBanners />
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <AuthGate
+                  state={state}
+                  onRetry={() => void run(getSession)}
+                  onAuthenticated={handleAuthenticated}
+                  onLoggedOut={handleLoggedOut}
+                />
+              }
             />
-          }
-        />
-      </Routes>
+          </Routes>
+        </BannerSlotProvider>
+      </UpdateProvider>
     </BrowserRouter>
   )
 }

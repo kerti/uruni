@@ -14,9 +14,11 @@ export default function OfflineBanner() {
   if (online) return null
 
   return (
-    <div role="status" className="flex items-center gap-2 bg-attention-soft px-4 py-2 text-sm text-attention-text">
-      <WifiSlash aria-hidden="true" className="size-4 shrink-0" />
-      {copy.common.offlineBanner}
+    <div role="status" className="bg-attention-soft text-sm text-attention-text">
+      <div className="mx-auto flex w-full max-w-xl items-center gap-2 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+        <WifiSlash aria-hidden="true" className="size-4 shrink-0" />
+        {copy.common.offlineBanner}
+      </div>
     </div>
   )
 }
