@@ -339,7 +339,7 @@ func TestReportPDFIgnoresPageFilters(t *testing.T) {
 	s := newPDFScenario(t)
 	base := "/report/" + s.fund.ReportSlug + "/pdf?month=2026-09"
 	plain := pdfText(t, s.get(t, base).Body.Bytes())
-	filtered := pdfText(t, s.get(t, base+"&dir=out&dues=paid&purpose=999&member=1").Body.Bytes())
+	filtered := pdfText(t, s.get(t, base+"&dues=paid&purpose=999&member=1").Body.Bytes())
 	if strings.Join(plain, "\n") != strings.Join(filtered, "\n") {
 		t.Errorf("filters changed the PDF's text:\nplain:\n%s\n\nfiltered:\n%s", strings.Join(plain, "\n"), strings.Join(filtered, "\n"))
 	}
@@ -391,6 +391,17 @@ func TestReportPDFPaginates(t *testing.T) {
 	if heads != pages-1 {
 		t.Errorf("table header drawn %d times over %d pages, want once per page after the summary", heads, pages)
 	}
+	// Every row is money in, so Uang masuk runs over every table page and is
+	// named again on each, above the column titles.
+	named := 0
+	for _, r := range runs {
+		if r == report.Text.DirectionIn {
+			named++
+		}
+	}
+	if named != pages-1 {
+		t.Errorf("Uang masuk named %d times over %d pages, want once per page after the summary", named, pages)
+	}
 	if want := report.Text.PDFPage("2", fmt.Sprint(pages)); !pdfHas(runs, want) {
 		t.Errorf("no footer %q; the page count did not resolve", want)
 	}
@@ -407,9 +418,14 @@ func TestReportPageLinksToThePDFForTheMonthShown(t *testing.T) {
 		t.Errorf("page does not link %q as %q", want, report.Text.PDFDownload)
 	}
 	// Filters shape the page, not the file: the link carries the month alone.
-	body = f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08&dir=in").Body.String()
+	body = f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08&member=1&purpose=999").Body.String()
 	if !strings.Contains(body, want) {
 		t.Error("a filtered page's PDF link carries more than the month")
+	}
+	// The grouping is the layout, and the file is laid out as the page is.
+	body = f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08&group=month").Body.String()
+	if want := `href="/report/` + f.fund.ReportSlug + `/pdf?month=2026-08&amp;group=month"`; !strings.Contains(body, want) {
+		t.Errorf("a by-month page does not link %q", want)
 	}
 	if notFound := f.get(t, "/report/nope"); strings.Contains(notFound.Body.String(), report.Text.PDFDownload) {
 		t.Error("the 404 page offers a PDF")

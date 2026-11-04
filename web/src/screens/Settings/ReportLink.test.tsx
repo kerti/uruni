@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import ReportLink from '@/screens/Settings/ReportLink'
 import { copy } from '@/copy/id'
+import { chooseOption } from '@/test/select'
 import { saveBlob } from '@/lib/api'
 import type { Fund } from '@/lib/setup'
 
@@ -144,7 +145,10 @@ describe('ReportLink', () => {
     expect(pdfGets).toEqual([])
     expect(screen.getByTestId('location-search')).toHaveTextContent('?edit=report%3Apdf')
     const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
-    expect(await within(dialog).findByRole('button', { name: text.pdfMonthLabel })).toHaveTextContent('Oktober 2026')
+    const field = within(dialog).getByRole('button', { name: text.pdfMonthLabel })
+    // Bulan is the first field and takes the opening focus, as in every dialog.
+    await waitFor(() => expect(field).toHaveFocus())
+    await waitFor(() => expect(field).toHaveTextContent('Oktober 2026'))
 
     await user.click(within(dialog).getByRole('button', { name: text.downloadPdf }))
 
@@ -180,6 +184,25 @@ describe('ReportLink', () => {
     await user.click(within(dialog).getByRole('button', { name: text.downloadPdf }))
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
     expect(pdfGets).toEqual([`${PDF_PATH}?month=2026-08`])
+  })
+
+  it('groups the PDF by kind unless by month is picked, as the page does', async () => {
+    const { pdfGets } = stubFund()
+    stubNavigator({})
+    const user = userEvent.setup()
+    renderCard('/settings?edit=report:pdf')
+
+    const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    const group = within(dialog).getByRole('combobox', { name: text.pdfGroupLabel })
+    expect(group).toHaveTextContent(text.pdfGroupByKind)
+    await chooseOption(text.pdfGroupLabel, text.pdfGroupByMonth, within(dialog))
+    expect(group).toHaveTextContent(text.pdfGroupByMonth)
+
+    const download = within(dialog).getByRole('button', { name: text.downloadPdf })
+    await waitFor(() => expect(download).toBeEnabled())
+    await user.click(download)
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
+    expect(pdfGets).toEqual([`${PDF_PATH}?month=2026-10&group=month`])
   })
 
   it('says why when the PDF cannot be fetched, and tries again on the next tap', async () => {

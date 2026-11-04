@@ -104,8 +104,8 @@ func TestReportGridIgnoresEveryFilter(t *testing.T) {
 	}
 	for _, query := range []string{
 		"&dues=unpaid", "&dues=partial", "&dues=paid",
-		fmt.Sprintf("&member=%d", members[0].ID), "&dir=out", fmt.Sprintf("&purpose=%d", s.mainID),
-		fmt.Sprintf("&dues=unpaid&member=%d&dir=in", members[1].ID),
+		fmt.Sprintf("&member=%d", members[0].ID), "&group=month", fmt.Sprintf("&purpose=%d", s.mainID),
+		fmt.Sprintf("&dues=unpaid&member=%d&group=month", members[1].ID),
 	} {
 		if got := gridBlock(s.get(t, s.base+query).Body.String()); got != want {
 			t.Errorf("grid under %q differs from the unfiltered one:\n%s\nwant:\n%s", query, got, want)

@@ -5,6 +5,7 @@ import { ArrowSquareOut, Check, Copy, DownloadSimple, ShareNetwork } from '@phos
 import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/toast/useToast'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ErrorState from '@/components/states/ErrorState'
@@ -12,8 +13,8 @@ import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { saveBlob } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
-import { fetchReportPdf, getReportMonths, replaceReportSlug } from '@/lib/setup'
-import type { DateBounds } from '@/lib/dates'
+import { fetchReportPdf, getReportMonths, replaceReportSlug, type ReportGroup } from '@/lib/setup'
+import { currentPeriod, type DateBounds } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
@@ -177,9 +178,11 @@ function LinkActions({ url, onPdf, onRenew }: { url: string; onPdf: () => void; 
 }
 
 /**
- * Unduh PDF's dialog: which month the statement is for. The months on offer
- * are the public report's own (GET /api/report/months): the first
- * transaction's month through the current one, opening on the current one.
+ * Unduh PDF's dialog: which month the statement is for, and how its list is
+ * grouped. The months on offer are the public report's own (GET
+ * /api/report/months): the first transaction's month through the current
+ * one, opening on the current one. The grouping is the page's Kelompokkan,
+ * by kind unless she picks by month.
  *
  * Never a link to /report/.../pdf: an installed PWA's scope is `/`, so iOS
  * opens that path inside the app's window - `download` and `target` both
@@ -213,8 +216,11 @@ function PdfDialog({ open, onClose, reportUrl }: { open: boolean; onClose: () =>
 
 function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: string }) {
   const [months, loadMonths] = useApi<DateBounds>()
-  // '' until the months arrive; then the newest the report offers, the current one.
-  const [month, setMonth] = useState('')
+  // The current month from the start - always one the report offers - so
+  // Bulan is enabled and takes the dialog's opening focus, as every dialog's
+  // first field does; the months that arrive only widen what it offers.
+  const [month, setMonth] = useState(currentPeriod)
+  const [group, setGroup] = useState<ReportGroup>('kind')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
 
@@ -236,7 +242,7 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
     setError(null)
     setBusy(true)
     try {
-      const pdf = await fetchReportPdf(reportUrl, month)
+      const pdf = await fetchReportPdf(reportUrl, month, group)
       saveBlob(pdf, pdf.name)
       onClose()
     } catch (err) {
@@ -260,17 +266,30 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
             value={month}
             onChange={setMonth}
             bounds={bounds ?? { min: month, max: month }}
-            disabled={!bounds || busy}
+            disabled={busy}
           />
         </div>
       )}
+      {/* A labelled Select, as every fixed choice in a dialog is (Lokasi's
+          Jenis, Riwayat's filter), even with two options. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="report-pdf-group">{text.pdfGroupLabel}</Label>
+        <Select value={group} onValueChange={(next) => setGroup(next as ReportGroup)} disabled={busy}>
+          <SelectTrigger id="report-pdf-group" aria-label={text.pdfGroupLabel}>
+            <SelectValue>{group === 'month' ? text.pdfGroupByMonth : text.pdfGroupByKind}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="kind">{text.pdfGroupByKind}</SelectItem>
+            <SelectItem value="month">{text.pdfGroupByMonth}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       {error && <ErrorState error={error} />}
       <DialogFooter className="mt-1">
         <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
           {copy.common.close}
         </Button>
-        <Button type="button" size="lg" className="gap-2" disabled={!bounds || month === '' || busy} onClick={() => void handleDownload()}>
-          <DownloadSimple aria-hidden="true" className="size-4" />
+        <Button type="button" size="lg" disabled={!bounds || busy} onClick={() => void handleDownload()}>
           {text.downloadPdf}
         </Button>
       </DialogFooter>

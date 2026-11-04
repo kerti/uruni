@@ -244,7 +244,7 @@ test.describe('report and backup', () => {
     // The picker opens on the current month and offers last month, where the
     // first transaction sits; the month after the current one is closed.
     const dialog = page.getByRole('dialog', { name: copy.settings.report.downloadPdf })
-    const field = dialog.getByRole('button', { name: copy.settings.report.pdfMonthLabel })
+    const field = dialog.getByRole('button', { name: copy.settings.report.pdfMonthLabel, exact: true })
     await expect(field).toHaveText(formatPeriod(thisMonth))
     await field.click()
     if (prevMonth.slice(0, 4) !== thisMonth.slice(0, 4)) await page.getByRole('button', { name: copy.dateField.previousYear }).click()

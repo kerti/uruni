@@ -97,7 +97,7 @@ test.describe('report, twelve months of dues', () => {
     await page.goto(`${reportPath}?dues=paid`)
     await expectWholeGrid(page)
 
-    await page.goto(`${reportPath}?dir=in`)
+    await page.goto(`${reportPath}?group=month`)
     await expectWholeGrid(page)
   })
 

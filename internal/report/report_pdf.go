@@ -56,12 +56,14 @@ const (
 // PDF assembles the month as the page does (same bad-month fallback, same
 // shaping) and draws it, with no filters. It returns the month it rendered
 // (the ledger's validated "YYYY-MM"), for the filename.
-func PDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string) ([]byte, string, error) {
+func PDF(ctx context.Context, l *ledger.Ledger, fundID int64, month, group string) ([]byte, string, error) {
 	report, err := monthlyOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month})
 	if err != nil {
 		return nil, "", err
 	}
-	body, err := RenderPDF(NewPage(report, false))
+	page := NewPage(report, false)
+	page.GroupRows(group, report.Walk)
+	body, err := RenderPDF(page)
 	return body, report.Month, err
 }
 
@@ -495,6 +497,29 @@ func (d *pdfDoc) transactions(p Page) {
 		d.text(pdfLine{text: Text.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		return
 	}
+	for _, g := range p.Groups {
+		d.rowGroup(g)
+	}
+}
+
+// rowGroup draws one group of the list as the page does: its heading with
+// the subtotal flush right, then its own table, or its empty line.
+func (d *pdfDoc) rowGroup(g RowGroup) {
+	d.SetY(d.GetY() + 5)
+	// Never strand a heading at a page's foot: it moves with room for the
+	// column titles and a first row.
+	d.need(24)
+	heading := func() {
+		d.row([]pdfCell{
+			{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: g.Heading, bold: true, size: pdfBodySize + 1, color: "primary"}}},
+			{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: g.Subtotal, bold: true, size: pdfBodySize + 1, color: "foreground"}}},
+		}, false)
+	}
+	heading()
+	if len(g.Rows) == 0 {
+		d.text(pdfLine{text: g.NoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+		return
+	}
 	// amountW fits "+Rp999.999.999.999" (33mm in bold 9.5pt, #540) with room
 	// to spare: a figure that did not would wrap at its space.
 	// kindW fits the longest kind word, Penyesuaian, at the small size: the
@@ -502,14 +527,20 @@ func (d *pdfDoc) transactions(p Page) {
 	// at a glance down the page, where the page has Riwayat's icons.
 	const dateW, kindW, amountW = 30.0, 24.0, 40.0
 	noteW := pdfContentW - dateW - kindW - amountW
-	d.SetY(d.GetY() + 4)
 	d.tableHead([]pdfCell{
 		headCell(dateW, "L", Text.PDFColDate),
 		headCell(kindW, "L", Text.PDFColKind),
 		headCell(noteW, "L", Text.PDFColNote),
 		headCell(amountW, "R", Text.PDFColAmount),
 	})
-	for _, r := range p.Rows {
+	// A group that runs onto the next page is named again there, above the
+	// column titles, so a page read alone still says whose rows these are.
+	columns := d.repeat
+	d.repeat = func() {
+		heading()
+		columns()
+	}
+	for _, r := range g.Rows {
 		note := pdfCell{w: noteW, align: "L"}
 		if r.Label != "" {
 			// The page's non-breaking hyphen (PeriodHyphen) is written plain:

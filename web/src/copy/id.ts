@@ -1105,11 +1105,16 @@ export const copy = {
       // button, and the title and action of the dialog that picks its month.
       downloadPdf: 'Unduh PDF',
       pdfMonthLabel: 'Bulan',
+      // The PDF's list, laid out as the report page's Kelompokkan: by kind
+      // (Uang masuk, Uang keluar, Lainnya) or by month.
+      pdfGroupLabel: 'Kelompokkan',
+      pdfGroupByKind: 'Per jenis',
+      pdfGroupByMonth: 'Per bulan',
       renew: 'Buat tautan baru',
       renewing: 'Membuat…',
       // The consequence, in terracotta (ADR-032).
       renewConfirm: 'Tautan lama berhenti bekerja. Siapa pun yang memegangnya harus diberi tautan baru.',
-      renewConfirmAction: 'Ya, buat tautan baru',
+      renewConfirmAction: 'Ya, buat baru',
       // The toast once the new link is made (#743).
       renewed: 'Tautan laporan sudah diganti.',
     },

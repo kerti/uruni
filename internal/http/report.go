@@ -45,6 +45,11 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.
 		// The link is to the month the page shows, the ledger's validated "YYYY-MM",
 		// never the raw query value.
 		page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?month=" + url.QueryEscape(page.Month)
+		// The file is laid out as the page is: a by-month page links a by-month
+		// PDF. Filters stay the page's alone (the PDF is the whole month).
+		if page.Group != report.GroupByKind {
+			page.PDFHref += "&group=" + url.QueryEscape(page.Group)
+		}
 		writeReportHTML(w, logger, http.StatusOK, "report", func(w io.Writer, nonce string) error {
 			return report.RenderHTML(w, page, nonce)
 		})
@@ -53,7 +58,8 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.
 
 // reportPDFHandler serves GET /report/{slug}/pdf with the page's edge: the
 // same headers, the same 404 for an unknown slug, a missing or malformed month
-// is the current one.
+// is the current one. ?group=month lays the list out by month, as the page
+// does; anything else is by kind.
 func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
@@ -64,7 +70,7 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) ht
 			return
 		}
 
-		body, month, err := report.PDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"))
+		body, month, err := report.PDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"), r.URL.Query().Get("group"))
 		if err != nil {
 			logger.Error("report: rendering the pdf", "fund_id", fund.ID, "error", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

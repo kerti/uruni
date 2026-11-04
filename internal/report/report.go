@@ -71,10 +71,14 @@ type Page struct {
 
 	// The transactions section (#374): the filter form, totals for the filtered
 	// set, and rows. The handler sets Filter; it alone knows the fund's members
-	// and purposes.
+	// and purposes. Rows is the month's list in the ledger's order; Groups is
+	// the same rows as the page and the PDF lay them out, by Group (see
+	// GroupRows).
 	Filter Filter
 	Totals []Total
 	Rows   []Row
+	Group  string
+	Groups []RowGroup
 	Month  string
 	NoRows bool
 
@@ -155,6 +159,92 @@ type Row struct {
 	// PartlyReversed marks a dues payment with only some months reversed:
 	// Sebagian dibatalkan (ADR-048, data from before it only).
 	PartlyReversed bool
+
+	// line is the walk line the row sums into (ADR-038), the key of the
+	// by-kind grouping: "in", "out", or "other" for an opening, a
+	// Penyesuaian and a move. month is its "YYYY-MM", the by-month key.
+	line  string
+	month string
+}
+
+// The two groupings of the transactions list (?group=), each answering a
+// question the other cannot: by kind, what came in and what went out (and so
+// what the money was spent on); by month, what happened in order across a
+// period that crosses months. Kind is the default.
+const (
+	GroupByKind  = "kind"
+	GroupByMonth = "month"
+)
+
+// readGroup is ?group=: "month", or the by-kind default for anything else, as
+// an unknown filter value is no filter.
+func readGroup(v string) string {
+	if v == GroupByMonth {
+		return GroupByMonth
+	}
+	return GroupByKind
+}
+
+// RowGroup is one block of the transactions list. Heading names it (Uang
+// masuk, Uang keluar, Lainnya; or a month). Subtotal is set on Uang masuk and
+// Uang keluar only: the walk's Total masuk and Total keluar, the ledger's own
+// figures for exactly these rows (ADR-038: one class drives the list, the
+// filter and the totals). Lainnya mixes signs and a month is not a walk, so
+// neither carries one. NoRows is what an empty Uang masuk or Uang keluar says;
+// every other group is omitted when empty.
+type RowGroup struct {
+	ID       string
+	Heading  string
+	Subtotal string
+	NoRows   string
+	Rows     []Row
+}
+
+// GroupRows sets the page's grouping and lays Rows out by it, keeping the
+// ledger's order inside each group. By kind, Uang masuk and Uang keluar are
+// always present - "nothing went out" is an answer - and Lainnya only when it
+// holds a row. By month, one group per month the rows fall in, in the order
+// the rows meet them.
+func (p *Page) GroupRows(group string, walk ledger.ReportWalk) {
+	p.Group = readGroup(group)
+	p.Groups = nil
+	if p.Group == GroupByMonth {
+		for _, r := range p.Rows {
+			if n := len(p.Groups); n == 0 || p.Groups[n-1].ID != r.month {
+				p.Groups = append(p.Groups, RowGroup{ID: r.month, Heading: Text.monthName(r.month)})
+			}
+			last := &p.Groups[len(p.Groups)-1]
+			last.Rows = append(last.Rows, r)
+		}
+		return
+	}
+	in := RowGroup{ID: "in", Heading: Text.DirectionIn, Subtotal: money.FormatIDR(walk.In), NoRows: Text.NoRowsIn}
+	out := RowGroup{ID: "out", Heading: Text.DirectionOut, Subtotal: money.FormatIDR(walk.Out), NoRows: Text.NoRowsOut}
+	other := RowGroup{ID: "other", Heading: Text.GroupOther}
+	for _, r := range p.Rows {
+		switch r.line {
+		case string(ledger.ReportLineIn):
+			in.Rows = append(in.Rows, r)
+		case string(ledger.ReportLineOut):
+			out.Rows = append(out.Rows, r)
+		default:
+			other.Rows = append(other.Rows, r)
+		}
+	}
+	p.Groups = []RowGroup{in, out}
+	if len(other.Rows) > 0 {
+		p.Groups = append(p.Groups, other)
+	}
+}
+
+// lineKey is a ledger row's by-kind group: its walk line when that is Uang
+// masuk or Uang keluar, else Lainnya.
+func lineKey(l ledger.ReportLine) string {
+	switch l {
+	case ledger.ReportLineIn, ledger.ReportLineOut:
+		return string(l)
+	}
+	return "other"
 }
 
 // noteText is a row's note as the report prints it: trimmed, "" for none.
@@ -168,10 +258,10 @@ func noteText(note *string) string {
 // Filter is the GET form: every option of every select, the current
 // choice marked, so a filtered view reads back as what it is.
 type Filter struct {
-	Purposes   []Option
-	Members    []Option
-	Directions []Option
-	Dues       []Option
+	Purposes []Option
+	Members  []Option
+	Groups   []Option
+	Dues     []Option
 
 	// Active is the filters in force, carried by the month steps and month form
 	// so changing month keeps them.
@@ -335,6 +425,7 @@ func Build(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64,
 	}
 	report.Envelopes = envelopesForPurpose(report.Envelopes, params.PurposeID)
 	page := NewPage(report, empty)
+	page.GroupRows(query.Get("group"), report.Walk)
 	page.Filter = filter
 	// A dues filter that matches nobody leaves no rows, which must not read
 	// as "nobody owes": ask the unfiltered question only then.
@@ -393,9 +484,11 @@ func fundIsEmpty(ctx context.Context, q store.Querier, fundID int64) (bool, erro
 }
 
 // readFilter turns the query string into ledger params and the form's
-// options. A purpose or member not this fund's, and a direction that is not
-// "in" or "out", is no filter: a stale or hand-edited URL shows the whole
-// month, not an error page. Options keep the store's order (Kas Utama first,
+// options. A purpose or member not this fund's is no filter, and a grouping
+// that is not "month" is by kind: a stale or hand-edited URL shows the whole
+// month, not an error page. The page has no direction filter: by kind, its
+// Uang masuk and Uang keluar are what the filter showed (a retired ?dir= in an
+// old link is ignored). Options keep the store's order (Kas Utama first,
 // then by name; members by name), as every other list.
 func readFilter(query url.Values, fundID int64, purposes []store.Purpose, members []store.Member) (ledger.ReportParams, Filter) {
 	params := ledger.ReportParams{FundID: fundID, Month: query.Get("month")}
@@ -423,14 +516,15 @@ func readFilter(query url.Values, fundID int64, purposes []store.Purpose, member
 		filter.Members = append(filter.Members, Option{Value: id, Label: m.Name, Selected: selected})
 	}
 
-	dir := query.Get("dir")
-	if dir == string(ledger.ReportDirectionIn) || dir == string(ledger.ReportDirectionOut) {
-		params.Direction = ledger.Direction(dir)
-		filter.Active.Set("dir", dir)
+	group := readGroup(query.Get("group"))
+	if group != GroupByKind {
+		filter.Active.Set("group", group)
 	}
-	filter.Directions = []Option{
-		{Value: string(ledger.ReportDirectionIn), Label: Text.DirectionIn, Selected: params.Direction == ledger.ReportDirectionIn},
-		{Value: string(ledger.ReportDirectionOut), Label: Text.DirectionOut, Selected: params.Direction == ledger.ReportDirectionOut},
+	filter.Groups = []Option{
+		// The default's value is empty, as "Semua" is: the page's script leaves
+		// an empty choice out of the URL, keeping a shared link short.
+		{Value: "", Label: Text.GroupByKind, Selected: group == GroupByKind},
+		{Value: GroupByMonth, Label: Text.GroupByMonth, Selected: group == GroupByMonth},
 	}
 
 	wantDues := query.Get("dues")
@@ -576,16 +670,19 @@ func NewPage(r ledger.Report, empty bool) Page {
 				Amount: sign + figure, Figure: figure, DirectionWord: word,
 				Kind: kind, KindIcon: icon, KindSpoken: spoken,
 				Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed, PartlyReversed: e.PartlyReversed,
+				line: lineKey(e.Line), month: row.Date[:7],
 			})
 		case row.Move != nil:
 			figure := money.FormatIDR(row.Move.Amount)
 			page.Rows = append(page.Rows, Row{
 				Date: date, Label: Text.moveLabel(*row.Move), Note: noteText(row.Move.Note),
 				Amount: figure, Figure: figure, Class: "move", Kind: Text.KindMoved,
+				line: "other", month: row.Date[:7],
 			})
 		}
 	}
 	page.NoRows = len(page.Rows) == 0
+	page.GroupRows(GroupByKind, r.Walk)
 
 	for _, d := range r.Dues {
 		row := DuesRow{

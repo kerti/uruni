@@ -315,7 +315,7 @@ func TestReportDuesSectionHidden(t *testing.T) {
 func TestReportDuesAndTransactionFormsCarryEachOther(t *testing.T) {
 	t.Parallel()
 	s := newDuesScenario(t)
-	body := s.get(t, s.base+"&dues=unpaid&dir=in").Body.String()
+	body := s.get(t, s.base+"&dues=unpaid&group=month").Body.String()
 
 	txnForm := body[strings.Index(body, `action="#transactions"`):]
 	txnForm = txnForm[:strings.Index(txnForm, "</form>")]
@@ -330,8 +330,8 @@ func TestReportDuesAndTransactionFormsCarryEachOther(t *testing.T) {
 	if !strings.Contains(sec, `action="#dues"`) || !strings.Contains(sec, `<select name="dues"`) {
 		t.Error("the dues section has no form of its own")
 	}
-	if !strings.Contains(sec, `<input type="hidden" name="dir" value="in">`) {
-		t.Error("the dues form drops the transactions filter")
+	if !strings.Contains(sec, `<input type="hidden" name="group" value="month">`) {
+		t.Error("the dues form drops the transactions grouping")
 	}
 	if strings.Contains(sec, `type="hidden" name="dues"`) {
 		t.Error("the dues form repeats dues as a hidden field")

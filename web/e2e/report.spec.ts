@@ -96,19 +96,32 @@ test.describe('report', () => {
     await expectAccessible(page)
   })
 
-  test('a filter is a GET query on the report URL', async ({ page }) => {
+  test('the grouping is a GET query on the report URL', async ({ page }) => {
     await page.goto(reportPath)
 
-    // Jenis (reportText.FilterDirection) submits its form on change.
+    // By kind is the default: Uang masuk and Uang keluar always, and the
+    // opening balance under Lainnya, since it is neither (ADR-038).
+    // reportText.DirectionIn / DirectionOut / GroupOther / NoRowsOut
     const transactions = page.locator('#transactions')
-    await transactions.getByLabel('Jenis').selectOption({ value: 'in' })
-    await expect(page).toHaveURL(/[?&]dir=in(&|#|$)/)
+    await expect(transactions.getByRole('heading', { name: /^Uang masuk/ })).toBeVisible()
+    await expect(transactions.getByRole('heading', { name: /^Uang keluar/ })).toBeVisible()
+    const other = transactions.locator('section.group').filter({ has: page.getByRole('heading', { name: 'Lainnya' }) })
+    await expect(other.locator('ul.txns li').filter({ hasText: 'Saldo awal' })).toHaveCount(1)
 
-    // The page rendered from that URL keeps the choice, and the opening
-    // balance - listed unfiltered, see the test above - is gone: ADR-038
-    // hides a Saldo awal under a direction filter, since it is not income.
-    await expect(transactions.getByLabel('Jenis')).toHaveValue('in')
-    await expect(transactions.locator('ul.txns li').filter({ hasText: 'Saldo awal' })).toHaveCount(0)
+    // Kelompokkan (reportText.FilterGroup) submits its form on change.
+    await transactions.getByLabel('Kelompokkan').selectOption({ label: 'Per bulan' })
+    await expect(page).toHaveURL(/[?&]group=month(&|#|$)/)
+
+    // The page rendered from that URL keeps the choice and lays the month out
+    // as one block, headed by its name, with no Lainnya.
+    await expect(transactions.getByLabel('Kelompokkan')).toHaveValue('month')
+    await expect(transactions.getByRole('heading', { name: 'Lainnya' })).toHaveCount(0)
+    await expect(transactions.locator('ul.txns li').filter({ hasText: 'Saldo awal' })).toHaveCount(1)
+
+    // Back to the default: the URL drops the parameter, as it does for Semua.
+    await transactions.getByLabel('Kelompokkan').selectOption({ label: 'Per jenis' })
+    await expect(transactions.getByRole('heading', { name: 'Lainnya' })).toBeVisible()
+    expect(page.url()).not.toMatch(/[?&]group=/)
   })
 
   test('an unknown slug is a 404 page', async ({ page }) => {

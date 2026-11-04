@@ -401,6 +401,10 @@ export function deleteDuesRate(id: number): Promise<void> {
 /** What the PDF is saved as when the server's Content-Disposition names nothing. */
 const REPORT_PDF_FALLBACK_NAME = 'laporan-kas.pdf'
 
+/** How the report lays out its list (?group=): by kind - Uang masuk, Uang
+ * keluar, Lainnya - the default, or by month. */
+export type ReportGroup = 'kind' | 'month'
+
 /** GET /api/report/months - the first and last month ("YYYY-MM", inclusive)
  * the public report offers: the first transaction's month through the current
  * one, with no gaps, so the two ends are MonthField's bounds as they stand. */
@@ -414,11 +418,13 @@ export function getReportMonths(): Promise<DateBounds> {
  * path, never by the absolute report_url: URUNI_BASE_URL may name another
  * origin than the one the app is open on (a tunnel in dev), and the request
  * must stay same-origin. A month the report does not offer draws the current
- * month, as the page does.
+ * month, as the page does. `group` lays the list out as the page's
+ * Kelompokkan does; by kind is the server's default, so it is left out.
  */
-export async function fetchReportPdf(reportUrl: string, month: string): Promise<File> {
+export async function fetchReportPdf(reportUrl: string, month: string, group: ReportGroup = 'kind'): Promise<File> {
   const path = reportUrl.startsWith('/') ? reportUrl : new URL(reportUrl).pathname
-  const { blob, res } = await fetchBlob(`${path}/pdf?month=${encodeURIComponent(month)}`)
+  const query = `month=${encodeURIComponent(month)}${group === 'month' ? '&group=month' : ''}`
+  const { blob, res } = await fetchBlob(`${path}/pdf?${query}`)
   const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
   return new File([blob], named?.[1] ?? REPORT_PDF_FALLBACK_NAME, { type: 'application/pdf' })
 }
