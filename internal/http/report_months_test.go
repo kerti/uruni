@@ -35,7 +35,7 @@ func TestGetReportMonthsSpansFirstTransactionToTheCurrentMonth(t *testing.T) {
 	r := authedRouterAt(t, testStoreDB(t), fixedClock(time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC)))
 	setup := setUpFund(t, r)
 
-	if got := decodeReportMonths(t, getReportMonths(t, r)); got != (reportMonthsResponse{Min: "2026-10", Max: "2026-10"}) {
+	if got := decodeReportMonths(t, getReportMonths(t, r)); got != (reportMonthsResponse{Min: "2026-10", Max: "2026-10", FirstDay: "2026-10-15", Today: "2026-10-15"}) {
 		t.Errorf("empty fund: months = %+v, want the current month alone", got)
 	}
 
@@ -46,7 +46,7 @@ func TestGetReportMonthsSpansFirstTransactionToTheCurrentMonth(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/transactions = %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if got := decodeReportMonths(t, getReportMonths(t, r)); got != (reportMonthsResponse{Min: "2026-06", Max: "2026-10"}) {
+	if got := decodeReportMonths(t, getReportMonths(t, r)); got != (reportMonthsResponse{Min: "2026-06", Max: "2026-10", FirstDay: "2026-06-20", Today: "2026-10-15"}) {
 		t.Errorf("months = %+v, want 2026-06 through 2026-10", got)
 	}
 }
@@ -55,19 +55,20 @@ func TestGetReportMonthsSpansFirstTransactionToTheCurrentMonth(t *testing.T) {
 func TestGetReportMonthsReadsTheFundsMonth(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name string
-		now  time.Time
-		want string
+		name  string
+		now   time.Time
+		want  string
+		today string
 	}{
-		{"one second before September in Jakarta", beforeSeptemberInJakarta, "2026-08"},
-		{"the first second of September in Jakarta", atSeptemberInJakarta, "2026-09"},
+		{"one second before September in Jakarta", beforeSeptemberInJakarta, "2026-08", "2026-08-31"},
+		{"the first second of September in Jakarta", atSeptemberInJakarta, "2026-09", "2026-09-01"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			r := authedRouterAt(t, testStoreDB(t), fixedClock(tc.now))
 			setUpFund(t, r)
-			if got := decodeReportMonths(t, getReportMonths(t, r)); got.Max != tc.want {
-				t.Errorf("max = %q, want %q", got.Max, tc.want)
+			if got := decodeReportMonths(t, getReportMonths(t, r)); got.Max != tc.want || got.Today != tc.today {
+				t.Errorf("max, today = %q, %q, want %q, %q", got.Max, got.Today, tc.want, tc.today)
 			}
 		})
 	}

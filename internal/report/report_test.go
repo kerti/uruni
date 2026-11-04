@@ -235,7 +235,7 @@ func TestPDFFontsAreReadOnceAcrossConcurrentRenders(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
-			if _, _, err := PDF(ctx, l, res.Fund.ID, "", ""); err != nil {
+			if _, _, err := PDF(ctx, l, res.Fund.ID, url.Values{}); err != nil {
 				t.Errorf("PDF() = %v, want no error", err)
 			}
 		})

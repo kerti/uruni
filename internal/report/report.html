@@ -29,19 +29,39 @@
   <p class="muted">{{.AsOf}}</p>
 </header>
 
-<nav class="months" id="months" aria-label="{{.Text.MonthLabel}}">
-  <div class="step">
+<nav class="months" id="months" aria-label="{{.Text.PeriodLabel}}">
+  {{if not .IsRange}}<div class="step">
     {{if .PrevHref}}<a href="{{.PrevHref}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
     {{if .NextHref}}<a href="{{.NextHref}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
   </div>
-  <form method="get" action="#months">
-    {{range $name, $values := .Filter.Active}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}
-    <label for="month">{{.Text.MonthLabel}}</label>
-    <select id="month" name="month">
-      {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
-      {{end}}
-    </select>
-    <button type="submit">{{.Text.MonthSubmit}}</button>
+  {{end}}
+  <form method="get" action="#months" id="period-form">
+    {{range $name, $values := .Filter.Active}}{{if and (ne $name "from") (ne $name "to")}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}{{end}}
+    <div class="field">
+      <label for="period">{{.Text.PeriodLabel}}</label>
+      <select id="period" name="period">
+        <option value=""{{if not .IsRange}} selected{{end}}>{{.Text.PeriodMonth}}</option>
+        <option value="range"{{if .IsRange}} selected{{end}}>{{.Text.PeriodRange}}</option>
+      </select>
+    </div>
+    <div class="field" id="field-month">
+      <label for="month">{{.Text.MonthLabel}}</label>
+      <select id="month" name="month">
+        {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </div>
+    <div id="field-range">
+      <div class="field">
+        <label for="from">{{.Text.RangeFrom}}</label>
+        <input type="date" id="from" name="from" min="{{.MinDay}}" max="{{.MaxDay}}"{{if .IsRange}} value="{{.From}}"{{end}} data-default="{{.From}}">
+      </div>
+      <div class="field">
+        <label for="to">{{.Text.RangeTo}}</label>
+        <input type="date" id="to" name="to" min="{{.MinDay}}" max="{{.MaxDay}}"{{if .IsRange}} value="{{.To}}"{{end}} data-default="{{.To}}">
+      </div>
+    </div>
+    <button type="submit" id="period-submit">{{.Text.MonthSubmit}}</button>
   </form>
 </nav>
 
@@ -79,7 +99,7 @@
   <h2 id="transactions-heading">{{.Text.TransactionsLabel}}</h2>
 
   <form class="filters" method="get" action="#transactions">
-    <input type="hidden" name="month" value="{{.Month}}">
+    {{if .IsRange}}<input type="hidden" name="from" value="{{.From}}"><input type="hidden" name="to" value="{{.To}}">{{else}}<input type="hidden" name="month" value="{{.Month}}">{{end}}
     {{with .Filter.Active.Get "dues"}}<input type="hidden" name="dues" value="{{.}}">{{end}}
     <label>{{.Text.FilterPurpose}}
       <select name="purpose">
@@ -109,7 +129,7 @@
     {{end}}
   </dl>
 
-  {{if .NoRows}}<p class="empty">{{.Text.NoRows}}</p>{{else}}
+  {{if .NoRows}}<p class="empty">{{if .IsRange}}{{.Text.NoRowsRange}}{{else}}{{.Text.NoRows}}{{end}}</p>{{else}}
   {{range .Groups}}
   <section class="group" aria-labelledby="group-{{.ID}}">
   <h3 class="group-head" id="group-{{.ID}}"><span>{{.Heading}}</span>{{if .Subtotal}} <span class="tabular">{{.Subtotal}}</span>{{end}}</h3>
@@ -140,6 +160,7 @@
 {{if or .HasDues .Grid}}
 <section id="dues" aria-labelledby="dues-heading">
   <h2 id="dues-heading">{{.Text.DuesLabel}}</h2>
+  {{if .DuesCaption}}<p class="muted">{{.DuesCaption}}</p>{{end}}
   {{with .Grid}}
   <div class="grid">
     <p class="muted">{{.Range}}</p>
@@ -175,7 +196,7 @@
   {{end}}
   {{if .HasDues}}
   <form class="filters" method="get" action="#dues">
-    <input type="hidden" name="month" value="{{.Month}}">
+    {{if not .IsRange}}<input type="hidden" name="month" value="{{.Month}}">{{end}}
     {{range $name, $values := .Filter.Active}}{{if ne $name "dues"}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}{{end}}
     <label><span class="sr-only">{{.Text.DuesFilter}}</span>
       <select name="dues">
@@ -256,19 +277,54 @@
 // Progressive enhancement: a select submits its form on change, so the
 // buttons go. An empty "Semua" choice is left out of the URL, keeping a
 // shared link short. Without JavaScript the page is the same plain GET forms.
+//
+// The period form is the exception: Periode only switches which fields show
+// (the month, or the two days), and the days submit with the form's button.
+// Only the fields in use go in the URL: a month, or from and to, never both.
+// Without JavaScript every field shows, and the server reads two valid days as
+// a range.
 const fields = document.querySelectorAll('form select, form input')
+const period = document.getElementById('period')
+const rangeOn = () => period.value === 'range'
+const prepare = (form) => {
+  // Periode itself never goes in the URL: from and to are what make a range.
+  const unused = form.id === 'period-form' ? (rangeOn() ? ['month', 'period'] : ['from', 'to', 'period']) : []
+  for (const f of form.elements) if (f.name && (!f.value || unused.includes(f.name))) f.disabled = true
+}
 for (const s of document.querySelectorAll('form select'))
-  s.addEventListener('change', () => {
-    for (const f of s.form.elements) if (f.name && !f.value) f.disabled = true
-    s.form.submit()
-  })
+  if (s !== period)
+    s.addEventListener('change', () => {
+      prepare(s.form)
+      s.form.submit()
+    })
+document.getElementById('period-form').addEventListener('submit', (e) => prepare(e.target))
+const showPeriod = () => {
+  const range = rangeOn()
+  document.getElementById('field-month').hidden = range
+  document.getElementById('field-range').hidden = !range
+  document.getElementById('period-submit').hidden = !range
+  if (range)
+    for (const d of document.querySelectorAll('#field-range input')) if (!d.value) d.value = d.dataset.default
+}
+// Bulanan is a whole choice: back to it, the page shows the month at once
+// (the month field holds the one the range ended in). Rentang tanggal waits
+// for the two days and Lihat.
+period.addEventListener('change', () => {
+  showPeriod()
+  if (!rangeOn()) {
+    prepare(period.form)
+    period.form.submit()
+  }
+})
 // A page restored by Back keeps the choices made before leaving it; reset
 // the forms to what this URL rendered, and undo the disabling.
 addEventListener('pageshow', () => {
   for (const f of fields) f.disabled = false
   for (const f of document.forms) f.reset()
+  showPeriod()
 })
 for (const b of document.querySelectorAll('form button')) b.hidden = true
+showPeriod()
 </script>
 {{template "foot" .}}{{end}}
 

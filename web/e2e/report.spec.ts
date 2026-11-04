@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { formatIsoDate } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
 import { expectAccessible } from './a11y'
@@ -122,6 +123,33 @@ test.describe('report', () => {
     await transactions.getByLabel('Kelompokkan').selectOption({ label: 'Per jenis' })
     await expect(transactions.getByRole('heading', { name: 'Lainnya' })).toBeVisible()
     expect(page.url()).not.toMatch(/[?&]group=/)
+  })
+
+  test('a date range is a GET query on the report URL, and Bulanan goes back', async ({ page }) => {
+    await page.goto(reportPath)
+    const months = page.locator('#months')
+
+    // Periode (reportText.PeriodLabel) swaps the month for Dari and Sampai,
+    // which open on the 1st of this month and today - clamped to the
+    // fixture's first row - and submit with Lihat.
+    await months.getByLabel('Periode').selectOption({ label: 'Rentang tanggal' })
+    await expect(months.getByLabel('Bulan', { exact: true })).toBeHidden()
+    const from = await months.getByLabel('Dari').inputValue()
+    const to = await months.getByLabel('Sampai').inputValue()
+    expect(from <= to).toBe(true)
+    await months.getByRole('button', { name: 'Lihat' }).click()
+
+    await expect(page).toHaveURL(new RegExp(`[?&]from=\\d{4}-\\d{2}-\\d{2}&to=${to}`))
+    expect(page.url()).not.toMatch(/[?&](month|period)=/)
+    // The header names the range; the month steps are gone.
+    await expect(page.locator('header p.muted')).toHaveText(new RegExp(`${formatIsoDate(to)}$`))
+    await expect(months.getByRole('link', { name: /Bulan sebelumnya/ })).toHaveCount(0)
+
+    // Bulanan is a whole choice: the page shows that month at once.
+    await months.getByLabel('Periode').selectOption({ label: 'Bulanan' })
+    await expect(page).toHaveURL(/[?&]month=\d{4}-\d{2}(&|#|$)/)
+    expect(page.url()).not.toMatch(/[?&](from|to)=/)
+    await expect(page.locator('header p.muted')).toContainText('Bulan berjalan')
   })
 
   test('an unknown slug is a 404 page', async ({ page }) => {

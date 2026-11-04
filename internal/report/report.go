@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
@@ -68,6 +69,22 @@ type Page struct {
 	PrevHref     string
 	NextHref     string
 	MonthOptions []MonthOption
+
+	// The period (ADR-049): Period is PeriodMonth or PeriodRange, IsRange the
+	// same as a bool for the template. From and To are the two days of the date
+	// fields ("YYYY-MM-DD"), the range's own in a range and, in a month, the
+	// defaults the fields start from (the current month's first day and today);
+	// MinDay and MaxDay bound them: the fund's first transaction day and today.
+	// RangeText names the range ("" in a month); DuesCaption captions the dues
+	// section in a range, which reads the month Month names.
+	Period      string
+	IsRange     bool
+	From        string
+	To          string
+	MinDay      string
+	MaxDay      string
+	RangeText   string
+	DuesCaption string
 
 	// The transactions section (#374): the filter form, totals for the filtered
 	// set, and rows. The handler sets Filter; it alone knows the fund's members
@@ -167,6 +184,12 @@ type Row struct {
 	month string
 }
 
+// The two periods (?from= and ?to=, or the month): Bulanan is the default.
+const (
+	PeriodMonth = "month"
+	PeriodRange = "range"
+)
+
 // The two groupings of the transactions list (?group=), each answering a
 // question the other cannot: by kind, what came in and what went out (and so
 // what the money was spent on); by month, what happened in order across a
@@ -263,8 +286,10 @@ type Filter struct {
 	Groups   []Option
 	Dues     []Option
 
-	// Active is the filters in force, carried by the month steps and month form
-	// so changing month keeps them.
+	// Active is the filters in force, carried by the month steps and the period
+	// form so changing period keeps them. In a range it also holds from and to,
+	// which the filter and dues forms keep (a range drops month: the two never
+	// travel together).
 	Active url.Values
 }
 
@@ -414,7 +439,16 @@ func Build(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64,
 	if err != nil {
 		return Page{}, err
 	}
+	firstDay, today, err := l.ReportDays(ctx, fundID)
+	if err != nil {
+		return Page{}, err
+	}
 	params, filter := readFilter(query, fundID, purposes, members)
+	if from, to, ok := readRange(query, firstDay, today); ok {
+		params.From, params.To = from, to
+		filter.Active.Set("from", from)
+		filter.Active.Set("to", to)
+	}
 	report, err := monthlyOrCurrent(ctx, l, params)
 	if err != nil {
 		return Page{}, err
@@ -426,6 +460,11 @@ func Build(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64,
 	report.Envelopes = envelopesForPurpose(report.Envelopes, params.PurposeID)
 	page := NewPage(report, empty)
 	page.GroupRows(query.Get("group"), report.Walk)
+	page.MinDay, page.MaxDay = firstDay, today
+	if !report.IsRange {
+		// The fields' starting points when the reader switches to a range.
+		page.From, page.To = max(firstDay, today[:8]+"01"), today
+	}
 	page.Filter = filter
 	// A dues filter that matches nobody leaves no rows, which must not read
 	// as "nobody owes": ask the unfiltered question only then.
@@ -541,10 +580,42 @@ func readFilter(query url.Values, fundID int64, purposes []store.Purpose, member
 	return params, filter
 }
 
+// readRange reads ?from= and ?to= (ADR-049): a range only when both are real
+// "YYYY-MM-DD" days, each clamped into [first, today] (the fund's first
+// transaction day and today in its zone), and swapped when they then run the
+// wrong way round. Anything else - absent, one-sided, malformed - is no range,
+// quietly: the report is read-only and records nothing, so an odd link shows
+// the month, as an invalid ?month= does. first and today are ISO days with
+// first <= today.
+func readRange(query url.Values, first, today string) (from, to string, ok bool) {
+	// Without JavaScript the period form submits every field: Periode set to
+	// Bulanan (an empty value) beside two dates still filled in from the range
+	// is a reader going back to the month, not staying in the range. The
+	// script never sends period, and a shared link need not carry it.
+	if query.Has("period") && query.Get("period") != PeriodRange {
+		return "", "", false
+	}
+	from, to = query.Get("from"), query.Get("to")
+	for _, d := range []string{from, to} {
+		if t, err := time.Parse(time.DateOnly, d); err != nil || t.Format(time.DateOnly) != d {
+			return "", "", false
+		}
+	}
+	from, to = min(max(from, first), today), min(max(to, first), today)
+	if from > to {
+		from, to = to, from
+	}
+	return from, to, true
+}
+
 // monthlyOrCurrent reads ?month= per ADR-035: a missing, malformed or
 // out-of-range month is the current one, never an error page. Malformed is
 // the ledger's ErrInvalidArgument; out-of-range assembles fine but names a
 // month the selector does not offer, so it is re-read as the current month.
+//
+// A range in params (already clamped by readRange) is read as it is, and Month
+// is then ignored; a range the ledger would still refuse falls back to the
+// month the same way.
 func monthlyOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.ReportParams) (ledger.Report, error) {
 	report, err := l.MonthlyReport(ctx, params)
 	if err == nil && slices.Contains(report.Months, report.Month) {
@@ -553,13 +624,17 @@ func monthlyOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.Repor
 	if err != nil && !errors.Is(err, ledger.ErrInvalidArgument) {
 		return ledger.Report{}, err
 	}
-	params.Month = ""
+	params.Month, params.From, params.To = "", "", ""
 	return l.MonthlyReport(ctx, params)
 }
 
 // asOf is the date line every figure answers to (ADR-037): a past
-// month's last day, or today marked as the running month.
+// month's last day, or today marked as the running month; in a range, the range
+// itself (ADR-049), the figures reading as of its last day.
 func asOf(r ledger.Report) string {
+	if r.IsRange {
+		return Text.rangeText(r.From, r.To)
+	}
 	if r.Running {
 		return Text.AsOfRunning(Text.longDate(r.AsOf))
 	}
@@ -637,6 +712,13 @@ func NewPage(r ledger.Report, empty bool) Page {
 	}
 
 	page.Month = r.Month
+	page.Period = PeriodMonth
+	if r.IsRange {
+		page.Period, page.IsRange = PeriodRange, true
+		page.From, page.To = r.From, r.To
+		page.RangeText = Text.rangeText(r.From, r.To)
+		page.DuesCaption = Text.DuesMonthCaption(Text.monthName(r.Month))
+	}
 	page.Totals = walkLines(r.Walk)
 	// The amplop pos the report knows of: an unnamed gift into one is a
 	// contribution nobody put a name to, as Riwayat reads it (rowLabel.ts),

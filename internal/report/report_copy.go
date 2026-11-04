@@ -41,6 +41,19 @@ type Copy struct {
 	MonthPrev   string
 	MonthNext   string
 
+	// The period form (ADR-049): Bulanan or Rentang tanggal, and the range's two
+	// days. RangeText names a range wherever it is named: the header line, the
+	// PDF's statement; its two days are long dates, each with its year.
+	// DuesMonthCaption captions the dues section in a range, which reads the
+	// month that holds the last day.
+	PeriodLabel      string
+	PeriodMonth      string
+	PeriodRange      string
+	RangeFrom        string
+	RangeTo          string
+	RangeText        func(from, to string) string
+	DuesMonthCaption func(month string) string
+
 	Empty string
 
 	// The transactions section (#374).
@@ -64,6 +77,7 @@ type Copy struct {
 	WalkMoved         string
 	HasReceipt        string
 	NoRows            string
+	NoRowsRange       string
 
 	// The dues section (#375). The four statuses are web/src/copy/id.ts's
 	// dues.statuses verbatim; the filter offers three, "Lunas" covering paid in
@@ -143,19 +157,24 @@ type Copy struct {
 
 	// The monthly PDF (#378): the page footer's link and the words the statement
 	// adds. Section headings and labels already on the page are reused.
-	PDFDownload     string
-	PDFFilename     func(month string) string
-	PDFStatement    func(month string) string
-	PDFSummary      string
-	PDFColDate      string
-	PDFColKind      string
-	PDFColNote      string
-	PDFColAmount    string
-	PDFColMember    string
-	PDFColStatus    string
-	PDFNoRows       string
-	PDFPage         func(page, pages string) string
-	PDFFooterSource func(fundName string) string
+	PDFDownload  string
+	PDFFilename  func(month string) string
+	PDFStatement func(month string) string
+	// PDFFilenameRange takes the range's two ISO days; PDFStatementRange the
+	// range text.
+	PDFFilenameRange  func(from, to string) string
+	PDFStatementRange func(rangeText string) string
+	PDFSummary        string
+	PDFColDate        string
+	PDFColKind        string
+	PDFColNote        string
+	PDFColAmount      string
+	PDFColMember      string
+	PDFColStatus      string
+	PDFNoRows         string
+	PDFNoRowsRange    string
+	PDFPage           func(page, pages string) string
+	PDFFooterSource   func(fundName string) string
 
 	NotFoundTitle string
 	NotFoundBody  string
@@ -194,6 +213,14 @@ var Text = Copy{
 	MonthPrev:   "\u2039 Bulan sebelumnya",
 	MonthNext:   "Bulan berikutnya \u203a",
 
+	PeriodLabel:      "Periode",
+	PeriodMonth:      "Bulanan",
+	PeriodRange:      "Rentang tanggal",
+	RangeFrom:        "Dari",
+	RangeTo:          "Sampai",
+	RangeText:        func(from, to string) string { return from + " \u2013 " + to },
+	DuesMonthCaption: func(month string) string { return "Iuran bulan " + month },
+
 	Empty: "Belum ada transaksi yang dicatat di kas ini.",
 
 	TransactionsLabel: "Transaksi",
@@ -216,6 +243,7 @@ var Text = Copy{
 	WalkMoved:         "Dipindah",
 	HasReceipt:        "Ada nota",
 	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
+	NoRowsRange:       "Tidak ada transaksi yang cocok pada rentang ini.",
 
 	DuesLabel:         "Status iuran",
 	DuesFilter:        "Status iuran",
@@ -269,19 +297,22 @@ var Text = Copy{
 	KindIn:           "Masuk",
 	KindOut:          "Keluar",
 
-	PDFDownload:     "Unduh PDF",
-	PDFFilename:     func(month string) string { return "laporan-kas-" + month + ".pdf" },
-	PDFStatement:    func(month string) string { return "Laporan kas bulan " + month },
-	PDFColDate:      "Tanggal",
-	PDFColKind:      "Jenis",
-	PDFColNote:      "Keterangan",
-	PDFColAmount:    "Jumlah",
-	PDFColMember:    "Anggota",
-	PDFColStatus:    "Status",
-	PDFSummary:      "Ringkasan",
-	PDFNoRows:       "Tidak ada transaksi bulan ini.",
-	PDFPage:         func(page, pages string) string { return "Halaman " + page + " dari " + pages },
-	PDFFooterSource: func(fundName string) string { return fundName + " \u00b7 Laporan kas" },
+	PDFDownload:       "Unduh PDF",
+	PDFFilename:       func(month string) string { return "laporan-kas-" + month + ".pdf" },
+	PDFStatement:      func(month string) string { return "Laporan kas bulan " + month },
+	PDFFilenameRange:  func(from, to string) string { return "laporan-kas-" + from + "_" + to + ".pdf" },
+	PDFStatementRange: func(rangeText string) string { return "Laporan kas " + rangeText },
+	PDFColDate:        "Tanggal",
+	PDFColKind:        "Jenis",
+	PDFColNote:        "Keterangan",
+	PDFColAmount:      "Jumlah",
+	PDFColMember:      "Anggota",
+	PDFColStatus:      "Status",
+	PDFSummary:        "Ringkasan",
+	PDFNoRows:         "Tidak ada transaksi bulan ini.",
+	PDFNoRowsRange:    "Tidak ada transaksi pada rentang ini.",
+	PDFPage:           func(page, pages string) string { return "Halaman " + page + " dari " + pages },
+	PDFFooterSource:   func(fundName string) string { return fundName + " \u00b7 Laporan kas" },
 
 	NotFoundTitle: "Laporan tidak ditemukan",
 	NotFoundBody:  "Tautan laporan ini tidak berlaku. Minta tautan terbaru ke bendahara.",
@@ -311,6 +342,16 @@ func (c Copy) longDate(iso string) string {
 		return iso
 	}
 	return strconv.Itoa(t.Day()) + " " + c.Months[t.Month()-1] + " " + strconv.Itoa(t.Year())
+}
+
+// rangeText is a range of two "YYYY-MM-DD" days as it is named on the page and
+// in the PDF: "15 Oktober 2026 \u2013 3 November 2026".
+func (c Copy) rangeText(from, to string) string {
+	// One day is that day, once: "4 November 2026", not twice across a dash.
+	if from == to {
+		return c.longDate(from)
+	}
+	return c.RangeText(c.longDate(from), c.longDate(to))
 }
 
 // monthName renders "YYYY-MM" as "Oktober 2026".

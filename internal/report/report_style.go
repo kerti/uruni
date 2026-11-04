@@ -99,10 +99,13 @@ ul.rows li{display:flex;justify-content:space-between;gap:12px;background:var(--
 nav.months{display:flex;flex-direction:column;gap:12px}
 nav.months .step{display:flex;justify-content:space-between;gap:12px;font-size:14px}
 nav.months a{color:var(--primary);text-decoration:none;font-weight:500;padding:10px 0}
-nav.months form{display:flex;gap:8px;align-items:center}
+nav.months form{display:flex;flex-direction:column;gap:12px}
+nav.months .field{display:flex;flex-direction:column;gap:4px}
+nav.months #field-range{display:flex;flex-direction:column;gap:12px}
 nav.months label{font-size:14px;color:var(--muted-foreground)}
-select,button{font:inherit;font-size:16px;min-height:44px;border-radius:8px}
-select{flex:1;border:1px solid var(--input);background:var(--card);color:var(--foreground);padding:0 12px}
+[hidden]{display:none!important}
+select,button,input[type=date]{font:inherit;font-size:16px;min-height:44px;border-radius:8px}
+select,input[type=date]{flex:1;min-width:0;border:1px solid var(--input);background:var(--card);color:var(--foreground);padding:0 12px}
 button{border:0;background:var(--primary);color:var(--primary-foreground);padding:0 20px;font-weight:600}
 .filters{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}
 .filters label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted-foreground)}

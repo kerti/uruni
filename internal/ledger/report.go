@@ -40,6 +40,16 @@ type ReportParams struct {
 	// current one is the HTTP edge's call (ADR-035).
 	Month string
 
+	// From and To are "YYYY-MM-DD" days, whole and inclusive, in the fund's time
+	// zone: a date range in place of a month (ADR-049). Both set means a range
+	// and Month is ignored; both empty means the month; exactly one, or a
+	// malformed or reversed pair, is ErrInvalidArgument. Clamping them to the
+	// fund's first day and to today, and falling back to the month when they do
+	// not parse, is the edge's call. A To of today or later makes a running
+	// period, read like the running month: unbounded, as Beranda reads it.
+	From string
+	To   string
+
 	// PurposeID filters transactions to one purpose tag (the stored tag every
 	// balance sums). A purpose move matches when it names the purpose on either
 	// side.
@@ -81,8 +91,8 @@ type Report struct {
 	FundName string
 
 	// AsOf is the day ("YYYY-MM-DD") every figure is true as of (ADR-037): the
-	// last day of a past month, or today in the fund's time zone for the running month
-	// (marked by Running).
+	// last day of a past month or a range, or today in the fund's time zone for
+	// the running month or a range ending today (marked by Running).
 	AsOf    string
 	Running bool
 
@@ -91,9 +101,18 @@ type Report struct {
 	Today string
 
 	// Month is the month shown ("YYYY-MM"); Months is every month offered,
-	// oldest first: the first transaction's month through the current one.
+	// oldest first: the first transaction's month through the current one. For a
+	// date range (IsRange) Month is the month that holds To: the month the dues
+	// list and the twelve-month grid read, which are monthly by nature (ADR-049).
 	Month  string
 	Months []string
+
+	// From and To are the first and last day shown ("YYYY-MM-DD"), inclusive:
+	// the month's first day and AsOf for a month, the range itself for a range.
+	// IsRange says which the report was asked for.
+	From    string
+	To      string
+	IsRange bool
 
 	// Balance is the fund's one pooled balance (FundBalance).
 	Balance money.Amount
@@ -407,29 +426,32 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 
 	now := l.now()
 	today := now.In(loc)
-	currentMonth := today.Format(reportMonthLayout)
+	todayDay := today.Format(reportDayLayout)
 
-	month := p.Month
-	if month == "" {
-		month = currentMonth
-	}
-	monthStart, err := parseReportMonth(month)
+	period, err := reportPeriodFor(p, today)
 	if err != nil {
 		return Report{}, err
+	}
+	month := period.start.Format(reportMonthLayout)
+	if period.isRange {
+		// The dues list and the grid are monthly: they read the month that holds To.
+		month = period.end.Format(reportMonthLayout)
 	}
 
 	r := Report{
 		FundName: fund.Name,
-		AsOf:     today.Format(reportDayLayout),
-		Running:  month >= currentMonth,
-		Today:    today.Format(reportDayLayout),
+		AsOf:     todayDay,
+		Running:  period.running,
+		Today:    todayDay,
 		Month:    month,
+		From:     period.startDay(),
+		IsRange:  period.isRange,
 	}
-	b := reportBound{}
-	if !r.Running {
-		b = boundAtMonthEnd(monthStart, loc)
+	b := period.bound(loc)
+	if !period.running {
 		r.AsOf = *b.through
 	}
+	r.To = r.AsOf
 
 	if r.Months, err = l.reportMonths(ctx, p.FundID, today); err != nil {
 		return Report{}, err
@@ -460,10 +482,10 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 
-	if r.Rows, r.Walk, err = l.reportRows(ctx, p, monthStart, r.Running); err != nil {
+	if r.Rows, r.Walk, err = l.reportRows(ctx, p, period); err != nil {
 		return Report{}, err
 	}
-	if err := l.walkEnds(ctx, p, monthStart, b, r.AsOf, &r.Walk); err != nil {
+	if err := l.walkEnds(ctx, p, period.start, b, r.AsOf, &r.Walk); err != nil {
 		return Report{}, err
 	}
 
@@ -474,22 +496,23 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if r.DuesGrid, err = l.duesGrid(ctx, p.FundID, month, now); err != nil {
 		return Report{}, err
 	}
-	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes, b); err != nil {
+	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, period, purposes, envelopes, b); err != nil {
 		return Report{}, err
 	}
 
 	return r, nil
 }
 
-// walkEnds sets the walk's two balances and their dates. The ends are ledger
-// sums, and only the whole fund, one pos or one location (with or without a
-// pos) has them (Full). A purpose or location that did not exist yet sums to
+// walkEnds sets the walk's two balances and their dates; periodStart is the
+// period's first day, so the start balance is the one at the end of the day
+// before it. The ends are ledger sums, and only the whole fund, one pos or one
+// location (with or without a pos) has them (Full). A purpose or location that did not exist yet sums to
 // nothing.
-func (l *Ledger) walkEnds(ctx context.Context, p ReportParams, monthStart time.Time, b reportBound, asOf string, walk *ReportWalk) error {
+func (l *Ledger) walkEnds(ctx context.Context, p ReportParams, periodStart time.Time, b reportBound, asOf string, walk *ReportWalk) error {
 	if !walk.Full {
 		return nil
 	}
-	dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
+	dayBefore := periodStart.AddDate(0, 0, -1).Format(reportDayLayout)
 	walk.StartOn, walk.EndOn = dayBefore, asOf
 	if p.AccountID != nil {
 		var err error
@@ -542,37 +565,115 @@ func (l *Ledger) MonthWalk(ctx context.Context, p ReportParams) (ReportWalk, err
 		return ReportWalk{}, err
 	}
 	today := l.now().In(loc)
-	running := p.Month >= today.Format(reportMonthLayout)
+	period := monthPeriod(monthStart, today)
 	asOf := today.Format(reportDayLayout)
-	b := reportBound{}
-	if !running {
-		b = boundAtMonthEnd(monthStart, loc)
+	b := period.bound(loc)
+	if !period.running {
 		asOf = *b.through
 	}
 
-	_, walk, err := l.reportRows(ctx, p, monthStart, running)
+	_, walk, err := l.reportRows(ctx, p, period)
 	if err != nil {
 		return ReportWalk{}, err
 	}
-	if err := l.walkEnds(ctx, p, monthStart, b, asOf, &walk); err != nil {
+	if err := l.walkEnds(ctx, p, period.start, b, asOf, &walk); err != nil {
 		return ReportWalk{}, err
 	}
 	return walk, nil
 }
 
-// reportBound is where a past month's figures stop (ADR-037): through is its
+// reportPeriod is the days one report covers, whole and inclusive in the fund's
+// zone: a calendar month, or the date range ADR-049 adds. The month and the
+// range share every step of the assembly, so a figure cannot be right for one
+// and wrong for the other. start and end are dates at midnight UTC, used only
+// for their calendar day.
+type reportPeriod struct {
+	start, end time.Time
+	isRange    bool
+
+	// running is whether the period reaches today: it then reads unbounded,
+	// exactly as Beranda does (ADR-037).
+	running bool
+}
+
+func (rp reportPeriod) startDay() string { return rp.start.Format(reportDayLayout) }
+func (rp reportPeriod) endDay() string   { return rp.end.Format(reportDayLayout) }
+
+// monthPeriod is the calendar month starting on monthStart, as seen on today (a
+// time in the fund's zone).
+func monthPeriod(monthStart, today time.Time) reportPeriod {
+	return reportPeriod{
+		start:   monthStart,
+		end:     monthStart.AddDate(0, 1, -1),
+		running: monthStart.Format(reportMonthLayout) >= today.Format(reportMonthLayout),
+	}
+}
+
+// reportPeriodFor reads p's period: the range when From and To are set (Month
+// is then ignored), the month otherwise (empty means the current one).
+func reportPeriodFor(p ReportParams, today time.Time) (reportPeriod, error) {
+	if p.From == "" && p.To == "" {
+		month := p.Month
+		if month == "" {
+			month = today.Format(reportMonthLayout)
+		}
+		monthStart, err := parseReportMonth(month)
+		if err != nil {
+			return reportPeriod{}, err
+		}
+		return monthPeriod(monthStart, today), nil
+	}
+	if p.From == "" || p.To == "" {
+		return reportPeriod{}, fmt.Errorf("%w: a date range needs both from and to", ErrInvalidArgument)
+	}
+	start, err := parseReportDay(p.From)
+	if err != nil {
+		return reportPeriod{}, err
+	}
+	end, err := parseReportDay(p.To)
+	if err != nil {
+		return reportPeriod{}, err
+	}
+	if end.Before(start) {
+		return reportPeriod{}, fmt.Errorf("%w: range ends (%s) before it starts (%s)", ErrInvalidArgument, p.To, p.From)
+	}
+	if p.From > today.Format(reportDayLayout) {
+		return reportPeriod{}, fmt.Errorf("%w: range starts (%s) after today", ErrInvalidArgument, p.From)
+	}
+	// A range reaching today is running, and never reads beyond it: a To ahead of
+	// today means today (the edge clamps too; the ledger does not rely on it).
+	running := p.To >= today.Format(reportDayLayout)
+	if running {
+		if end, err = parseReportDay(today.Format(reportDayLayout)); err != nil {
+			return reportPeriod{}, err
+		}
+	}
+	return reportPeriod{start: start, end: end, isRange: true, running: running}, nil
+}
+
+// bound is where the period's figures stop (ADR-037): the zero bound, reading
+// everything, when it is running.
+func (rp reportPeriod) bound(loc *time.Location) reportBound {
+	if rp.running {
+		return reportBound{}
+	}
+	return boundAtDayEnd(rp.end, loc)
+}
+
+// reportBound is where a past period's figures stop (ADR-037): through is its
 // last day, compared against the ledger's day columns; before is the first
-// instant of the next month in the fund's time zone, compared against a count's
-// performed_at. Both nil is the running month, which reads every row, the
-// same figures Beranda shows.
+// instant of the day after it in the fund's time zone, compared against a
+// count's performed_at. Both nil is the running period, which reads every row,
+// the same figures Beranda shows.
 type reportBound struct {
 	through *string
 	before  *int64
 }
 
-func boundAtMonthEnd(monthStart time.Time, loc *time.Location) reportBound {
-	last := monthStart.AddDate(0, 1, -1).Format(reportDayLayout)
-	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, loc).Unix()
+// boundAtDayEnd bounds a past period at the end of its last day.
+func boundAtDayEnd(lastDay time.Time, loc *time.Location) reportBound {
+	last := lastDay.Format(reportDayLayout)
+	next := time.Date(lastDay.Year(), lastDay.Month(), lastDay.Day()+1, 0, 0, 0, 0, loc).Unix()
 	return reportBound{through: &last, before: &next}
 }
 
@@ -582,6 +683,16 @@ func parseReportMonth(month string) (time.Time, error) {
 	t, err := time.Parse(reportMonthLayout, month)
 	if err != nil || t.Format(reportMonthLayout) != month {
 		return time.Time{}, fmt.Errorf("%w: month %q is not a valid \"YYYY-MM\" month", ErrInvalidArgument, month)
+	}
+	return t, nil
+}
+
+// parseReportDay returns the "YYYY-MM-DD" day at midnight UTC, refusing
+// anything time.Parse would normalise into a different string.
+func parseReportDay(day string) (time.Time, error) {
+	t, err := time.Parse(reportDayLayout, day)
+	if err != nil || t.Format(reportDayLayout) != day {
+		return time.Time{}, fmt.Errorf("%w: day %q is not a valid \"YYYY-MM-DD\" day", ErrInvalidArgument, day)
 	}
 	return t, nil
 }
@@ -599,6 +710,32 @@ func (l *Ledger) ReportMonths(ctx context.Context, fundID int64) ([]string, erro
 		return nil, err
 	}
 	return l.reportMonths(ctx, fundID, l.now().In(loc))
+}
+
+// ReportDays is the span a date range may cover, as "YYYY-MM-DD" days in the
+// fund's zone: the fund's first transaction day and today. A fund with no
+// transaction, or whose first one is dated after today, starts today. The
+// report's edge clamps a requested range into it (ADR-049).
+func (l *Ledger) ReportDays(ctx context.Context, fundID int64) (first, today string, err error) {
+	fund, err := l.q.GetFund(ctx, fundID)
+	if err != nil {
+		return "", "", fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return "", "", err
+	}
+	today = l.now().In(loc).Format(reportDayLayout)
+	first = today
+	firstDate, err := l.q.FirstTransactionDateByFund(ctx, fundID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return "", "", fmt.Errorf("first transaction date: %w", err)
+	case firstDate < first:
+		first = firstDate
+	}
+	return first, today, nil
 }
 
 // reportMonths lists the months the report offers, oldest first: the first
@@ -781,26 +918,27 @@ func (l *Ledger) monthInOut(ctx context.Context, fundID int64, now time.Time) (i
 	if err != nil {
 		return 0, 0, err
 	}
-	_, walk, err := l.reportRows(ctx, ReportParams{FundID: fundID}, monthStart, true)
+	_, walk, err := l.reportRows(ctx, ReportParams{FundID: fundID}, monthPeriod(monthStart, now.In(loc)))
 	if err != nil {
 		return 0, 0, err
 	}
 	return walk.In, walk.Out, nil
 }
 
-// reportRows reads the month, folds transfer pairs, applies the filters, and
-// lands each entry on its line of the walk. The running month reads with no
+// reportRows reads the period, folds transfer pairs, applies the filters, and
+// lands each entry on its line of the walk. A running period reads with no
 // upper bound, matching its unbounded balance (ADR-037, ADR-038): a row dated
 // after today still belongs to the walk that ends on that balance.
-func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time.Time, running bool) ([]ReportRow, ReportWalk, error) {
+func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPeriod) ([]ReportRow, ReportWalk, error) {
 	var to *string
-	if !running {
-		next := monthStart.AddDate(0, 1, 0).Format(reportDayLayout)
+	if !period.running {
+		// ToDate is exclusive: the day after the period's last.
+		next := period.end.AddDate(0, 0, 1).Format(reportDayLayout)
 		to = &next
 	}
 	rows, err := l.q.ListReportTransactions(ctx, store.ListReportTransactionsParams{
 		FundID:   p.FundID,
-		FromDate: monthStart.Format(reportDayLayout),
+		FromDate: period.startDay(),
 		ToDate:   to,
 	})
 	if err != nil {
@@ -1294,12 +1432,12 @@ func duesStatusMatches(filter string, s DuesStatus) bool {
 	}
 }
 
-// reportEnvelopes lists every envelope open at some point during month
-// (opened by its end, not closed before its start), each with its recipients
-// and participation table. For the current month that is every open envelope
-// plus any closed in it (ADR-035); for a past month, the envelopes as they
-// stood then. Oldest first, then by name.
-func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportEnvelope, error) {
+// reportEnvelopes lists every envelope open at some point during the period
+// (opened by its last day, not closed before its first), each with its
+// recipients and participation table. For a period reaching today that is every
+// open envelope plus any closed in it (ADR-035); for a past one, the envelopes
+// as they stood then. Oldest first, then by name.
+func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, period reportPeriod, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportEnvelope, error) {
 	nameByPurpose := make(map[int64]string, len(purposes))
 	for _, pu := range purposes {
 		nameByPurpose[pu.ID] = pu.Name
@@ -1307,13 +1445,13 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 
 	var out []ReportEnvelope
 	for _, e := range envelopes {
-		// opened_on and closed_on are CHECKed "YYYY-MM-DD", so a prefix is a
-		// month. An envelope opened after the month did not exist yet in it.
-		if e.OpenedOn[:len(reportMonthLayout)] > month {
+		// opened_on and closed_on are CHECKed "YYYY-MM-DD", so they compare as
+		// days. An envelope opened after the period did not exist yet in it.
+		if e.OpenedOn > period.endDay() {
 			continue
 		}
-		// Closed before the month began: it was not open in it.
-		if e.ClosedOn != nil && (*e.ClosedOn)[:len(reportMonthLayout)] < month {
+		// Closed before the period began: it was not open in it.
+		if e.ClosedOn != nil && *e.ClosedOn < period.startDay() {
 			continue
 		}
 
@@ -1337,7 +1475,7 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 			OpenedOn: e.OpenedOn, ClosedOn: e.ClosedOn, Balance: balance,
 			Collected: money.FromDB(totals.CollectedAmount),
 		}
-		// Closed after a past month ended: it was still open at its end.
+		// Closed after a past period ended: it was still open at its end.
 		if b.through != nil && e.ClosedOn != nil && *e.ClosedOn > *b.through {
 			env.ClosedOn = nil
 		}

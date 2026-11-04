@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import SectionLabel from '@/components/SectionLabel'
 import { ArrowSquareOut, Check, Copy, DownloadSimple, ShareNetwork } from '@phosphor-icons/react'
 
+import DateField from '@/components/DateField'
 import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -13,8 +14,8 @@ import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { saveBlob } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
-import { fetchReportPdf, getReportMonths, replaceReportSlug, type ReportGroup } from '@/lib/setup'
-import { currentPeriod, type DateBounds } from '@/lib/dates'
+import { fetchReportPdf, getReportMonths, replaceReportSlug, type ReportGroup, type ReportSpan } from '@/lib/setup'
+import { currentPeriod } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
@@ -178,11 +179,14 @@ function LinkActions({ url, onPdf, onRenew }: { url: string; onPdf: () => void; 
 }
 
 /**
- * Unduh PDF's dialog: which month the statement is for, and how its list is
- * grouped. The months on offer are the public report's own (GET
- * /api/report/months): the first transaction's month through the current
- * one, opening on the current one. The grouping is the page's Kelompokkan,
- * by kind unless she picks by month.
+ * Unduh PDF's dialog: which days the statement covers, and how its list is
+ * grouped - the report page's own choices, in its order (ADR-049). Periode
+ * first: Bulanan, a month the report offers (GET /api/report/months: the first
+ * transaction's month through the current one), opening on the current one;
+ * or Rentang tanggal, Dari and Sampai between the first transaction's day and
+ * today, opening on the 1st of this month through today. Each date field stops
+ * at the other, so the range cannot be backwards. The grouping is the page's
+ * Kelompokkan, by kind unless she picks by month.
  *
  * Never a link to /report/.../pdf: an installed PWA's scope is `/`, so iOS
  * opens that path inside the app's window - `download` and `target` both
@@ -215,11 +219,13 @@ function PdfDialog({ open, onClose, reportUrl }: { open: boolean; onClose: () =>
 }
 
 function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: string }) {
-  const [months, loadMonths] = useApi<DateBounds>()
+  const [months, loadMonths] = useApi<ReportSpan>()
+  const [mode, setMode] = useState<'month' | 'range'>('month')
   // The current month from the start - always one the report offers - so
-  // Bulan is enabled and takes the dialog's opening focus, as every dialog's
-  // first field does; the months that arrive only widen what it offers.
+  // the fields are usable at once; the span that arrives only widens them.
   const [month, setMonth] = useState(currentPeriod)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [group, setGroup] = useState<ReportGroup>('kind')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
@@ -227,9 +233,13 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
   const load = useCallback(
     () =>
       loadMonths(async () => {
-        const bounds = await getReportMonths()
-        setMonth(bounds.max)
-        return bounds
+        const span = await getReportMonths()
+        setMonth(span.max)
+        // The 1st of this month, or the first transaction's day if later.
+        const firstOfMonth = `${span.today.slice(0, 7)}-01`
+        setFrom(firstOfMonth > span.first_day ? firstOfMonth : span.first_day)
+        setTo(span.today)
+        return span
       }),
     [loadMonths],
   )
@@ -242,7 +252,7 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
     setError(null)
     setBusy(true)
     try {
-      const pdf = await fetchReportPdf(reportUrl, month, group)
+      const pdf = await fetchReportPdf(reportUrl, mode === 'month' ? { month } : { from, to }, group)
       saveBlob(pdf, pdf.name)
       onClose()
     } catch (err) {
@@ -252,23 +262,58 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
     }
   }
 
-  const bounds = months.status === 'success' ? months.data : undefined
+  const span = months.status === 'success' ? months.data : undefined
 
   return (
     <>
       {months.status === 'error' && months.error ? (
         <ErrorState error={months.error} onRetry={() => void load()} />
       ) : (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="report-pdf-month">{text.pdfMonthLabel}</Label>
-          <MonthField
-            id="report-pdf-month"
-            value={month}
-            onChange={setMonth}
-            bounds={bounds ?? { min: month, max: month }}
-            disabled={busy}
-          />
-        </div>
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="report-pdf-period">{text.pdfPeriodLabel}</Label>
+            <Select value={mode} onValueChange={(next) => setMode(next as 'month' | 'range')} disabled={busy}>
+              <SelectTrigger id="report-pdf-period" aria-label={text.pdfPeriodLabel}>
+                <SelectValue>{mode === 'range' ? text.pdfPeriodRange : text.pdfPeriodMonth}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">{text.pdfPeriodMonth}</SelectItem>
+                <SelectItem value="range">{text.pdfPeriodRange}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {mode === 'month' ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="report-pdf-month">{text.pdfMonthLabel}</Label>
+              <MonthField
+                id="report-pdf-month"
+                value={month}
+                onChange={setMonth}
+                bounds={span ?? { min: month, max: month }}
+                disabled={busy}
+              />
+            </div>
+          ) : (
+            span && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="report-pdf-from">{text.pdfFromLabel}</Label>
+                  <DateField
+                    id="report-pdf-from"
+                    value={from}
+                    onChange={setFrom}
+                    bounds={{ min: span.first_day, max: to }}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="report-pdf-to">{text.pdfToLabel}</Label>
+                  <DateField id="report-pdf-to" value={to} onChange={setTo} bounds={{ min: from, max: span.today }} disabled={busy} />
+                </div>
+              </>
+            )
+          )}
+        </>
       )}
       {/* A labelled Select, as every fixed choice in a dialog is (Lokasi's
           Jenis, Riwayat's filter), even with two options. */}
@@ -289,7 +334,7 @@ function PdfMonthForm({ onClose, reportUrl }: { onClose: () => void; reportUrl: 
         <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
           {copy.common.close}
         </Button>
-        <Button type="button" size="lg" disabled={!bounds || busy} onClick={() => void handleDownload()}>
+        <Button type="button" size="lg" disabled={!span || busy} onClick={() => void handleDownload()}>
           {text.downloadPdf}
         </Button>
       </DialogFooter>
