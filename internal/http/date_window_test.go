@@ -157,7 +157,11 @@ var windowRoutes = []windowRoute{
 		return callJSON(t, e.r, "PATCH", fmt.Sprintf("/api/members/%d", e.member), map[string]any{"joined_on": d})
 	}},
 	{"PATCH /api/members/{id} inactive_on", wPerson, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {
-		return callJSON(t, e.r, "PATCH", fmt.Sprintf("/api/members/%d", e.member), map[string]any{"inactive_on": d})
+		return callJSON(t, e.r, "PATCH", fmt.Sprintf("/api/members/%d", e.member), map[string]any{
+			// The join day at the floor too: a leaving day before the join day is
+			// refused on its own (#803), and this route tests the window alone.
+			"joined_on": "2000-01-01", "inactive_on": d,
+		})
 	}},
 	{"POST /api/dues-tiers/{id}/rates", wRate, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {
 		return callJSON(t, e.r, "POST", fmt.Sprintf("/api/dues-tiers/%d/rates", e.tier), map[string]any{"amount": 1000, "effective_from": d})

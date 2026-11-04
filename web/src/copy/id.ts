@@ -1039,6 +1039,12 @@ export const copy = {
       deactivateConfirm:
         'Anggota ini tidak akan muncul lagi saat mencatat iuran baru. Riwayatnya tetap utuh, dan bisa diaktifkan lagi kapan saja.',
       deactivateConfirmAction: 'Ya, nonaktifkan',
+      // The day she left (#803), asked on the Nonaktifkan confirm and editable
+      // afterwards beside Tanggal bergabung. The badge's own word, not "Tanggal
+      // keluar": Keluar is already the money's direction.
+      inactiveOnLabel: 'Tidak aktif sejak',
+      // Above deactivateConfirm: the month the chosen day ends her dues in.
+      owedThrough: (month: string) => `Iuran tetap ditagih sampai ${month}.`,
       reinstate: 'Aktifkan lagi',
       reinstating: 'Mengaktifkan…',
       inactiveBadge: 'Tidak aktif',

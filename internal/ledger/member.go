@@ -122,7 +122,10 @@ type UpdateMemberParams struct {
 //     a later row is never cancelled by an earlier statement ("A from March"
 //     with B from June changes nothing); else it writes the next correction of
 //     month M (0 when M has no row yet).
-//  3. Name and the leaving date are plain updates, with no history.
+//  3. Name and the leaving date are plain updates, with no history: a member
+//     deactivated, reinstated and deactivated again holds only the last date
+//     (#803). A leaving date before the join date, as this call leaves the
+//     pair, is ErrDateOutOfRange.
 //
 // Rule 2's month bounds read the join month AFTER this call's own change, and a
 // tier given without TierFrom is stated from the current month or the join month
@@ -188,6 +191,12 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 		})
 		if err != nil {
 			return fmt.Errorf("updating member: %w", err)
+		}
+		// Leaving before joining is no window at all: every month would fall
+		// outside it and her payments would belong to nobody. Read after the
+		// update, so a call moving either end is held to the pair it leaves.
+		if updated.InactiveOn != nil && *updated.InactiveOn < updated.JoinedOn {
+			return fmt.Errorf("%w: inactive_on %s is before joined_on %s", ErrDateOutOfRange, *updated.InactiveOn, updated.JoinedOn)
 		}
 		oldMonth, newMonth := old.JoinedOn[:len(duesPeriodLayout)], updated.JoinedOn[:len(duesPeriodLayout)]
 		createdAt := l.now().Unix()

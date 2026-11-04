@@ -498,3 +498,94 @@ func TestUpdateMemberRefusesAJoinDateBefore2000AndChangesNothing(t *testing.T) {
 	}
 	wantRows(t, l, m.ID, "2026-03#0="+strconv.FormatInt(a, 10))
 }
+
+// --- the leaving date (#803) --------------------------------------------------
+
+var novemberNow = time.Date(2026, 11, 4, 12, 0, 0, 0, wib)
+
+// The treasurer recorded a departure as today (4 November), reinstated the
+// member, and recorded it again as the day it happened (31 October). Only the
+// last date stands: October is owed, November is not, and every reading agrees.
+func TestUpdateMemberALaterLeavingDateReplacesTheEarlierOne(t *testing.T) {
+	t.Parallel()
+	l := newTestLedger(t).at(novemberNow)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	tier := createDuesTier(t, q, f.fundID, "Reguler")
+	createDuesRate(t, q, tier, 25_000, "2026-01")
+	m, err := l.CreateMember(ctx, CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &tier, JoinedOn: "2026-09-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, inactiveOn := range []*string{strp("2026-11-04"), nil, strp("2026-10-31")} {
+		if _, err := l.UpdateMember(ctx, UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetInactiveOn: true, InactiveOn: inactiveOn}); err != nil {
+			t.Fatalf("UpdateMember(inactive_on=%v) = %v, want no error", inactiveOn, err)
+		}
+	}
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, m.ID, "2026-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var periods []string
+	for _, r := range rows {
+		periods = append(periods, r.Period)
+	}
+	if want := []string{"2026-09", "2026-10"}; !slices.Equal(periods, want) {
+		t.Errorf("outstanding periods = %v, want %v: owed through the month of 31 October, not November", periods, want)
+	}
+
+	for period, wantListed := range map[string]bool{"2026-10": true, "2026-11": false} {
+		statuses, err := l.DuesStatusForPeriod(ctx, f.fundID, period)
+		if err != nil {
+			t.Fatal(err)
+		}
+		listed := slices.ContainsFunc(statuses, func(s MemberDuesStatus) bool { return s.Member.ID == m.ID })
+		if listed != wantListed {
+			t.Errorf("DuesStatusForPeriod(%s) lists the member = %v, want %v", period, listed, wantListed)
+		}
+	}
+}
+
+func TestUpdateMemberRefusesALeavingDateBeforeTheJoinDate(t *testing.T) {
+	t.Parallel()
+	l := newTestLedger(t).at(novemberNow)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	m, err := l.CreateMember(ctx, CreateMemberParams{FundID: f.fundID, Name: "Andi", JoinedOn: "2026-09-10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		p    UpdateMemberParams
+		want error // nil: accepted
+	}{
+		{"the day before joining", UpdateMemberParams{SetInactiveOn: true, InactiveOn: strp("2026-09-09")}, ErrDateOutOfRange},
+		{"the join day itself", UpdateMemberParams{SetInactiveOn: true, InactiveOn: strp("2026-09-10")}, nil},
+		// Now inactive on 10 September: moving the join date past it is the same gap from the other end.
+		{"a join date moved past the leaving date", UpdateMemberParams{JoinedOn: strp("2026-09-11")}, ErrDateOutOfRange},
+		{"a join date moved earlier", UpdateMemberParams{JoinedOn: strp("2026-09-01")}, nil},
+	}
+	for _, tt := range tests {
+		tt.p.FundID, tt.p.MemberID = f.fundID, m.ID
+		_, err := l.UpdateMember(ctx, tt.p)
+		if tt.want == nil && err != nil {
+			t.Errorf("%s: err = %v, want none", tt.name, err)
+		}
+		if tt.want != nil && !errors.Is(err, tt.want) {
+			t.Errorf("%s: err = %v, want %v", tt.name, err, tt.want)
+		}
+	}
+
+	got, err := store.New(l.db).GetMemberForFund(ctx, store.GetMemberForFundParams{ID: m.ID, FundID: f.fundID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.JoinedOn != "2026-09-01" || got.InactiveOn == nil || *got.InactiveOn != "2026-09-10" {
+		t.Errorf("member = joined %s, inactive %v; want 2026-09-01 and 2026-09-10 - a refused call writes nothing", got.JoinedOn, got.InactiveOn)
+	}
+}

@@ -8,6 +8,7 @@ import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
 import type { DuesTierWithRates, Member } from '@/lib/setup'
 import { cardName } from '@/test/card'
+import { pickDate } from '@/test/datePicker'
 
 const text = copy.members.roster
 
@@ -270,6 +271,40 @@ describe('Roster', () => {
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0].method).toBe('PATCH')
     expect((calls[0].body as { inactive_on: string }).inactive_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('asks the day she left on the deactivate confirm and names the last month owed (#803)', async () => {
+    const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu', { joined_on: '2026-01-15' })])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    // An active member's form has no leaving day until she says Nonaktifkan.
+    expect(within(dialog).queryByLabelText(text.inactiveOnLabel)).not.toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
+    await pickDate(text.inactiveOnLabel, '2026-01-31')
+    const confirm = screen.getByRole('dialog', { name: text.editTitle })
+    expect(within(confirm).getByText(text.owedThrough('Januari 2026'))).toBeInTheDocument()
+
+    await userEvent.click(within(confirm).getByRole('button', { name: text.deactivateConfirmAction }))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({ method: 'PATCH', body: { inactive_on: '2026-01-31' } })
+  })
+
+  it("fixes a retired member's leaving day in place, sending only that", async () => {
+    const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu', { joined_on: '2026-01-15', inactive_on: '2026-03-04' })])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
+
+    await pickDate(text.inactiveOnLabel, '2026-02-28')
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({ method: 'PATCH', body: { inactive_on: '2026-02-28' } })
+    expect(Object.keys(calls[0].body as object)).toEqual(['inactive_on'])
   })
 
   it('reinstates a retired member immediately, no confirm needed', async () => {
