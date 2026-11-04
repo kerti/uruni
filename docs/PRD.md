@@ -89,6 +89,7 @@ Key entities:
 - View members and, for the current period, who has paid / partially paid / paid in advance (some pay several months at once).
 - Mark a dues payment (amount auto-filled from the member's tier, editable; location; cash/transfer).
 - Undo a dues payment recorded in error (wrong member, entered twice) — the payment is reversed by a new entry, never edited away, and the member reads as unpaid for that period again.
+- **Waive** a member's dues for one or more months when the group decides they owe nothing (a fire, a robbery, a death in the family) - the UI word is **"Putihkan"**, as for a talangan. No money moves; a waived month reads *Diputihkan*, never paid, drops out of arrears, and can be undone. Any note stays the treasurer's, never on the public report ([ADR-050](./ADR/050-waiving-a-members-dues.md)).
 - A simple "not yet paid" view. **No reminders, no nagging automation.**
 - Each member's status across the last twelve months at a glance - status only, no counts or amounts ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
 

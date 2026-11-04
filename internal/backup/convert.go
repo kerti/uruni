@@ -107,6 +107,14 @@ func toDuesPayments(rows []store.DuesPayment) []DuesPayment {
 	return out
 }
 
+func toDuesWaivers(rows []store.DuesWaiver) []DuesWaiver {
+	out := make([]DuesWaiver, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, DuesWaiver{ID: r.ID, FundID: r.FundID, MemberID: r.MemberID, DuesPeriod: r.DuesPeriod, Note: r.Note, CreatedAt: r.CreatedAt})
+	}
+	return out
+}
+
 func toReimbursements(rows []store.ListReimbursementsByFundRow) []Reimbursement {
 	out := make([]Reimbursement, 0, len(rows))
 	for _, r := range rows {

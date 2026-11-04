@@ -45,6 +45,15 @@ type DuesTier struct {
 	CreatedAt int64
 }
 
+type DuesWaiver struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	DuesPeriod string
+	Note       *string
+	CreatedAt  int64
+}
+
 type Fund struct {
 	ID         int64
 	Name       string

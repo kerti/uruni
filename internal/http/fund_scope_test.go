@@ -151,6 +151,12 @@ func fundScopedRouteCases() []struct {
 		{"PATCH /api/dues-rates/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return patchDuesRate(t, r, o.rateID, 30_000)
 		}},
+		{"POST /api/members/{id}/dues-waivers", func(_ *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
+			return postDuesWaivers(r, o.memberID, `{"periods":["2026-03"]}`)
+		}},
+		{"DELETE /api/members/{id}/dues-waivers/{period}", func(_ *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
+			return deleteDuesWaiverCall(r, o.memberID, "2026-03")
+		}},
 		{"DELETE /api/dues-rates/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return deleteDuesRate(t, r, o.rateID)
 		}},

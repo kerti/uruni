@@ -26,6 +26,11 @@ const (
 	// DuesStatusPaidInAdvance is a member who fully paid this period and also a
 	// later one (PRD 7.3: "some pay several months at once").
 	DuesStatusPaidInAdvance DuesStatus = "paid_in_advance"
+	// DuesStatusWaived is a month the group decided is no longer owed (ADR-050):
+	// whatever was paid toward it stays paid, nothing more is owed, and it is
+	// never read as Paid, because nobody paid the rest. It outranks every other
+	// state, a later rate change or a later full payment's reversal included.
+	DuesStatusWaived DuesStatus = "waived"
 )
 
 // MemberDuesStatus is one row of DuesStatusForPeriod's roster: a member who
@@ -43,6 +48,10 @@ type MemberDuesStatus struct {
 	// is DuesStatusPaidInAdvance and the run reaches past the requested period.
 	// See paidThrough.
 	PaidThrough string
+	// WaiverNote is the waiver's note, set only when Status is DuesStatusWaived
+	// and one was given. It is the treasurer's alone (ADR-050): nothing that
+	// builds the public report reads it.
+	WaiverNote *string
 }
 
 // DuesStatusForPeriod returns one row per member who owes dues for period
@@ -63,6 +72,10 @@ type MemberDuesStatus struct {
 //     counts in full (dues are one monthly amount paid after payday, not
 //     pro-rated). joined_on is always set (#471: history starts at adoption,
 //     PRD 7.1); inactive_on == nil means still active.
+//
+// A waived month (ADR-050) reads DuesStatusWaived whatever was paid toward it,
+// and carries that payment and the waiver's note. It is never upgraded to paid
+// in advance.
 //
 // Overpayment (paid > owed for this period) reads as Paid, not a fifth
 // status: the treasurer's question is "did they clear what they owe". The
@@ -110,6 +123,12 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		paidByMember[*row.MemberID] = money.FromDB(row.PaidAmount)
 	}
 
+	waiverRows, err := l.q.ListDuesWaiversInRange(ctx, store.ListDuesWaiversInRangeParams{FundID: fundID, FromPeriod: period, ToPeriod: period})
+	if err != nil {
+		return nil, fmt.Errorf("listing dues waivers: %w", err)
+	}
+	waivers := foldWaivers(waiverRows)
+
 	latestRows, err := l.q.LatestDuesPeriodPaidByMember(ctx, fundID)
 	if err != nil {
 		return nil, fmt.Errorf("latest dues period paid by member: %w", err)
@@ -139,7 +158,8 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		owed := money.FromDB(rate)
 		paid := paidByMember[m.ID] // zero value if the member paid nothing this period
 
-		status := classifyDuesStatus(owed, paid)
+		note, waived := waivers[m.ID][period]
+		status := classifyDuesMonth(owed, paid, waived)
 		if status == DuesStatusPaid {
 			if latest, ok := latestByMember[m.ID]; ok && latest > period {
 				status = DuesStatusPaidInAdvance
@@ -148,7 +168,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		}
 
 		statuses = append(statuses, MemberDuesStatus{
-			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status,
+			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status, WaiverNote: note,
 		})
 	}
 
@@ -159,13 +179,20 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		for i, at := range advance {
 			ids[i] = statuses[at].Member.ID
 		}
-		historyByMember, err := l.duesPaidByPeriodForMembers(ctx, fundID, ids)
+		historyByMember, err := duesPaidByPeriodForMembers(ctx, l.q, fundID, ids)
 		if err != nil {
 			return nil, err
 		}
+		// The run stops at a waived month, wherever it falls, so the walk needs the
+		// advance members' waivers over the months it can reach.
+		waiverRows, err := l.q.ListDuesWaiversByMembers(ctx, store.ListDuesWaiversByMembersParams{FundID: fundID, MemberIds: ids})
+		if err != nil {
+			return nil, fmt.Errorf("listing dues waivers: %w", err)
+		}
+		waiversByMember := foldWaivers(waiverRows)
 		for _, at := range advance {
 			s := &statuses[at]
-			s.PaidThrough, err = paidThrough(s.Member.Member, prices, historyByMember[s.Member.ID], period, latestByMember[s.Member.ID])
+			s.PaidThrough, err = paidThrough(s.Member.Member, prices, historyByMember[s.Member.ID], waiversByMember[s.Member.ID], period, latestByMember[s.Member.ID])
 			if err != nil {
 				return nil, err
 			}
@@ -178,7 +205,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 // OutstandingDuesPeriod is one period a member still owes something for.
 // Unlike MemberDuesStatus it carries no store.Member (the caller named the
 // member), and Status is only DuesStatusUnpaid or DuesStatusPartial:
-// OutstandingDuesForMember never returns a Paid or PaidInAdvance period.
+// OutstandingDuesForMember never returns a Paid, PaidInAdvance or Waived period.
 type OutstandingDuesPeriod struct {
 	Period     string // "YYYY-MM"
 	OwedAmount money.Amount
@@ -236,14 +263,22 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 //     period can still be owed once a tier or rate exists.
 //
 // A period appears only when classifyDuesStatus says Unpaid or Partial; Paid
-// and PaidInAdvance are "nothing outstanding" and dropped. So unlike
+// and PaidInAdvance are "nothing outstanding" and dropped, and so is a waived
+// month (ADR-050): it is not owed, so the payment form never offers it. So unlike
 // DuesStatusForPeriod it needs no LatestDuesPeriodPaidByMember call.
 //
 // It uses l.q directly rather than withTx, like DuesStatusForPeriod (ADR-027).
 // The tier timeline and rates are read once and folded per period.
 func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string) ([]OutstandingDuesPeriod, error) {
+	return l.outstandingDuesWith(ctx, l.q, fundID, memberID, through)
+}
+
+// outstandingDuesWith is OutstandingDuesForMember on a querier its caller picks,
+// so WaiveDues decides eligibility inside its own transaction with the very walk
+// the payment form is offered (one definition of "still owed").
+func (l *Ledger) outstandingDuesWith(ctx context.Context, q store.Querier, fundID, memberID int64, through string) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
-		fund, err := l.q.GetFund(ctx, fundID)
+		fund, err := q.GetFund(ctx, fundID)
 		if err != nil {
 			return nil, fmt.Errorf("fetching fund: %w", err)
 		}
@@ -256,12 +291,12 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		return nil, err
 	}
 
-	member, err := l.q.GetMemberForFund(ctx, store.GetMemberForFundParams{ID: memberID, FundID: fundID})
+	member, err := q.GetMemberForFund(ctx, store.GetMemberForFundParams{ID: memberID, FundID: fundID})
 	if err != nil {
 		return nil, fmt.Errorf("fetching member: %w", err)
 	}
 
-	prices, err := l.memberPricing(ctx, fundID, memberID)
+	prices, err := memberPricing(ctx, q, fundID, memberID)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +304,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		return nil, nil // no dues obligation, so no payments to read
 	}
 
-	paidRows, err := l.q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
+	paidRows, err := q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
 		FundID: fundID, MemberID: &memberID,
 	})
 	if err != nil {
@@ -280,14 +315,20 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		paidByPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
 	}
 
-	return outstandingDues(member, prices, paidByPeriod, through)
+	waiverRows, err := q.ListDuesWaiversByMember(ctx, store.ListDuesWaiversByMemberParams{FundID: fundID, MemberID: memberID})
+	if err != nil {
+		return nil, fmt.Errorf("listing dues waivers: %w", err)
+	}
+
+	return outstandingDues(member, prices, paidByPeriod, foldWaivers(waiverRows)[memberID], through)
 }
 
 // outstandingDues is OutstandingDuesForMember's walk over rows already in
 // memory: the one place that decides which periods up to through a member still
 // owes, shared by the single-member read and the roster's batch (#532) so the
-// two cannot drift. through is a checked "YYYY-MM".
-func outstandingDues(member store.Member, prices pricing, paidByPeriod map[string]money.Amount, through string) ([]OutstandingDuesPeriod, error) {
+// two cannot drift. through is a checked "YYYY-MM". waived is the member's
+// waived months (nil for none); a waived month is not owed (ADR-050).
+func outstandingDues(member store.Member, prices pricing, paidByPeriod map[string]money.Amount, waived map[string]*string, through string) ([]OutstandingDuesPeriod, error) {
 	if !prices.hasTier(member.ID) {
 		return nil, nil // no dues obligation, in any period
 	}
@@ -329,9 +370,10 @@ func outstandingDues(member store.Member, prices pricing, paidByPeriod map[strin
 		owed := money.FromDB(rate)
 		paid := paidByPeriod[period] // zero value if the member paid nothing this period
 
-		status := classifyDuesStatus(owed, paid)
-		if status == DuesStatusPaid {
-			continue // square for this period - not outstanding
+		_, isWaived := waived[period]
+		status := classifyDuesMonth(owed, paid, isWaived)
+		if status == DuesStatusPaid || status == DuesStatusWaived {
+			continue // square for this period, or waived - not outstanding
 		}
 
 		outstanding = append(outstanding, OutstandingDuesPeriod{
@@ -427,13 +469,18 @@ func (l *Ledger) ArrearsMonthsForMembers(ctx context.Context, fundID int64, memb
 	for i, m := range members {
 		ids[i] = m.ID
 	}
-	paidByMember, err := l.duesPaidByPeriodForMembers(ctx, fundID, ids)
+	paidByMember, err := duesPaidByPeriodForMembers(ctx, l.q, fundID, ids)
 	if err != nil {
 		return nil, err
 	}
+	waiverRows, err := l.q.ListDuesWaiversByMembers(ctx, store.ListDuesWaiversByMembersParams{FundID: fundID, MemberIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("listing dues waivers: %w", err)
+	}
+	waivers := foldWaivers(waiverRows)
 
 	for _, m := range members {
-		outstanding, err := outstandingDues(m, prices, paidByMember[m.ID], through)
+		outstanding, err := outstandingDues(m, prices, paidByMember[m.ID], waivers[m.ID], through)
 		if err != nil {
 			return nil, err
 		}
@@ -445,12 +492,12 @@ func (l *Ledger) ArrearsMonthsForMembers(ctx context.Context, fundID int64, memb
 // duesPaidByPeriodForMembers is DuesPaidByMemberGroupedByPeriod for several
 // members in one read: member id, then period, to the amount paid toward it,
 // reversed payments excluded (ADR-029). A member who paid nothing has no entry.
-func (l *Ledger) duesPaidByPeriodForMembers(ctx context.Context, fundID int64, memberIDs []int64) (map[int64]map[string]money.Amount, error) {
+func duesPaidByPeriodForMembers(ctx context.Context, q store.Querier, fundID int64, memberIDs []int64) (map[int64]map[string]money.Amount, error) {
 	ptrs := make([]*int64, len(memberIDs))
 	for i := range memberIDs {
 		ptrs[i] = &memberIDs[i]
 	}
-	rows, err := l.q.DuesPaidByMembersGroupedByPeriod(ctx, store.DuesPaidByMembersGroupedByPeriodParams{FundID: fundID, MemberIds: ptrs})
+	rows, err := q.DuesPaidByMembersGroupedByPeriod(ctx, store.DuesPaidByMembersGroupedByPeriodParams{FundID: fundID, MemberIds: ptrs})
 	if err != nil {
 		return nil, fmt.Errorf("dues paid by members: %w", err)
 	}
@@ -470,9 +517,8 @@ func (l *Ledger) duesPaidByPeriodForMembers(ctx context.Context, fundID int64, m
 }
 
 // classifyDuesStatus derives unpaid / partial / paid from owed vs paid alone,
-// for one member and one period: the comparison DuesStatusForPeriod (followed
-// by its paid-in-advance upgrade) and OutstandingDuesForMember (followed by
-// dropping Paid) both build on. Extracted so "paid enough" has one definition.
+// for one member and one period: the comparison classifyDuesMonth builds on.
+// Extracted so "paid enough" has one definition.
 func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 	switch {
 	case paid >= owed:
@@ -482,6 +528,33 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 	default:
 		return DuesStatusUnpaid
 	}
+}
+
+// classifyDuesMonth is a month's status as every dues read decides it:
+// classifyDuesStatus, except that a waived month (ADR-050) is DuesStatusWaived
+// whatever owed and paid say. DuesStatusForPeriod (followed by its paid-in-advance
+// upgrade), OutstandingDuesForMember (followed by dropping Paid and Waived), the
+// grid and the paid-through walk all go through it, so "waived" has one meaning.
+func classifyDuesMonth(owed, paid money.Amount, waived bool) DuesStatus {
+	if waived {
+		return DuesStatusWaived
+	}
+	return classifyDuesStatus(owed, paid)
+}
+
+// foldWaivers groups waiver rows by member, then month, to the waiver's note
+// (nil when none was given). A month is present exactly when it is waived.
+func foldWaivers(rows []store.DuesWaiver) map[int64]map[string]*string {
+	out := make(map[int64]map[string]*string)
+	for _, r := range rows {
+		byPeriod := out[r.MemberID]
+		if byPeriod == nil {
+			byPeriod = make(map[string]*string)
+			out[r.MemberID] = byPeriod
+		}
+		byPeriod[r.DuesPeriod] = r.Note
+	}
+	return out
 }
 
 // paidThrough walks forward from the period after `period` and returns the
@@ -494,8 +567,10 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 // member's active window ends the run; a period with no tier in force or no
 // effective rate owes nothing, so it is skipped without breaking the run; a
 // period paid below what its own tier and rate say breaks it, so a rate or tier
-// rise in a prepaid month reads honestly as not paid through.
-func paidThrough(m store.Member, prices pricing, paidByPeriod map[string]money.Amount, period, latest string) (string, error) {
+// rise in a prepaid month reads honestly as not paid through. A waived month
+// breaks it too (ADR-050): Lunas, Diputihkan, Lunas is paid through the first,
+// because nobody paid the second.
+func paidThrough(m store.Member, prices pricing, paidByPeriod map[string]money.Amount, waived map[string]*string, period, latest string) (string, error) {
 	t, err := time.Parse(duesPeriodLayout, period)
 	if err != nil {
 		return "", fmt.Errorf("parsing period %q: %w", period, err)
@@ -512,7 +587,8 @@ func paidThrough(m store.Member, prices pricing, paidByPeriod map[string]money.A
 		if !ok {
 			continue // nothing owed this period - skipped, not a break
 		}
-		if classifyDuesStatus(money.FromDB(rate), paidByPeriod[next]) != DuesStatusPaid {
+		_, isWaived := waived[next]
+		if classifyDuesMonth(money.FromDB(rate), paidByPeriod[next], isWaived) != DuesStatusPaid {
 			return through, nil
 		}
 		through = next
@@ -521,12 +597,12 @@ func paidThrough(m store.Member, prices pricing, paidByPeriod map[string]money.A
 
 // memberPricing fetches what prices one member's walk: their standing tier rows
 // and those tiers' rates.
-func (l *Ledger) memberPricing(ctx context.Context, fundID, memberID int64) (pricing, error) {
-	tierRows, err := l.q.ListMemberTiersForMember(ctx, store.ListMemberTiersForMemberParams{FundID: fundID, MemberID: memberID})
+func memberPricing(ctx context.Context, q store.Querier, fundID, memberID int64) (pricing, error) {
+	tierRows, err := q.ListMemberTiersForMember(ctx, store.ListMemberTiersForMemberParams{FundID: fundID, MemberID: memberID})
 	if err != nil {
 		return pricing{}, fmt.Errorf("listing member tiers: %w", err)
 	}
-	rateRows, err := l.q.ListDuesRatesForMemberPricing(ctx, store.ListDuesRatesForMemberPricingParams{FundID: fundID, MemberID: memberID})
+	rateRows, err := q.ListDuesRatesForMemberPricing(ctx, store.ListDuesRatesForMemberPricingParams{FundID: fundID, MemberID: memberID})
 	if err != nil {
 		return pricing{}, fmt.Errorf("listing dues rates: %w", err)
 	}

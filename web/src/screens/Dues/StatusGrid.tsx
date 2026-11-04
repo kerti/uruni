@@ -17,12 +17,14 @@ const cellWord: Record<DuesGridCell, string> = {
   paid: text.statuses.paid,
   partial: text.statuses.partial,
   unpaid: text.statuses.unpaid,
+  waived: text.statuses.waived,
   none: gridText.none,
 }
 
 /**
  * One cell's shape, drawn (never a typed glyph): filled = Lunas, half-filled =
- * Bayar sebagian, hollow = Belum bayar, a dash = no obligation. The shape carries
+ * Bayar sebagian, hollow = Belum bayar, a ring with a dot = Diputihkan (ADR-050),
+ * a dash = no obligation. The shape carries
  * the status as much as the colour does, so the grid reads in greyscale
  * (ADR-044). Gentle tones only: green family, terracotta, neutral - never red.
  */
@@ -37,6 +39,12 @@ function CellShape({ cell }: { cell: DuesGridCell }) {
         </>
       )}
       {cell === 'unpaid' && <circle cx="7" cy="7" r="5.5" className="fill-none stroke-muted-foreground" strokeWidth="1.5" />}
+      {cell === 'waived' && (
+        <>
+          <circle cx="7" cy="7" r="5.5" className="fill-none stroke-muted-foreground" strokeWidth="1.5" />
+          <circle cx="7" cy="7" r="2" className="fill-muted-foreground" />
+        </>
+      )}
       {cell === 'none' && (
         <line x1="3.5" y1="7" x2="10.5" y2="7" className="stroke-muted-foreground" strokeWidth="1.5" strokeLinecap="round" />
       )}
@@ -44,7 +52,7 @@ function CellShape({ cell }: { cell: DuesGridCell }) {
   )
 }
 
-const legendCells: readonly DuesGridCell[] = ['paid', 'partial', 'unpaid', 'none']
+const legendCells: readonly DuesGridCell[] = ['paid', 'partial', 'unpaid', 'waived', 'none']
 
 /** Groups consecutive periods by year, for the row of years above the heads:
  * the first column of the grid and every January start a group. */

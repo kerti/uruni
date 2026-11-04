@@ -24,6 +24,10 @@ type duesStatusResponse struct {
 	// PaidThrough is "YYYY-MM" for a paid-in-advance member whose unbroken
 	// run of paid periods reaches past this one (#357), null otherwise.
 	PaidThrough *string `json:"paid_through"`
+	// WaiverNote is the note of a waived month (ADR-050), null when the month is
+	// not waived or no note was given. Session-gated: the public report never
+	// carries it.
+	WaiverNote *string `json:"waiver_note"`
 }
 
 func toDuesStatusResponse(s ledger.MemberDuesStatus, arrearsMonths int) duesStatusResponse {
@@ -34,6 +38,7 @@ func toDuesStatusResponse(s ledger.MemberDuesStatus, arrearsMonths int) duesStat
 		OwedAmount: s.OwedAmount.Int64(),
 		PaidAmount: s.PaidAmount.Int64(),
 		Status:     string(s.Status),
+		WaiverNote: s.WaiverNote,
 	}
 	if s.PaidThrough != "" {
 		resp.PaidThrough = &s.PaidThrough
@@ -87,8 +92,8 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 
 // duesGridResponse is GET /api/dues-status/grid (ADR-044): the twelve-month
 // dues status table. periods are "YYYY-MM", oldest first, and every member's
-// cells run parallel to them. A cell is "paid", "partial", "unpaid" or "none"
-// (no obligation that month); paying ahead is "paid". Status only: no amounts,
+// cells run parallel to them. A cell is "paid", "partial", "unpaid", "waived"
+// (ADR-050) or "none" (no obligation that month); paying ahead is "paid". Status only: no amounts,
 // counts or totals, by design.
 type duesGridResponse struct {
 	Periods []string                 `json:"periods"`

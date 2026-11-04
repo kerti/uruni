@@ -17,7 +17,8 @@ import (
 // current month the ceiling), and that the reads do not grow with the fund.
 
 // gridCellFromStatus is the reference reading of one DuesStatusForPeriod
-// answer: no row is no obligation, and paying ahead draws as paid.
+// answer: no row is no obligation, paying ahead draws as paid, and a waived
+// month (ADR-050) draws as its own cell, never as paid.
 func gridCellFromStatus(rows []MemberDuesStatus, memberID int64) DuesGridCell {
 	for _, r := range rows {
 		if r.Member.ID != memberID {
@@ -28,6 +29,8 @@ func gridCellFromStatus(rows []MemberDuesStatus, memberID int64) DuesGridCell {
 			return DuesCellUnpaid
 		case DuesStatusPartial:
 			return DuesCellPartial
+		case DuesStatusWaived:
+			return DuesCellWaived
 		default:
 			return DuesCellPaid
 		}
@@ -120,7 +123,7 @@ func TestDuesGridEqualsTwelveCallsToDuesStatusForPeriod(t *testing.T) {
 		}
 	}
 
-	for _, c := range []DuesGridCell{DuesCellPaid, DuesCellPartial, DuesCellUnpaid, DuesCellNone} {
+	for _, c := range []DuesGridCell{DuesCellPaid, DuesCellPartial, DuesCellUnpaid, DuesCellWaived, DuesCellNone} {
 		if !seen[c] {
 			t.Errorf("no cell read %q in any window: the fixture does not reach that state", c)
 		}

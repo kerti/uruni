@@ -67,6 +67,8 @@ var gatedRoutes = []struct {
 	{http.MethodGet, "/api/dues-status"},
 	{http.MethodGet, "/api/dues-status/grid"},
 	{http.MethodGet, "/api/members/1/outstanding-dues"},
+	{http.MethodPost, "/api/members/1/dues-waivers"},
+	{http.MethodDelete, "/api/members/1/dues-waivers/2026-07"},
 	{http.MethodPost, "/api/incidentals"},
 	{http.MethodGet, "/api/incidentals"},
 	{http.MethodGet, "/api/incidentals/1"},

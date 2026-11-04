@@ -909,6 +909,8 @@ func TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase(t *tes
 		delete(doc, "member_tiers")
 		// Nor did it have dues payments (ADR-048); the step binds the dues rows.
 		delete(doc, "dues_payments")
+		// Nor waivers (ADR-050).
+		delete(doc, "dues_waivers")
 		txns, _ := doc["transactions"].([]any)
 		for _, tx := range txns {
 			delete(tx.(map[string]any), "dues_payment_id")

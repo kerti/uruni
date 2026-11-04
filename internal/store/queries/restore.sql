@@ -49,6 +49,13 @@ DELETE FROM dues_rate;
 INSERT INTO dues_rate (id, tier_id, amount, effective_from, correction, deleted, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
+-- name: DeleteAllDuesWaivers :exec
+DELETE FROM dues_waiver;
+
+-- name: RestoreDuesWaiver :exec
+INSERT INTO dues_waiver (id, fund_id, member_id, dues_period, note, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
 -- name: DeleteAllMembers :exec
 DELETE FROM member;
 

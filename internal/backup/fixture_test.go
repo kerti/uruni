@@ -220,6 +220,15 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateTransaction(dues reversal): %v", err)
 	}
 
+	// A waived month, note included (ADR-050): a decision, not money, so it moves
+	// no total.
+	waiverNote := "Rumah kebakaran"
+	if _, err := q.CreateDuesWaiver(ctx, store.CreateDuesWaiverParams{
+		FundID: fund.ID, MemberID: andi.ID, DuesPeriod: "2026-09", Note: &waiverNote, CreatedAt: 1700000120,
+	}); err != nil {
+		t.Fatalf("CreateDuesWaiver: %v", err)
+	}
+
 	// A named contribution to the envelope (ADR-034).
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: fund.ID, AccountID: cash.ID, PurposeID: envelope.ID, Direction: "in", Amount: 30000,

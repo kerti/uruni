@@ -39,10 +39,15 @@ func TestWireSamples(t *testing.T) {
 	w.send(http.MethodPost, "/api/dues-payments", fmt.Sprintf(`{"account_id":%d,"member_id":%d,"occurred_on":"2026-09-05","note":null,
 		"periods":[{"dues_period":"2026-08","amount":50000},{"dues_period":"2026-09","amount":50000}]}`, cash, budi), "")
 	// Citra joins in March (January and February are no obligation for her) and
-	// part-pays July, so the grid sample carries all four cell states.
+	// part-pays July, so the grid sample carries the paid, partial, unpaid and none cell states (and
+	// the waived one, below).
 	citra := w.id(w.send(http.MethodPost, "/api/members", fmt.Sprintf(`{"name":"Citra","tier_id":%d,"joined_on":"2026-03-01"}`, tier), ""))
 	w.send(http.MethodPost, "/api/dues-payments", fmt.Sprintf(`{"account_id":%d,"member_id":%d,"occurred_on":"2026-07-05","note":null,
 		"periods":[{"dues_period":"2026-07","amount":20000}]}`, cash, citra), "")
+
+	// Citra's September is waived (ADR-050), so the status roster carries a waived
+	// row with its note and the grid its fifth cell state.
+	w.send(http.MethodPost, fmt.Sprintf("/api/members/%d/dues-waivers", citra), `{"periods":["2026-09"],"note":"Kena musibah"}`, "dues-waivers")
 
 	lamp := w.id(w.send(http.MethodPost, "/api/transactions", fmt.Sprintf(`{"account_id":%d,"purpose_id":%d,"direction":"out",
 		"amount":75000,"occurred_on":"2026-09-02","note":"Beli lampu","is_adjustment":false,"member_id":null}`, cash, main), ""))

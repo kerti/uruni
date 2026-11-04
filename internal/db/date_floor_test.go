@@ -51,6 +51,10 @@ var dateColumns = []dateColumn{
 		})
 		return err
 	}},
+	{table: "dues_waiver", column: "dues_period", month: true, write: func(_ *testing.T, w *floorWriter, v string) error {
+		_, err := w.q.CreateDuesWaiver(w.ctx, store.CreateDuesWaiverParams{FundID: w.f.fundID, MemberID: w.f.memberID, DuesPeriod: v, CreatedAt: 1})
+		return err
+	}},
 	{table: "reimbursement", column: "incurred_on", write: func(_ *testing.T, w *floorWriter, v string) error {
 		_, err := w.q.CreateReimbursement(w.ctx, store.CreateReimbursementParams{
 			FundID: w.f.fundID, MemberID: w.f.memberID, PurposeID: w.f.purposeID, Amount: 1, IncurredOn: v, CreatedAt: 1,

@@ -377,6 +377,31 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 			t.Errorf("%d members behind for several months, want two", behind)
 		}
 
+		// The group waived Mas Rizki's first two months behind (ADR-050): they read
+		// waived with their note, and the arrears left are the months after them.
+		for _, offset := range []int{-5, -4} {
+			rows, err := s.l.DuesStatusForPeriod(ctx, s.fundID, periodAt(t, now, offset))
+			if err != nil {
+				t.Fatalf("DuesStatusForPeriod(M%d) = %v", offset, err)
+			}
+			var found bool
+			for _, r := range rows {
+				if r.Member.Name != "Mas Rizki" {
+					continue
+				}
+				found = true
+				if r.Status != ledger.DuesStatusWaived || r.WaiverNote == nil || *r.WaiverNote != "Ibu dirawat di rumah sakit" {
+					t.Errorf("Mas Rizki at M%d = %s note %v, want waived with the note", offset, r.Status, r.WaiverNote)
+				}
+			}
+			if !found {
+				t.Errorf("Mas Rizki has no dues row at M%d", offset)
+			}
+		}
+		if months, err := s.l.ArrearsMonthsForMember(ctx, s.fundID, memberID("Mas Rizki"), periodAt(t, now, 0)); err != nil || months != 3 {
+			t.Errorf("Mas Rizki's arrears = %d, %v, want 3 (M-3 to M-1; the two waived months are not owed)", months, err)
+		}
+
 		owedIn := func(period, name string) int64 {
 			t.Helper()
 			rows, err := s.l.DuesStatusForPeriod(ctx, s.fundID, period)

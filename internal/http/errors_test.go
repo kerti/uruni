@@ -406,6 +406,10 @@ func TestEveryLedgerErrorKeepsItsWireStatusAndCode(t *testing.T) {
 		ledger.ErrReferenceMissing:                      {400, "invalid_argument"},
 		ledger.ErrReferencedByOtherRecords:              {409, "referenced_by_other_records"},
 		ledger.ErrPurposeNotRenameable:                  {409, "purpose_not_renameable"},
+		ledger.ErrDuesPeriodWaived:                      {409, "dues_period_waived"},
+		ledger.ErrDuesAlreadyWaived:                     {409, "dues_already_waived"},
+		ledger.ErrDuesNotOwed:                           {409, "dues_not_owed"},
+		ledger.ErrDuesNotWaived:                         {409, "dues_not_waived"},
 	}
 	errs := ledger.Errors()
 	if len(errs) != len(want) {

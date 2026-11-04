@@ -71,6 +71,7 @@ func replayHistory(ctx context.Context, ledgerAt func(time.Time) *ledger.Ledger,
 	s := &story{w: w}
 	s.setup()
 	s.dues()
+	s.waiver()
 	s.everydaySpending()
 	s.passThrough()
 	s.reimbursements()
@@ -351,6 +352,22 @@ func (s *story) dues() {
 	// Mas Pandu tops his part payment of M-2 up a month later.
 	s.at(-1, 20, "Mas Pandu completes his dues", func(st *step) error {
 		_, err := st.payDues("Mas Pandu", w.bankID, []ledger.PeriodAmount{period(w.cal, -2, 15_000)}, "Pelunasan bulan lalu")
+		return err
+	})
+}
+
+// waiver is the one decision the group makes about dues (ADR-050): Mas Rizki's
+// mother was in hospital, so the two months he fell behind first are waived, with
+// a note only the treasurer sees. He stays behind from M-3 on, as the story
+// tells; the waived months read Diputihkan on Status iuran and in the grid, are
+// left out of his arrears, and move no money.
+func (s *story) waiver() {
+	w := s.w
+	s.at(-3, 18, "waiving Mas Rizki's first two months behind", func(st *step) error {
+		note := "Ibu dirawat di rumah sakit"
+		_, err := st.l.WaiveDues(st.ctx, ledger.WaiveDuesParams{
+			FundID: w.fundID, MemberID: w.members["Mas Rizki"], Periods: []string{w.cal.period(-5), w.cal.period(-4)}, Note: &note,
+		})
 		return err
 	})
 }

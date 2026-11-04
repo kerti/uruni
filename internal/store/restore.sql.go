@@ -45,6 +45,15 @@ func (q *Queries) DeleteAllDuesTiers(ctx context.Context) error {
 	return err
 }
 
+const deleteAllDuesWaivers = `-- name: DeleteAllDuesWaivers :exec
+DELETE FROM dues_waiver
+`
+
+func (q *Queries) DeleteAllDuesWaivers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllDuesWaivers)
+	return err
+}
+
 const deleteAllFunds = `-- name: DeleteAllFunds :exec
 DELETE FROM fund
 `
@@ -240,6 +249,32 @@ func (q *Queries) RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams
 		arg.ID,
 		arg.FundID,
 		arg.Name,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const restoreDuesWaiver = `-- name: RestoreDuesWaiver :exec
+INSERT INTO dues_waiver (id, fund_id, member_id, dues_period, note, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type RestoreDuesWaiverParams struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	DuesPeriod string
+	Note       *string
+	CreatedAt  int64
+}
+
+func (q *Queries) RestoreDuesWaiver(ctx context.Context, arg RestoreDuesWaiverParams) error {
+	_, err := q.db.ExecContext(ctx, restoreDuesWaiver,
+		arg.ID,
+		arg.FundID,
+		arg.MemberID,
+		arg.DuesPeriod,
+		arg.Note,
 		arg.CreatedAt,
 	)
 	return err

@@ -4,10 +4,10 @@
 import { apiFetch } from '@/lib/api'
 import type { Member } from '@/lib/setup'
 
-/** The schema's four dues-status values (internal/ledger's MemberDuesStatus,
- * ADR-014: English on the wire and in code, Indonesian only on screen - see
- * copy.dues.statuses). */
-export type DuesStatusKind = 'unpaid' | 'partial' | 'paid' | 'paid_in_advance'
+/** The dues-status values (internal/ledger's MemberDuesStatus, ADR-014: English
+ * on the wire and in code, Indonesian only on screen - see copy.dues.statuses).
+ * `waived` is a month the group decided is no longer owed (ADR-050). */
+export type DuesStatusKind = 'unpaid' | 'partial' | 'paid' | 'paid_in_advance' | 'waived'
 
 /** One row of GET /api/dues-status's roster: one member who owes dues for the
  * requested period. A member with no tier never appears -
@@ -20,6 +20,9 @@ export interface DuesStatusRow {
   /** "YYYY-MM": the last month of the unbroken run of paid months for a
    * member paid ahead; null otherwise. */
   paid_through: string | null
+  /** The waiver's note, for a `waived` month that has one: the treasurer's
+   * alone (ADR-050), never on the public report. Null otherwise. */
+  waiver_note: string | null
 }
 
 /**
@@ -31,10 +34,11 @@ export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
   return apiFetch<DuesStatusRow[]>(`/api/dues-status?period=${encodeURIComponent(period)}`)
 }
 
-/** One cell of the twelve-month grid (ADR-044): the three statuses
+/** One cell of the twelve-month grid (ADR-044): the statuses
  * `DuesStatusForPeriod` reports (a month it reads as paid in advance arrives as
- * 'paid'), or 'none' - the member owes nothing that month, whatever the reason. */
-export type DuesGridCell = 'paid' | 'partial' | 'unpaid' | 'none'
+ * 'paid'; a waived one, ADR-050, as 'waived'), or 'none' - the member owes
+ * nothing that month, whatever the reason. */
+export type DuesGridCell = 'paid' | 'partial' | 'unpaid' | 'waived' | 'none'
 
 /** One member's row: `cells[i]` is the status for `periods[i]`. */
 export interface DuesGridMember {
@@ -55,6 +59,16 @@ export interface DuesGrid {
  * fund's current month itself (ADR-041). */
 export function getDuesGrid(): Promise<DuesGrid> {
   return apiFetch<DuesGrid>('/api/dues-status/grid')
+}
+
+/** One waiver POST /api/members/{id}/dues-waivers created (ADR-050): a member's
+ * dues for one month, no longer owed. The note is the treasurer's alone. */
+export interface DuesWaiver {
+  id: number
+  member_id: number
+  dues_period: string
+  note: string | null
+  created_at: number
 }
 
 /** One row of GET /api/members/{id}/outstanding-dues: one period this member

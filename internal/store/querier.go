@@ -51,6 +51,10 @@ type Querier interface {
 	// DeleteDuesRatesByTier (dues_tier.sql) and restore's clear-all.
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
+	// A member's dues for one month, waived (ADR-050). Not a ledger fact: nothing
+	// here is summed into a balance. Every read is fund-scoped; the period compares
+	// as "YYYY-MM" text, which sorts chronologically (ADR-024).
+	CreateDuesWaiver(ctx context.Context, arg CreateDuesWaiverParams) (DuesWaiver, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
 	CreateIdempotencyKey(ctx context.Context, arg CreateIdempotencyKeyParams) error
 	CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error)
@@ -86,6 +90,7 @@ type Querier interface {
 	DeleteAllDuesPayments(ctx context.Context) error
 	DeleteAllDuesRates(ctx context.Context) error
 	DeleteAllDuesTiers(ctx context.Context) error
+	DeleteAllDuesWaivers(ctx context.Context) error
 	DeleteAllFunds(ctx context.Context) error
 	// A restore returns the ledger to an older state, so a key from before it would
 	// replay a success whose rows are gone (ADR-043, ADR-012).
@@ -117,6 +122,10 @@ type Querier interface {
 	// FK onto the tier so it cannot go first, and if a member then refuses the
 	// tier the transaction rolls back and the deleted rates come back.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
+	// Undoing a waiver deletes its row (it is not a ledger row, so immutability does
+	// not reach it). The affected-row count tells the ledger whether the month was
+	// waived at all.
+	DeleteDuesWaiver(ctx context.Context, arg DeleteDuesWaiverParams) (int64, error)
 	// The purge: a side effect of a keyed write that found no record, in its own
 	// transaction (ADR-043), never a ticker (ADR-013). It also clears an expired row
 	// of the very key about to be inserted.
@@ -428,6 +437,17 @@ type Querier interface {
 	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
+	// Every waiver of a fund, for the backup export; ordered only so two exports of
+	// the same data are byte for byte the same.
+	ListDuesWaiversByFund(ctx context.Context, fundID int64) ([]DuesWaiver, error)
+	// One member's waivers, every month, for the single-member walk
+	// (OutstandingDuesForMember, WaiveDues).
+	ListDuesWaiversByMember(ctx context.Context, arg ListDuesWaiversByMemberParams) ([]DuesWaiver, error)
+	// A page of members' waivers in one pass (GET /api/members' arrears count).
+	ListDuesWaiversByMembers(ctx context.Context, arg ListDuesWaiversByMembersParams) ([]DuesWaiver, error)
+	// Every member's waivers for the months from_period..to_period inclusive: one
+	// month (the status roster, the public report) or the twelve of the grid.
+	ListDuesWaiversInRange(ctx context.Context, arg ListDuesWaiversInRangeParams) ([]DuesWaiver, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
 	// One envelope's recipients with the member name, so callers need no second
 	// lookup. Ordered by name then id (as ListMembersPage), not insertion order,
@@ -793,6 +813,7 @@ type Querier interface {
 	RestoreDuesPayment(ctx context.Context, arg RestoreDuesPaymentParams) error
 	RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams) error
 	RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams) error
+	RestoreDuesWaiver(ctx context.Context, arg RestoreDuesWaiverParams) error
 	RestoreFund(ctx context.Context, arg RestoreFundParams) error
 	RestoreIncidental(ctx context.Context, arg RestoreIncidentalParams) error
 	RestoreIncidentalRecipient(ctx context.Context, arg RestoreIncidentalRecipientParams) error

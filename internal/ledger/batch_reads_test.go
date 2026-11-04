@@ -63,7 +63,14 @@ func duesStatusPerMember(ctx context.Context, l *Ledger, fundID int64, period st
 			continue
 		}
 		owed, paid := money.FromDB(rate), paidByMember[m.ID]
-		status := classifyDuesStatus(owed, paid)
+		// Waivers one member at a time, like the payment history below (ADR-050).
+		waiverRows, err := l.q.ListDuesWaiversByMember(ctx, store.ListDuesWaiversByMemberParams{FundID: fundID, MemberID: m.ID})
+		if err != nil {
+			return nil, err
+		}
+		waived := foldWaivers(waiverRows)[m.ID]
+		note, isWaived := waived[period]
+		status := classifyDuesMonth(owed, paid, isWaived)
 		var through string
 		if status == DuesStatusPaid {
 			if latest, ok := latestByMember[m.ID]; ok && latest > period {
@@ -76,13 +83,13 @@ func duesStatusPerMember(ctx context.Context, l *Ledger, fundID int64, period st
 				for _, row := range memberPaid {
 					byPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
 				}
-				if through, err = paidThrough(m, prices, byPeriod, period, latest); err != nil {
+				if through, err = paidThrough(m, prices, byPeriod, waived, period, latest); err != nil {
 					return nil, err
 				}
 			}
 		}
 		statuses = append(statuses, MemberDuesStatus{
-			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status, PaidThrough: through,
+			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status, PaidThrough: through, WaiverNote: note,
 		})
 	}
 	return statuses, nil
@@ -191,6 +198,19 @@ func newRichFund(t *testing.T) richFund {
 	pay(joko, 4_000, span("2025-03", 5)...) // short every month it paid
 	pay(joko, 10_000, span("2025-08", 3)...)
 	pay(lina, 10_000, span("2025-01", 12)...)
+
+	// Waived months (ADR-050): Joko's short-paid April 2025 (the payment stays,
+	// the month reads waived), the October he owes now, and a month ahead; Eka's
+	// November gap, between two months she paid.
+	waive := func(memberID int64, note *string, periods ...string) {
+		t.Helper()
+		if _, err := l.at(richNow).WaiveDues(ctx, WaiveDuesParams{FundID: f.fundID, MemberID: memberID, Periods: periods, Note: note}); err != nil {
+			t.Fatalf("WaiveDues(member %d, %v) = %v", memberID, periods, err)
+		}
+	}
+	jokoNote := "Kehilangan pekerjaan"
+	waive(joko, &jokoNote, "2025-04", "2026-10", "2026-12")
+	waive(eka, nil, "2026-11")
 
 	// --- the money: accounts, purposes, an envelope, a pass-through -----------
 	r.savingsID = createAccount(t, q, f.fundID, "bank", "Savings")

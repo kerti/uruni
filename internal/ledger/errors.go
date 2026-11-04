@@ -510,3 +510,33 @@ var ErrReferencedByOtherRecords = refuse("ledger: the record is referenced by ot
 var ErrPurposeNotRenameable = refuse("ledger: the main purpose cannot be renamed",
 	ClassConflict, "purpose_not_renameable",
 	"The fund's Kas Utama purpose cannot be renamed.")
+
+// The dues-waiver refusals (ADR-050): one error and one wire code each. A waiver
+// is the group's decision that a month stops being owed; the ledger enforces
+// what the schema cannot, because "still owed" needs the dues computation.
+
+// ErrDuesPeriodWaived is returned by PostDuesPayments when a period it was asked
+// to take money for is waived. A month is in one state at a time: to take money
+// for it anyway, un-waive it first.
+var ErrDuesPeriodWaived = refuse("ledger: the dues period has been waived",
+	ClassConflict, "dues_period_waived",
+	"This month has been waived.")
+
+// ErrDuesAlreadyWaived is returned by WaiveDues for a month that already has a
+// waiver.
+var ErrDuesAlreadyWaived = refuse("ledger: the dues period is already waived",
+	ClassConflict, "dues_already_waived",
+	"This month is already waived.")
+
+// ErrDuesNotOwed is returned by WaiveDues for a month the member does not owe:
+// paid in full (paid ahead included), outside their active window, or with no
+// tier or rate in force. It is exactly the months OutstandingDuesForMember does
+// not offer; giving back money already paid is a refund, a real keluar.
+var ErrDuesNotOwed = refuse("ledger: the member does not owe that dues period",
+	ClassConflict, "dues_not_owed",
+	"The member does not owe dues for this month.")
+
+// ErrDuesNotWaived is returned by UnwaiveDues for a month that has no waiver.
+var ErrDuesNotWaived = refuse("ledger: the dues period is not waived",
+	ClassConflict, "dues_not_waived",
+	"This month is not waived.")
