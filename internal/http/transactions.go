@@ -136,9 +136,48 @@ type transactionResponse struct {
 	// (every toTransactionResponse caller but toTransactionsPageResponse) gets
 	// [], since a receipt names an existing transaction id. GET
 	// /api/transactions overwrites it with a batched lookup (listTransactions).
-	// A transfer's list row carries both legs' receipts (#738), oldest first.
+	// A transfer's list row carries both legs' receipts (#738), oldest first. A
+	// dues payment's or a dues reversal group's carries every photo on any of its
+	// rows (ADR-048).
 	ReceiptIDs []int64 `json:"receipt_ids"`
+
+	// DuesPaymentID is, on a dues row or payment item, the payment it belongs to
+	// (ADR-048); on a dues-reversal group, the payment it reverses; nil on every
+	// other row. A payment item stands for ALL of the payment's rows (one item per
+	// payment, GET /api/transactions): its ID is the payment's ANCHOR row, the one
+	// of its earliest month, which is where a new receipt photo is uploaded;
+	// Amount is the sum of the months; and Periods lists them. A reversal group
+	// works the same way over its reversal rows (kind 'adjustment'; ID is the
+	// anchor reversal; ReversesTransactionID is the anchor's own original).
+	// POST replies carry the payment of the row posted, and no Periods.
+	DuesPaymentID *int64 `json:"dues_payment_id"`
+	// Periods is a payment item's or a reversal group's months, oldest first, with
+	// each month's amount and - on a payment - whether that month is reversed.
+	// Always present, [] on every other row and on a POST reply. A single-month
+	// payment is a group of one: the same shape.
+	Periods []duesPeriodResponse `json:"periods"`
+	// ReversalState is "none", "partial" or "all": whether something reverses this
+	// row, or - on a payment item - how many of its months are reversed. "partial"
+	// exists only in data from before ADR-048 (a payment is reversed whole);
+	// Reversed is the "all" case.
+	ReversalState string `json:"reversal_state"`
 }
+
+// duesPeriodResponse is one month of a dues payment item or a dues reversal
+// group (ADR-048). Reversed is whether a reversal points at that month's row; it
+// is always false on a reversal group, whose rows are reversals themselves.
+type duesPeriodResponse struct {
+	DuesPeriod string `json:"dues_period"`
+	Amount     int64  `json:"amount"`
+	Reversed   bool   `json:"reversed"`
+}
+
+// Reversal states of a listed row (transactionResponse.ReversalState).
+const (
+	reversalStateNone    = "none"
+	reversalStatePartial = "partial"
+	reversalStateAll     = "all"
+)
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
 	return transactionResponse{
@@ -160,6 +199,10 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 		CreatedAt: t.CreatedAt,
 
 		ReceiptIDs: []int64{},
+
+		DuesPaymentID: t.DuesPaymentID,
+		Periods:       []duesPeriodResponse{},
+		ReversalState: reversalStateNone,
 	}
 }
 
@@ -177,14 +220,24 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 //
 // today is the fund's calendar day, which the reversible flag needs (a counted
 // row dated after it cannot be reversed, ADR-042).
-func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) transactionResponse {
+//
+// group is the rest of a dues payment's or dues-reversal group's rows
+// (ListDuesGroupRows, filtered to this item), nil for every other row. With it
+// the item stands for the whole group (ADR-048): the sum of its months, its
+// periods, and reversal facts judged per payment - reversible when at least one
+// month stands and ledger.DuesPaymentRefusal does not refuse, the same rule
+// Ledger.ReverseDuesPayment applies.
+func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.ListDuesGroupRowsRow, today string) transactionResponse {
 	resp := toTransactionResponse(store.Transaction{
 		ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,
-		Direction: t.Direction, Amount: t.Amount, OccurredOn: t.OccurredOn, Kind: t.Kind,
+		Direction: t.Direction, Amount: t.GroupAmount, OccurredOn: t.OccurredOn, Kind: t.Kind,
 		MemberID: t.MemberID, DuesPeriod: t.DuesPeriod, ReimbursementID: t.ReimbursementID,
-		TransferID: t.TransferID, ReversesTransactionID: t.ReversesTransactionID,
+		TransferID: t.TransferID, DuesPaymentID: t.DuesPaymentID, ReversesTransactionID: t.ReversesTransactionID,
 		Note: t.Note, CreatedAt: t.CreatedAt,
 	})
+	if t.ReversesDuesPaymentID != nil {
+		resp.DuesPaymentID = t.ReversesDuesPaymentID
+	}
 
 	resp.AccountName = t.AccountName
 	resp.PurposeKind = t.PurposeKind
@@ -206,6 +259,13 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 		EffectiveClosed:     t.EffectiveClosedOn != nil,
 		Counted:             resp.Counted,
 	}, today) == nil
+	if resp.Reversed {
+		resp.ReversalState = reversalStateAll
+	}
+
+	if len(group) > 0 {
+		applyDuesGroup(&resp, t, group, today)
+	}
 
 	switch {
 	case t.MemberName != nil:
@@ -232,6 +292,87 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 	}
 
 	return resp
+}
+
+// applyDuesGroup makes a listed dues row the item of its whole payment, or of
+// its whole reversal group (ADR-048). The rows of a payment are its kind='dues'
+// rows; those of a reversal group are the kind='adjustment' rows that reverse the
+// payment's rows on the item's date. Months are listed oldest first by period:
+// "YYYY-MM" sorts chronologically, and no id order is relied on.
+func applyDuesGroup(resp *transactionResponse, t store.ListTransactionsPageRow, group []store.ListDuesGroupRowsRow, today string) {
+	periods := make([]duesPeriodResponse, 0, len(group))
+	for _, g := range group {
+		period := ""
+		if g.DuesPeriod != nil {
+			period = *g.DuesPeriod
+		}
+		periods = append(periods, duesPeriodResponse{DuesPeriod: period, Amount: g.Amount, Reversed: g.Reversed != 0})
+	}
+	slices.SortFunc(periods, func(a, b duesPeriodResponse) int { return strings.Compare(a.DuesPeriod, b.DuesPeriod) })
+	resp.Periods = periods
+
+	if t.Kind != string(ledger.TransactionKindDues) {
+		// A reversal group: its rows are reversals themselves, never reversed.
+		return
+	}
+
+	reversedMonths := 0
+	facts := make([]ledger.ReversalFacts, 0, len(group))
+	for _, g := range group {
+		if g.Reversed != 0 {
+			reversedMonths++
+		}
+		facts = append(facts, ledger.ReversalFacts{
+			Kind:                ledger.TransactionKindDues,
+			OccurredOn:          g.OccurredOn,
+			Reversed:            g.Reversed != 0,
+			IsReconciliationFix: g.IsReconciliationFix != 0,
+			EffectiveClosed:     g.EffectiveClosedOn != nil,
+			Counted:             g.Counted != 0,
+		})
+	}
+	switch {
+	case reversedMonths == 0:
+		resp.ReversalState = reversalStateNone
+	case reversedMonths == len(group):
+		resp.ReversalState = reversalStateAll
+	default:
+		resp.ReversalState = reversalStatePartial
+	}
+	resp.Reversed = resp.ReversalState == reversalStateAll
+	resp.Reversible = ledger.DuesPaymentRefusal(facts, today) == nil
+}
+
+// duesGroupOf is the rows of the dues payment or dues-reversal group a listed row
+// stands for, out of the page's ListDuesGroupRows (by payment id); nil for any
+// other row. A payment item takes the payment's kind='dues' rows. A reversal item
+// takes the kind='adjustment' rows of the payment dated as the item is: a
+// reversal group is (the reversed rows' payment, the reversal's date).
+func duesGroupOf(t store.ListTransactionsPageRow, byPayment map[int64][]store.ListDuesGroupRowsRow) []store.ListDuesGroupRowsRow {
+	var (
+		paymentID *int64
+		kind      string
+	)
+	switch {
+	case t.Kind == string(ledger.TransactionKindDues):
+		paymentID, kind = t.DuesPaymentID, string(ledger.TransactionKindDues)
+	case t.ReversesDuesPaymentID != nil:
+		paymentID, kind = t.ReversesDuesPaymentID, string(ledger.TransactionKindAdjustment)
+	}
+	if paymentID == nil {
+		return nil
+	}
+	var group []store.ListDuesGroupRowsRow
+	for _, g := range byPayment[*paymentID] {
+		if g.Kind != kind {
+			continue
+		}
+		if kind == string(ledger.TransactionKindAdjustment) && g.OccurredOn != t.OccurredOn {
+			continue
+		}
+		group = append(group, g)
+	}
+	return group
 }
 
 // createTransaction is POST /api/transactions: wraps Ledger.PostTransaction.
@@ -548,13 +689,45 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
+	// A dues payment and a dues-reversal group are one item each (ADR-048): one
+	// fund-scoped read brings the months of every payment the page touches, and
+	// duesGroupOf picks each item's own.
+	var paymentIDs []*int64
+	seenPayment := map[int64]bool{}
+	for _, t := range rows {
+		for _, id := range []*int64{t.DuesPaymentID, t.ReversesDuesPaymentID} {
+			if id != nil && !seenPayment[*id] {
+				seenPayment[*id] = true
+				paymentIDs = append(paymentIDs, id)
+			}
+		}
+	}
+	byPayment := map[int64][]store.ListDuesGroupRowsRow{}
+	if len(paymentIDs) > 0 {
+		groupRows, err := a.queries.ListDuesGroupRows(r.Context(), store.ListDuesGroupRowsParams{FundID: fund.ID, PaymentIds: paymentIDs})
+		if err != nil {
+			mapSQLiteError(w, a.log(r), err)
+			return
+		}
+		for _, g := range groupRows {
+			if g.PaymentID != nil {
+				byPayment[*g.PaymentID] = append(byPayment[*g.PaymentID], g)
+			}
+		}
+	}
+	groups := make([][]store.ListDuesGroupRowsRow, len(rows))
+	for i, t := range rows {
+		groups[i] = duesGroupOf(t, byPayment)
+	}
+
 	// One batched, fund-scoped receipt lookup for the page (#154), never a query
 	// per row; see receiptIDsForTransactions.
 	// A transfer is one row here (#738) but two ledger rows, and a photo may sit on
-	// either leg, so a transfer's lookup covers both of its legs.
+	// either leg, so a transfer's lookup covers both of its legs; a dues payment or
+	// reversal group likewise covers every row of the group (ADR-048).
 	ids := make([]int64, 0, len(rows))
-	for _, t := range rows {
-		ids = append(ids, receiptParentIDs(t)...)
+	for i, t := range rows {
+		ids = append(ids, receiptParentIDs(t, groups[i])...)
 	}
 	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
 	if err != nil {
@@ -563,14 +736,14 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := make([]transactionResponse, 0, len(rows))
-	for _, t := range rows {
-		row := toTransactionsPageResponse(t, today)
-		parents := receiptParentIDs(t)
+	for i, t := range rows {
+		row := toTransactionsPageResponse(t, groups[i], today)
+		parents := receiptParentIDs(t, groups[i])
 		var merged []int64
 		for _, id := range parents {
 			merged = append(merged, receiptIDs[id]...)
 		}
-		// Receipt ids rise with upload time, so sorting two legs' lists keeps
+		// Receipt ids rise with upload time, so sorting several rows' lists keeps
 		// receipt_ids "oldest first". One list (any other row) is already in order.
 		if len(parents) > 1 {
 			slices.Sort(merged)
@@ -582,9 +755,18 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 // receiptParentIDs is every transaction id whose receipts belong on one listed
-// row: its own, and for a transfer (one row standing for two legs, #738) both
-// legs', whichever leg ListTransactionsPage picked to represent it.
-func receiptParentIDs(t store.ListTransactionsPageRow) []int64 {
+// row: its own, for a transfer (one row standing for two legs, #738) both legs',
+// whichever leg ListTransactionsPage picked to represent it, and for a dues
+// payment or reversal group (ADR-048) every row of the group. A new photo is
+// uploaded to the item's own id, the group's anchor row.
+func receiptParentIDs(t store.ListTransactionsPageRow, group []store.ListDuesGroupRowsRow) []int64 {
+	if len(group) > 0 {
+		ids := make([]int64, 0, len(group))
+		for _, g := range group {
+			ids = append(ids, g.ID)
+		}
+		return ids
+	}
 	if t.TransferID == nil || t.TransferOutLegID == nil || t.TransferInLegID == nil {
 		return []int64{t.ID}
 	}

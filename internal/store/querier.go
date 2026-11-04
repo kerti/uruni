@@ -372,6 +372,16 @@ type Querier interface {
 	// counts in. Every list of locations reads this one order. id only breaks a
 	// tie between identical names.
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
+	// Every row of the dues payments a list page shows, for the group items of
+	// GET /api/transactions (ADR-048): the payments' own dues rows AND the reversal
+	// rows that undo them, each tagged with the payment it belongs to
+	// (payment_id: the row's own, or - on a reversal - its original's). The Go side
+	// builds the periods of a payment item from the first and of a reversal group
+	// from the second (grouped by payment and date), and decides the payment's
+	// reversibility from the same facts as GetReversalTarget. A reversal of a
+	// non-dues row has no payment and is never returned. Fund-scoped; the order is
+	// the Go side's job (it sorts by month), not an id order.
+	ListDuesGroupRows(ctx context.Context, arg ListDuesGroupRowsParams) ([]ListDuesGroupRowsRow, error)
 	// Every dues row of one payment, oldest month first (the anchor row is the
 	// first, ADR-048), with what a whole-payment reversal needs to decide each row
 	// (the same facts as GetReversalTarget). Fund-scoped: another fund's payment
@@ -577,6 +587,12 @@ type Querier interface {
 	// reversed and reverses_occurred_on (ADR-042): the mark on the original and the
 	// unnamed reversal's label, on the page and in the PDF.
 	//
+	// dues_payment_id and reverses_dues_payment_id (ADR-048): the payment a dues row
+	// belongs to, and the payment a reversal of one undoes. The ledger folds a
+	// payment's rows (and a reversal group's: the same payment, the same date) into
+	// one listed row in Go, after the walk has counted every row; the payment id is
+	// a key for that fold and never reaches the page.
+	//
 	// has_receipt is true for a receipt on the row itself or, on a reimbursement
 	// payout, on the claim it settles: that nota is the proof of the payout
 	// (ADR-011).
@@ -690,6 +706,26 @@ type Querier interface {
 	// next page cannot return the other leg of a pair already shown. A transfer is
 	// neither in nor out, so a direction filter excludes it outright. Non-transfer
 	// rows (transfer_id NULL) pass untouched.
+	//
+	// One row per dues payment and per dues-reversal group (ADR-048), by the same
+	// device: `keyed` gives every ledger row of the fund a group key - 'p'+payment
+	// for a dues row, 'r'+payment+':'+date for a reversal of one (its original names
+	// the payment, so a reversal group is derived: the reversed rows' payment and the
+	// reversal's date) - and NULL for every other row. `matched` applies the filters
+	// to every row first, so a group is in when ANY of its rows matches (they share
+	// member, location, date, pos, note and direction, so only dues_period and the
+	// amount differ: a dues_period filter finds the payment covering that month, and
+	// a q that is an amount finds a row's amount or the group's sum). `kept` then
+	// keeps the group's ANCHOR row - the row of its earliest dues_period, taken over
+	// the whole group, not over the matched rows, so the representative is fixed by
+	// the group alone and a new photo always lands on the same row - and only then
+	// does the keyset cut the page, on the anchor's (occurred_on, id). A page can
+	// never split a group, repeat one or omit one.
+	//
+	// group_amount is the sum of the group's rows (the row's own amount for every
+	// other row). reverses_dues_payment_id is, on a reversal of a dues row, the
+	// payment it reverses: with dues_payment_id it names the payment a group item
+	// belongs to, so ListDuesGroupRows can fetch its months.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The backup export's read (ADR-012): the whole table, password hash included

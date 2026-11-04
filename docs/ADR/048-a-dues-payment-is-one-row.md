@@ -1,6 +1,6 @@
 # ADR-048 - A dues payment is one row
 
-**Status:** `draft` · M11 ([#758](https://github.com/kerti/uruni/issues/758)) · grilled with the maintainer 2026-11-04 · amends [ADR-042](./042-reversing-any-ordinary-transaction.md) (a dues payment is reversed whole) · [ADR index](./README.md)
+**Status:** implemented · M11 ([#758](https://github.com/kerti/uruni/issues/758)) · grilled with the maintainer 2026-11-04 · amends [ADR-042](./042-reversing-any-ordinary-transaction.md) (a dues payment is reversed whole) · [ADR index](./README.md)
 
 **Context.** A dues payment covering several months posts one `kind='dues'` row per month ([ADR-027](./027-ledger-domain-boundary.md)), because status, arrears, the 12-month grid and the report read dues month by month. Riwayat, Beranda and the report therefore showed N rows for what the treasurer did once. Nothing stored tied a payment's rows together: they share member, location, date, pos and note, and `created_at` only by luck, so two separate same-day payments could not be told from one multi-month payment. A display-only heuristic would sometimes be wrong.
 

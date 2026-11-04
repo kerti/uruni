@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import TransactionList from '@/components/TransactionList'
 import { copy } from '@/copy/id'
-import { formatPeriod } from '@/lib/dates'
+import { formatPeriod, formatPeriods, PERIOD_HYPHEN } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import type { Transaction } from '@/lib/transactions'
 import type { ReceiptUploadResult } from '@/lib/receipts'
@@ -1081,5 +1081,98 @@ describe('TransactionList transfer detail (#738)', () => {
     const dialog = await openDetail()
 
     expect(within(dialog).queryByRole('button', { name: copy.history.transactions.reverse })).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionList dues payment as one row (ADR-048)', () => {
+  const parts = (...months: [string, number, boolean?][]) =>
+    months.map(([dues_period, amount, reversed]) => ({ dues_period, amount, reversed: reversed ?? false }))
+  const group = (overrides: Partial<Transaction> = {}) =>
+    transaction({
+      kind: 'dues',
+      member_id: 5,
+      member_name: 'Rizki',
+      dues_period: '2026-05',
+      amount: 150_000,
+      dues_payment_id: 7,
+      periods: parts(['2026-05', 50_000], ['2026-06', 50_000], ['2026-10', 50_000]),
+      reversal_state: 'none',
+      ...overrides,
+    })
+
+  it('reads a payment of several months as one range-and-run label', () => {
+    renderRows([group()])
+
+    expect(screen.getByText(copy.rowLabels.dues.text(`Mei${PERIOD_HYPHEN}Jun, Okt 2026`, 'Rizki'))).toBeInTheDocument()
+  })
+
+  it('reads a single month exactly as before', () => {
+    renderRows([group({ dues_period: '2026-10', amount: 50_000, periods: parts(['2026-10', 50_000]) })])
+
+    expect(screen.getByText(copy.rowLabels.dues.text(formatPeriod('2026-10'), 'Rizki'))).toBeInTheDocument()
+  })
+
+  it('reads a reversal group by the months it undoes', () => {
+    renderRows([
+      group({
+        kind: 'adjustment',
+        direction: 'out',
+        reverses_transaction_id: 7,
+        periods: parts(['2026-05', 50_000], ['2026-06', 50_000], ['2026-10', 50_000]),
+      }),
+    ])
+
+    expect(screen.getByText(copy.rowLabels.duesReversal.text(`Mei${PERIOD_HYPHEN}Jun, Okt 2026`, 'Rizki'))).toBeInTheDocument()
+  })
+
+  it('falls back to the row period when it carries no months', () => {
+    renderRows([group({ periods: [] })])
+
+    expect(screen.getByText(copy.rowLabels.dues.text(formatPeriods(['2026-05']), 'Rizki'))).toBeInTheDocument()
+  })
+
+  it('says Sebagian dibatalkan on a part-reversed payment, Sudah dibatalkan once all is undone', () => {
+    const { unmount } = renderRows([group({ reversal_state: 'partial', reversed: false })])
+    expect(screen.getByText('Sebagian dibatalkan')).toBeInTheDocument()
+    expect(screen.queryByText('Sudah dibatalkan')).not.toBeInTheDocument()
+    unmount()
+
+    renderRows([group({ reversal_state: 'all', reversed: true })])
+    expect(screen.getByText('Sudah dibatalkan')).toBeInTheDocument()
+    expect(screen.queryByText('Sebagian dibatalkan')).not.toBeInTheDocument()
+  })
+
+  it('lists each month with its amount in the detail, marking an undone month', async () => {
+    renderRows([
+      group({
+        reversal_state: 'partial',
+        periods: parts(['2026-05', 50_000], ['2026-06', 40_000, true], ['2026-10', 60_000]),
+        amount: 150_000,
+      }),
+    ])
+
+    const dialog = await openDetail()
+
+    for (const [month, amount] of [
+      ['Mei 2026', 50_000],
+      ['Juni 2026', 40_000],
+      ['Oktober 2026', 60_000],
+    ] as const) {
+      const row = within(dialog).getByText(month).closest('div') as HTMLElement
+      expect(within(row).getByText(formatIDR(amount))).toBeInTheDocument()
+    }
+    const june = within(dialog).getByText('Juni 2026').closest('div') as HTMLElement
+    expect(within(june).getByText('Sudah dibatalkan')).toBeInTheDocument()
+    expect(within(dialog).getByText('Sebagian dibatalkan')).toBeInTheDocument()
+    // The headline is the payment's total.
+    expect(within(dialog).getAllByText(formatIDR(150_000)).length).toBeGreaterThan(0)
+  })
+
+  it('lists no month rows for a single month', async () => {
+    renderRows([group({ dues_period: '2026-10', amount: 50_000, periods: parts(['2026-10', 50_000]) })])
+
+    const dialog = await openDetail()
+
+    expect(within(dialog).getAllByText(formatIDR(50_000))).toHaveLength(1)
   })
 })

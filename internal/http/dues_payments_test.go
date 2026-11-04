@@ -109,8 +109,12 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 
 	list := getTransactions(t, r)
 	allTx := decodeTransactionsPage(t, list).Transactions
-	if len(allTx) != len(periods) {
-		t.Fatalf("GET /api/transactions returned %d rows, want %d", len(allTx), len(periods))
+	// One payment is one listed item (ADR-048), however many months it covers.
+	if len(allTx) != 1 {
+		t.Fatalf("GET /api/transactions returned %d items, want 1 over %d periods", len(allTx), len(periods))
+	}
+	if len(allTx[0].Periods) != len(periods) {
+		t.Errorf("the item lists %d periods, want %d", len(allTx[0].Periods), len(periods))
 	}
 }
 

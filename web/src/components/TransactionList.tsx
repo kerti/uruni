@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReversalDialog from '@/components/ReversalDialog'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
-import { transferHeadline, transferKind } from '@/components/rowLabel'
+import { reversalBadge, transferHeadline, transferKind } from '@/components/rowLabel'
 import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { useToast } from '@/components/toast/useToast'
@@ -197,7 +197,7 @@ export default function TransactionList({
                         <TransactionRowLabel transaction={transaction} bare={kind !== null} kindShown={kind !== null} />
                         {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
                         <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
-                        {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
+                        {reversalBadge(transaction) && <span className="text-sm text-muted-foreground">{reversalBadge(transaction)}</span>}
                       </span>
                     </span>
                     {/* Amount first and alone on its line, so every row's figure

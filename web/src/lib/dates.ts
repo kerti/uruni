@@ -130,6 +130,63 @@ export function formatPeriod(period: string): string {
   return monthFormatter.format(new Date(year, month - 1, 1))
 }
 
+/**
+ * Joins the two ends of a range of months: U+2011, a non-breaking hyphen, so a
+ * wrapping row never leaves "Jan-" on one line and "Jul 2027" on the next. The
+ * server's report.PeriodHyphen.
+ */
+export const PERIOD_HYPHEN = '\u2011'
+
+/**
+ * The months of a dues payment ("YYYY-MM", any order, repeats ignored) for its
+ * row (ADR-048). One month reads as formatPeriod does ("Oktober 2026"). Several
+ * read in three-letter months, consecutive months joined as a range by
+ * PERIOD_HYPHEN, runs separated by ", ", and the year after a run when the next
+ * run starts in another year or none follows. A range may cross the new year
+ * and then names both years: "Mei-Jun, Okt 2026", "Des 2026-Nov 2027",
+ * "Agu, Okt 2026-Jul 2027". A value that is not a month comes back as given.
+ * Twin of the server's Copy.periodsText (internal/report/report_copy.go); both
+ * tables test the same cases.
+ */
+export function formatPeriods(periods: readonly string[]): string {
+  const seen = new Set<number>()
+  const months: number[] = [] // year * 12 + month index
+  for (const period of periods) {
+    const match = /^(\d{4})-(\d{2})$/.exec(period)
+    const year = match ? Number(match[1]) : 0
+    const month = match ? Number(match[2]) : 0
+    if (!match || month < 1 || month > 12) return periods.join(', ')
+    const key = year * 12 + month - 1
+    if (seen.has(key)) continue
+    seen.add(key)
+    months.push(key)
+  }
+  months.sort((a, b) => a - b)
+  if (months.length === 0) return ''
+  const yearOf = (m: number) => Math.floor(m / 12)
+  if (months.length === 1) return formatPeriod(`${yearOf(months[0])}-${String((months[0] % 12) + 1).padStart(2, '0')}`)
+
+  const runs: { from: number; to: number }[] = []
+  for (let i = 0; i < months.length;) {
+    let j = i
+    while (j + 1 < months.length && months[j + 1] === months[j] + 1) j++
+    runs.push({ from: months[i], to: months[j] })
+    i = j + 1
+  }
+
+  const short = copy.rowLabels.monthsShort
+  return runs
+    .map((run, i) => {
+      let text = short[run.from % 12]
+      if (yearOf(run.from) !== yearOf(run.to)) text += ` ${yearOf(run.from)}`
+      if (run.to !== run.from) text += `${PERIOD_HYPHEN}${short[run.to % 12]}`
+      const next = runs[i + 1]
+      if (!next || yearOf(next.from) !== yearOf(run.to)) text += ` ${yearOf(run.to)}`
+      return text
+    })
+    .join(', ')
+}
+
 /** "YYYY-MM-DD" -> a local-midnight Date, or null for anything else. Never
  * `new Date(iso)`, see above. */
 export function parseIsoDate(iso: string): Date | null {

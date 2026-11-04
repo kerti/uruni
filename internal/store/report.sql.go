@@ -37,9 +37,10 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        t.member_id, m.name AS member_name,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
-       t.dues_period, t.reverses_transaction_id, t.note,
+       t.dues_period, t.dues_payment_id, t.reverses_transaction_id, t.note,
        t.reversed,
        orig.occurred_on AS reverses_occurred_on,
+       orig.dues_payment_id AS reverses_dues_payment_id,
        t.transfer_id,
        tr.kind AS transfer_kind,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
@@ -92,10 +93,12 @@ type ListReportTransactionsRow struct {
 	SettlementMemberName          *string
 	ClaimNote                     *string
 	DuesPeriod                    *string
+	DuesPaymentID                 *int64
 	ReversesTransactionID         *int64
 	Note                          *string
 	Reversed                      int64
 	ReversesOccurredOn            *string
+	ReversesDuesPaymentID         *int64
 	TransferID                    *int64
 	TransferKind                  *string
 	TransferCorrectsTransactionID *int64
@@ -133,6 +136,12 @@ type ListReportTransactionsRow struct {
 // reversed and reverses_occurred_on (ADR-042): the mark on the original and the
 // unnamed reversal's label, on the page and in the PDF.
 //
+// dues_payment_id and reverses_dues_payment_id (ADR-048): the payment a dues row
+// belongs to, and the payment a reversal of one undoes. The ledger folds a
+// payment's rows (and a reversal group's: the same payment, the same date) into
+// one listed row in Go, after the walk has counted every row; the payment id is
+// a key for that fold and never reaches the page.
+//
 // has_receipt is true for a receipt on the row itself or, on a reimbursement
 // payout, on the claim it settles: that nota is the proof of the payout
 // (ADR-011).
@@ -160,10 +169,12 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 			&i.SettlementMemberName,
 			&i.ClaimNote,
 			&i.DuesPeriod,
+			&i.DuesPaymentID,
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.Reversed,
 			&i.ReversesOccurredOn,
+			&i.ReversesDuesPaymentID,
 			&i.TransferID,
 			&i.TransferKind,
 			&i.TransferCorrectsTransactionID,

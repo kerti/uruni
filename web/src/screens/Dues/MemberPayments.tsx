@@ -3,6 +3,7 @@ import { ArrowUUpLeft } from '@phosphor-icons/react'
 
 import ReversalDialog from '@/components/ReversalDialog'
 import { sharedErrorText } from '@/components/reversalCopy'
+import { duesPeriodsText, reversalBadge } from '@/components/rowLabel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
@@ -66,9 +67,11 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   // is either the kind='dues' payment or a kind='adjustment' reversal of it
   // (schema CHECK: only a reversal may carry member_id+dues_period on a
   // non-'dues' row), so no client-side filtering.
+  // Each item is a whole payment, or a whole reversal of one (ADR-048): the
+  // amount is the payment's, so a payment covering more than this month names
+  // its months, and whether it can still be reversed is the server's
+  // per-payment answer, never inferred from the reversal rows on this list.
   const rows = state.data ?? []
-  // A payment is spent once any row reverses it.
-  const reversedIds = new Set(rows.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
 
   const reversing = rows.find((row) => row.id === reversalId) ?? null
 
@@ -109,7 +112,8 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
       <ul className="flex flex-col [&>li]:border-t [&>li]:border-foreground/10 [&>li]:py-3 [&>li:first-child]:border-t-0 [&>li:first-child]:pt-0 [&>li:last-child]:pb-0">
         {rows.map((row) => {
           const isReversal = row.reverses_transaction_id !== null
-          const reversed = reversedIds.has(row.id)
+          const badge = reversalBadge(row)
+          const severalMonths = (row.periods?.length ?? 0) > 1
           return (
             <li key={row.id} className="flex flex-col gap-1 text-sm">
               <div className="tabular flex items-center justify-between gap-3">
@@ -122,14 +126,16 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
                 <span className="font-medium">{formatIDR(row.amount)}</span>
               </div>
 
+              {severalMonths && <span className="text-muted-foreground">{duesPeriodsText(row)}</span>}
+
               {row.note && <span className="truncate text-muted-foreground">{row.note}</span>}
 
-              {!isReversal && reversed && <span className="text-muted-foreground">{text.reversedBadge}</span>}
+              {!isReversal && badge && <span className="text-muted-foreground">{badge}</span>}
 
               {/* `lg` on every control in this panel, never `sm` (h-7 = 28px):
                 Design-System.md's minimum touch target is 44x44px, and a
                 control that undoes money is the last place to shave it. */}
-              {!isReversal && !reversed && (
+              {!isReversal && row.reversible && (
                 <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => reversal.open(`reverse:${row.id}`)}>
                   <ArrowUUpLeft aria-hidden="true" />
                   {text.reverse}

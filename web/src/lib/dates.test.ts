@@ -6,6 +6,8 @@ import {
   dateBounds,
   formatIsoDate,
   formatPeriod,
+  formatPeriods,
+  PERIOD_HYPHEN,
   formatUnixSeconds,
   formatUnixSecondsWithTime,
   getFundTimeZone,
@@ -287,4 +289,48 @@ describe('the pickers sit inside the server window (#632)', () => {
     expect(yearAhead('2024-02-29')).toBe('2025-02-28')
     expect(yearAhead('2027-02-28')).toBe('2028-02-28')
   })
+})
+
+// Mirrors TestPeriodsText (internal/report/report_periods_test.go) case for case.
+describe('formatPeriods (ADR-048)', () => {
+  const cases: [string, string[], string][] = [
+    ['nothing', [], ''],
+    ['one month keeps its long name', ['2026-10'], 'Oktober 2026'],
+    ['one month repeated', ['2026-10', '2026-10'], 'Oktober 2026'],
+    ['two consecutive months', ['2026-05', '2026-06'], 'Mei-Jun 2026'],
+    ['a run and a lone month', ['2026-05', '2026-06', '2026-10'], 'Mei-Jun, Okt 2026'],
+    ['a run longer than two', ['2026-01', '2026-02', '2026-03', '2026-04'], 'Jan-Apr 2026'],
+    [
+      'the whole year',
+      ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'],
+      'Jan-Des 2026',
+    ],
+    ['non-contiguous months', ['2026-01', '2026-03'], 'Jan, Mar 2026'],
+    ['three separate months', ['2026-02', '2026-04', '2026-06'], 'Feb, Apr, Jun 2026'],
+    ['a range crosses the new year', ['2025-11', '2025-12', '2026-01'], 'Nov 2025-Jan 2026'],
+    [
+      'twelve months ahead',
+      ['2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07', '2027-08', '2027-09', '2027-10', '2027-11'],
+      'Des 2026-Nov 2027',
+    ],
+    ['arrears and months ahead', ['2026-08', '2026-10', '2026-11', '2026-12', '2027-01', '2027-07'], 'Agu, Okt 2026-Jan, Jul 2027'],
+    ['a lone month, then a range across the year', ['2026-08', '2026-10', '2026-11', '2026-12', '2027-01'], 'Agu, Okt 2026-Jan 2027'],
+    ['December and January only', ['2026-12', '2027-01'], 'Des 2026-Jan 2027'],
+    ['two years in one range', ['2025-11', '2025-12', '2026-01', '2026-02'], 'Nov 2025-Feb 2026'],
+    ['a range in each of two years', ['2025-10', '2025-11', '2026-02', '2026-03'], 'Okt-Nov 2025, Feb-Mar 2026'],
+    ['December then a lone later month', ['2025-12', '2026-03'], 'Des 2025, Mar 2026'],
+    ['a year skipped', ['2024-12', '2026-01'], 'Des 2024, Jan 2026'],
+    ['any order', ['2026-10', '2026-05', '2026-06'], 'Mei-Jun, Okt 2026'],
+    ['every short month name', ['2026-02', '2026-04', '2026-07', '2026-08', '2026-09'], 'Feb, Apr, Jul-Sep 2026'],
+    ['not a month comes back as given', ['2026-13', '2026-01'], '2026-13, 2026-01'],
+  ]
+  it.each(cases)('%s', (_name, periods, want) => {
+    // Written with '-'; the formatter joins ranges with PERIOD_HYPHEN (U+2011).
+    expect(formatPeriods(periods).replaceAll(PERIOD_HYPHEN, '-')).toBe(want)
+  })
+})
+
+it('joins a range with a non-breaking hyphen, so a wrapping row never splits it', () => {
+  expect(formatPeriods(['2026-05', '2026-06'])).toBe(`Mei${PERIOD_HYPHEN}Jun 2026`)
+  expect(formatPeriods(['2026-05', '2026-06'])).not.toContain('-')
 })
