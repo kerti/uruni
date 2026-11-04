@@ -252,6 +252,18 @@ CREATE TABLE reimbursement (              -- off-ledger until settled
   FOREIGN KEY (fund_id, purpose_id) REFERENCES purpose(fund_id, id)
 ) STRICT;
 
+CREATE TABLE dues_payment (               -- binds the rows of one dues payment (ADR-048)
+  -- One act of the treasurer paying one or more months writes one row per month
+  -- (read month by month) and this header, so a list shows the act once. It holds
+  -- nothing else: member, location, date and amounts live on the rows. Inserted
+  -- by PostDuesPayments in the same database transaction as its rows; never
+  -- updated. A second binder beside transfer, not a kind of it.
+  id         INTEGER PRIMARY KEY,
+  fund_id    INTEGER NOT NULL REFERENCES fund(id),
+  created_at INTEGER NOT NULL,
+  UNIQUE (fund_id, id)                    -- see account.id above: enables composite FKs from children
+) STRICT;
+
 CREATE TABLE "transaction" (              -- the ledger. insert-only.
   id          INTEGER PRIMARY KEY,
   fund_id     INTEGER NOT NULL,
@@ -266,14 +278,15 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   kind        TEXT    NOT NULL CHECK (kind IN
                 ('opening','normal','dues','reimbursement','adjustment','transfer')),
   member_id        INTEGER,               -- dues, or a named contribution (ADR-034)
-  dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
+  dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows, bound by dues_payment_id
   reimbursement_id INTEGER,               -- the settling payout
   transfer_id      INTEGER,
+  dues_payment_id  INTEGER,               -- the payment a dues row belongs to (ADR-048); dues rows only
   reverses_transaction_id INTEGER,        -- the dues or normal row this adjustment reverses (ADR-029, ADR-042)
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
-  -- Six composite FKs: each stops a transaction borrowing another fund's row,
+  -- Seven composite FKs: each stops a transaction borrowing another fund's row,
   -- which a single-column REFERENCES would allow. The reverses_transaction_id
   -- one stops naming another fund's row as the row being reversed (ADR-029).
   FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
@@ -281,6 +294,7 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
   FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id),
   FOREIGN KEY (fund_id, transfer_id)      REFERENCES transfer(fund_id, id),
+  FOREIGN KEY (fund_id, dues_payment_id)  REFERENCES dues_payment(fund_id, id),
   FOREIGN KEY (fund_id, reverses_transaction_id) REFERENCES "transaction"(fund_id, id),
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                  AND date(dues_period||'-01') IS NOT NULL
@@ -312,7 +326,11 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- payment must - which the trigger checks, as this CHECK cannot.
   CHECK (reverses_transaction_id IS NULL OR kind = 'adjustment'),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
-  CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
+  CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL),
+  -- A payment binds dues rows and nothing else (ADR-048): required on a dues
+  -- row, refused on every other kind, a reversal row included (it names the row
+  -- it undoes, which names the payment).
+  CHECK ((kind = 'dues') = (dues_payment_id IS NOT NULL))
   -- kind='adjustment' otherwise requires nothing extra: an ordinary correction
   -- may be raised any time, not only during a reconciliation (ADR-024).
 ) STRICT;
@@ -462,6 +480,7 @@ CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on, id);
 CREATE INDEX transaction_by_account ON "transaction"(account_id, occurred_on);
 CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
 CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHERE kind = 'dues';
+CREATE INDEX transaction_by_dues_payment ON "transaction"(dues_payment_id) WHERE dues_payment_id IS NOT NULL;
 
 -- Same shape: orders the (incurred_on DESC, id DESC) keyset scan (#226).
 CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
@@ -503,7 +522,7 @@ CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id)
 -- the walk and skips only the reversal lookups.
 CREATE VIEW ledger_entry AS
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
        (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
@@ -546,6 +565,18 @@ END;
 -- +goose StatementBegin
 CREATE TRIGGER transfer_immutable_delete BEFORE DELETE ON transfer BEGIN
   SELECT RAISE(ABORT, 'transfer rows are immutable - post an adjusting entry');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER dues_payment_immutable_update BEFORE UPDATE ON dues_payment BEGIN
+  SELECT RAISE(ABORT, 'dues_payment rows are immutable - reverse the payment');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER dues_payment_immutable_delete BEFORE DELETE ON dues_payment BEGIN
+  SELECT RAISE(ABORT, 'dues_payment rows are immutable - reverse the payment');
 END;
 -- +goose StatementEnd
 
@@ -601,12 +632,15 @@ DROP TRIGGER reconciliation_line_immutable_delete;
 DROP TRIGGER reconciliation_line_immutable_update;
 DROP TRIGGER reconciliation_immutable_delete;
 DROP TRIGGER reconciliation_immutable_update;
+DROP TRIGGER dues_payment_immutable_delete;
+DROP TRIGGER dues_payment_immutable_update;
 DROP TRIGGER transfer_immutable_delete;
 DROP TRIGGER transfer_immutable_update;
 DROP TRIGGER transaction_immutable_delete;
 DROP TRIGGER transaction_immutable_update;
 DROP INDEX reconciliation_by_date;
 DROP INDEX reimbursement_by_date;
+DROP INDEX transaction_by_dues_payment;
 DROP INDEX transaction_by_dues;
 DROP INDEX transaction_by_purpose;
 DROP INDEX transaction_by_account;
@@ -621,6 +655,7 @@ DROP INDEX dues_payment_reversed_once;
 DROP INDEX reimbursement_settled_once;
 DROP TRIGGER transaction_named_row_shape;
 DROP TABLE "transaction";
+DROP TABLE dues_payment;
 DROP TABLE reimbursement;
 DROP TABLE transfer;
 DROP VIEW member_tier_standing;

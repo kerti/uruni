@@ -99,6 +99,14 @@ func toTransfers(rows []store.Transfer) []Transfer {
 // transaction exists) is derived, not stored, so it is left out: uruni.json
 // exports the reimbursement table's columns, and a restore recomputes
 // "settled" from the transactions it inserted, as the column does.
+func toDuesPayments(rows []store.DuesPayment) []DuesPayment {
+	out := make([]DuesPayment, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, DuesPayment{ID: r.ID, FundID: r.FundID, CreatedAt: r.CreatedAt})
+	}
+	return out
+}
+
 func toReimbursements(rows []store.ListReimbursementsByFundRow) []Reimbursement {
 	out := make([]Reimbursement, 0, len(rows))
 	for _, r := range rows {
@@ -118,7 +126,7 @@ func toTransactions(rows []store.Transaction) []Transaction {
 			ID: r.ID, FundID: r.FundID, AccountID: r.AccountID, PurposeID: r.PurposeID,
 			Direction: r.Direction, Amount: r.Amount, OccurredOn: r.OccurredOn, Kind: r.Kind,
 			MemberID: r.MemberID, DuesPeriod: r.DuesPeriod, ReimbursementID: r.ReimbursementID,
-			TransferID: r.TransferID, ReversesTransactionID: r.ReversesTransactionID,
+			TransferID: r.TransferID, DuesPaymentID: r.DuesPaymentID, ReversesTransactionID: r.ReversesTransactionID,
 			Note: r.Note, CreatedAt: r.CreatedAt,
 		})
 	}

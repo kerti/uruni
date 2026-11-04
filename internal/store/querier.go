@@ -40,6 +40,9 @@ type Querier interface {
 	// (ADR-030): the gate is the count, not a duplicate-email collision.
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	// The header PostDuesPayments inserts before a payment's rows (ADR-048). It
+	// holds nothing but its fund and its time; the rows carry everything else.
+	CreateDuesPayment(ctx context.Context, arg CreateDuesPaymentParams) (DuesPayment, error)
 	// dues_rate (ADR-040): a mistake is a new row (the next correction of its month),
 	// never an UPDATE; a deletion is a deleting correction. Pricing reads go through
 	// the dues_rate_standing view (schema file). internal/db's guard test fails a
@@ -80,6 +83,7 @@ type Querier interface {
 	// only; a used-then-retired account gets inactive_on via UpdateAccount.
 	DeleteAccount(ctx context.Context, id int64) error
 	DeleteAllAccounts(ctx context.Context) error
+	DeleteAllDuesPayments(ctx context.Context) error
 	DeleteAllDuesRates(ctx context.Context) error
 	DeleteAllDuesTiers(ctx context.Context) error
 	DeleteAllFunds(ctx context.Context) error
@@ -368,6 +372,12 @@ type Querier interface {
 	// counts in. Every list of locations reads this one order. id only breaks a
 	// tie between identical names.
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
+	// Every dues row of one payment, oldest month first (the anchor row is the
+	// first, ADR-048), with what a whole-payment reversal needs to decide each row
+	// (the same facts as GetReversalTarget). Fund-scoped: another fund's payment
+	// reads as no rows.
+	ListDuesPaymentReversalTargets(ctx context.Context, arg ListDuesPaymentReversalTargetsParams) ([]ListDuesPaymentReversalTargetsRow, error)
+	ListDuesPaymentsByFund(ctx context.Context, fundID int64) ([]DuesPayment, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
 	// GET /api/dues-payments (#228, ADR-032): newest-first, keyset-paged on
 	// (occurred_on DESC, id DESC) like ListTransactionsPage, which documents the
@@ -744,6 +754,7 @@ type Querier interface {
 	ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembersParams) (int64, error)
 	ReportPurposeBalance(ctx context.Context, arg ReportPurposeBalanceParams) (int64, error)
 	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
+	RestoreDuesPayment(ctx context.Context, arg RestoreDuesPaymentParams) error
 	RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams) error
 	RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams) error
 	RestoreFund(ctx context.Context, arg RestoreFundParams) error

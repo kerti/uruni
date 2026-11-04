@@ -245,7 +245,7 @@ func TestDeletingAMemberTakesItsTierRowsButAPostedRowKeepsThem(t *testing.T) {
 	period := "2026-01"
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-		OccurredOn: "2026-01-05", Kind: "dues", MemberID: &paid, DuesPeriod: &period,
+		OccurredOn: "2026-01-05", Kind: "dues", MemberID: &paid, DuesPeriod: &period, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 
 	count := func(memberID int64) int {

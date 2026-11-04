@@ -13,6 +13,12 @@ type Account struct {
 	InactiveOn *string
 }
 
+type DuesPayment struct {
+	ID        int64
+	FundID    int64
+	CreatedAt int64
+}
+
 type DuesRate struct {
 	ID            int64
 	TierID        int64
@@ -85,6 +91,7 @@ type LedgerEntry struct {
 	DuesPeriod              *string
 	ReimbursementID         *int64
 	TransferID              *int64
+	DuesPaymentID           *int64
 	ReversesTransactionID   *int64
 	Note                    *string
 	CreatedAt               int64
@@ -193,6 +200,7 @@ type Transaction struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64

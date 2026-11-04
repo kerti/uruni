@@ -688,6 +688,8 @@ func TestRestoreRecreatesImmutableTriggers(t *testing.T) {
 		{"transaction delete", `DELETE FROM "transaction" WHERE id = 1`, "transaction rows are immutable - post an adjusting entry"},
 		{"transfer update", `UPDATE transfer SET kind = 'reclass_purpose' WHERE id = 1`, "transfer rows are immutable - post an adjusting entry"},
 		{"transfer delete", `DELETE FROM transfer WHERE id = 1`, "transfer rows are immutable - post an adjusting entry"},
+		{"dues_payment update", `UPDATE dues_payment SET created_at = 0 WHERE id = 1`, "dues_payment rows are immutable - reverse the payment"},
+		{"dues_payment delete", `DELETE FROM dues_payment WHERE id = 1`, "dues_payment rows are immutable - reverse the payment"},
 		{"reconciliation update", `UPDATE reconciliation SET note = 'x' WHERE id = 1`, "reconciliation rows are immutable - take a new snapshot"},
 		{"reconciliation delete", `DELETE FROM reconciliation WHERE id = 1`, "reconciliation rows are immutable - take a new snapshot"},
 		{"reconciliation_line update", `UPDATE reconciliation_line SET resolution = 'matched' WHERE id = 1`, "reconciliation_line rows are immutable - take a new snapshot"},
@@ -1100,12 +1102,12 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 func TestAdoptionDatesFallsBackToTheFundsCreationDayInItsOwnZone(t *testing.T) {
 	t.Parallel()
 	created := time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC).Unix()
-	got, err := adoptionDates(Document{Funds: []Fund{
+	got, err := adoptionDates([]Fund{
 		{ID: 7, CreatedAt: created, TimeZone: tz.Jakarta},
 		{ID: 8, CreatedAt: created - 2*3600, TimeZone: tz.Jayapura},
 		{ID: 9, CreatedAt: created - 3600, TimeZone: tz.Makassar},
 		{ID: 10, CreatedAt: created - 1, TimeZone: tz.Jakarta},
-	}})
+	}, nil)
 	if err != nil {
 		t.Fatalf("adoptionDates() = %v, want no error", err)
 	}
@@ -1114,7 +1116,7 @@ func TestAdoptionDatesFallsBackToTheFundsCreationDayInItsOwnZone(t *testing.T) {
 			t.Errorf("adoptionDates()[%d] = %q, want %q", id, got[id], want)
 		}
 	}
-	if _, err := adoptionDates(Document{Funds: []Fund{{ID: 1, TimeZone: ""}}}); !errors.Is(err, ErrMalformedBackup) {
+	if _, err := adoptionDates([]Fund{{ID: 1, TimeZone: ""}}, nil); !errors.Is(err, ErrMalformedBackup) {
 		t.Errorf("adoptionDates(empty zone) = %v, want ErrMalformedBackup", err)
 	}
 }

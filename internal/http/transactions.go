@@ -605,7 +605,10 @@ type reverseTransactionRequest struct {
 // Ledger.ReverseTransaction; every refusal is the ledger's own named error
 // (ADR-042), reaching the client through mapLedgerError. Once-only by the
 // schema, so no idempotency key (ADR-043). The response is the posted reversal
-// row as transactionResponse.
+// row as transactionResponse. Naming a dues row reverses its whole payment
+// (ADR-048), one reversal row per month still standing, in one transaction; the
+// response is then the reversal of the month named (the first reversal posted,
+// when that month was already reversed), and a list refetch shows the rest.
 func (a *api) reverseTransaction(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

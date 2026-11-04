@@ -58,7 +58,8 @@ func TestAReversalMatrixAgainstTheSchema(t *testing.T) {
 	}
 	duesPayment := func() store.Transaction {
 		return mustPost(store.CreateTransactionParams{AccountID: f.accountID, PurposeID: f.purposeID,
-			Direction: "in", Amount: 25000, Kind: "dues", MemberID: &f.memberID, DuesPeriod: &period})
+			Direction: "in", Amount: 25000, Kind: "dues", MemberID: &f.memberID, DuesPeriod: &period,
+			DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID)})
 	}
 	// reversalOf is the row the ledger would post for orig, to be bent per case.
 	reversalOf := func(orig store.Transaction) store.CreateTransactionParams {

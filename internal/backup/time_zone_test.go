@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -197,7 +198,7 @@ func TestTheBootDumpBeforeSetupIsStampedInWIB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteDump() = %v", err)
 	}
-	if strings.Contains(name, "utc") || !strings.HasPrefix(name, "uruni-20260930-100000-daily-fv2-") {
+	if strings.Contains(name, "utc") || !strings.HasPrefix(name, fmt.Sprintf("uruni-20260930-100000-daily-fv%d-", FormatVersion)) {
 		t.Errorf("boot dump name = %q, want a token-less WIB name", name)
 	}
 }

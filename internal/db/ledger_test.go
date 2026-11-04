@@ -68,6 +68,17 @@ func createTransfer(t *testing.T, sqlDB *sql.DB, fundID int64, kind string) int6
 	return tr.ID
 }
 
+// createDuesPayment inserts the dues_payment header a kind='dues' row must name
+// (ADR-048) and returns it as the pointer CreateTransactionParams takes.
+func createDuesPayment(t *testing.T, sqlDB *sql.DB, fundID int64) *int64 {
+	t.Helper()
+	dp, err := store.New(sqlDB).CreateDuesPayment(context.Background(), store.CreateDuesPaymentParams{FundID: fundID, CreatedAt: 1})
+	if err != nil {
+		t.Fatalf("CreateDuesPayment(%d) = %v, want no error", fundID, err)
+	}
+	return &dp.ID
+}
+
 // ledgerFixture is one fund with the rows every ledger test needs under it.
 type ledgerFixture struct {
 	fundID, accountID, purposeID, memberID int64
@@ -231,7 +242,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 
 	t.Run("valid dues payment", func(t *testing.T) {
 		p := base()
-		p.Kind, p.MemberID, p.DuesPeriod = "dues", &f.memberID, &period
+		p.Kind, p.MemberID, p.DuesPeriod, p.DuesPaymentID = "dues", &f.memberID, &period, createDuesPayment(t, sqlDB, f.fundID)
 		if _, err := q.CreateTransaction(ctx, p); err != nil {
 			t.Errorf("a complete dues payment = %v, want no error", err)
 		}
@@ -239,7 +250,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 
 	t.Run("dues without a member", func(t *testing.T) {
 		p := base()
-		p.Kind, p.DuesPeriod = "dues", &period
+		p.Kind, p.DuesPeriod, p.DuesPaymentID = "dues", &period, createDuesPayment(t, sqlDB, f.fundID)
 		if _, err := q.CreateTransaction(ctx, p); err == nil {
 			t.Error("kind='dues' with no member_id = nil error, want the CHECK to reject it")
 		}
@@ -247,7 +258,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 
 	t.Run("dues without a period", func(t *testing.T) {
 		p := base()
-		p.Kind, p.MemberID = "dues", &f.memberID
+		p.Kind, p.MemberID, p.DuesPaymentID = "dues", &f.memberID, createDuesPayment(t, sqlDB, f.fundID)
 		if _, err := q.CreateTransaction(ctx, p); err == nil {
 			t.Error("kind='dues' with no dues_period = nil error, want the CHECK to reject it")
 		}
@@ -256,6 +267,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 	t.Run("dues paid outward", func(t *testing.T) {
 		p := base()
 		p.Kind, p.MemberID, p.DuesPeriod, p.Direction = "dues", &f.memberID, &period, "out"
+		p.DuesPaymentID = createDuesPayment(t, sqlDB, f.fundID)
 		if _, err := q.CreateTransaction(ctx, p); err == nil {
 			t.Error("kind='dues' with direction='out' = nil error, want the CHECK to reject it")
 		}
@@ -268,7 +280,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 		// EXISTS only asks whether something points at the row) and consuming the
 		// reversed-once slot so the real reversal can never post.
 		paid := base()
-		paid.Kind, paid.MemberID, paid.DuesPeriod = "dues", &f.memberID, &period
+		paid.Kind, paid.MemberID, paid.DuesPeriod, paid.DuesPaymentID = "dues", &f.memberID, &period, createDuesPayment(t, sqlDB, f.fundID)
 		posted, err := q.CreateTransaction(ctx, paid)
 		if err != nil {
 			t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
@@ -283,7 +295,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 
 	t.Run("an adjustment reversing without naming the member and period", func(t *testing.T) {
 		paid := base()
-		paid.Kind, paid.MemberID, paid.DuesPeriod = "dues", &f.memberID, &period
+		paid.Kind, paid.MemberID, paid.DuesPeriod, paid.DuesPaymentID = "dues", &f.memberID, &period, createDuesPayment(t, sqlDB, f.fundID)
 		posted, err := q.CreateTransaction(ctx, paid)
 		if err != nil {
 			t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
@@ -293,6 +305,45 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 		p.Kind, p.Direction, p.ReversesTransactionID = "adjustment", "out", &posted.ID
 		if _, err := q.CreateTransaction(ctx, p); err == nil {
 			t.Error("a reversal with no member_id or dues_period = nil error, want the CHECK to reject it")
+		}
+	})
+
+	// ADR-048: a dues row names its payment, and nothing else does.
+	t.Run("dues without a payment", func(t *testing.T) {
+		p := base()
+		p.Kind, p.MemberID, p.DuesPeriod = "dues", &f.memberID, &period
+		if _, err := q.CreateTransaction(ctx, p); err == nil {
+			t.Error("kind='dues' with no dues_payment_id = nil error, want the CHECK to reject it")
+		}
+	})
+
+	t.Run("a payment on a row that is not dues", func(t *testing.T) {
+		for _, kind := range []string{"normal", "opening", "adjustment", "reimbursement", "transfer"} {
+			p := base()
+			p.Kind, p.DuesPaymentID = kind, createDuesPayment(t, sqlDB, f.fundID)
+			if _, err := q.CreateTransaction(ctx, p); err == nil {
+				t.Errorf("kind=%q with a dues_payment_id = nil error, want the CHECK to reject it", kind)
+			}
+		}
+	})
+
+	t.Run("a reversal row carrying the payment of the row it reverses", func(t *testing.T) {
+		paid := base()
+		paid.Kind, paid.MemberID, paid.DuesPeriod, paid.DuesPaymentID = "dues", &f.memberID, &period, createDuesPayment(t, sqlDB, f.fundID)
+		posted, err := q.CreateTransaction(ctx, paid)
+		if err != nil {
+			t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
+		}
+
+		p := base()
+		p.Kind, p.Direction, p.MemberID, p.DuesPeriod = "adjustment", "out", &f.memberID, &period
+		p.ReversesTransactionID, p.DuesPaymentID = &posted.ID, paid.DuesPaymentID
+		if _, err := q.CreateTransaction(ctx, p); err == nil {
+			t.Error("a reversal row with a dues_payment_id = nil error, want the CHECK to reject it")
+		}
+		p.DuesPaymentID = nil
+		if _, err := q.CreateTransaction(ctx, p); err != nil {
+			t.Errorf("the same reversal without one = %v, want no error", err)
 		}
 	})
 
@@ -307,7 +358,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 	t.Run("an impossible period", func(t *testing.T) {
 		bad := "2026-13"
 		p := base()
-		p.Kind, p.MemberID, p.DuesPeriod = "dues", &f.memberID, &bad
+		p.Kind, p.MemberID, p.DuesPeriod, p.DuesPaymentID = "dues", &f.memberID, &bad, createDuesPayment(t, sqlDB, f.fundID)
 		if _, err := q.CreateTransaction(ctx, p); err == nil {
 			t.Error("dues_period '2026-13' = nil error, want the CHECK to reject it")
 		}
@@ -386,6 +437,8 @@ func TestTransactionCannotBorrowAnotherFundsRow(t *testing.T) {
 
 	otherReimb := createReimbursement(t, sqlDB, b.fundID, b.memberID, b.purposeID, 2000)
 	otherTransfer := createTransfer(t, sqlDB, b.fundID, "between_accounts")
+	otherPayment := createDuesPayment(t, sqlDB, b.fundID)
+	ownPayment := createDuesPayment(t, sqlDB, a.fundID)
 	period := "2026-08"
 
 	// Each row exists, so a single-column REFERENCES would accept all of them;
@@ -398,6 +451,11 @@ func TestTransactionCannotBorrowAnotherFundsRow(t *testing.T) {
 		{"purpose", func(p *store.CreateTransactionParams) { p.PurposeID = b.purposeID }},
 		{"member", func(p *store.CreateTransactionParams) {
 			p.Kind, p.MemberID, p.DuesPeriod, p.Direction = "dues", &b.memberID, &period, "in"
+			p.DuesPaymentID = ownPayment // fund A's own, so only the member is foreign
+		}},
+		{"dues payment", func(p *store.CreateTransactionParams) {
+			p.Kind, p.MemberID, p.DuesPeriod, p.Direction = "dues", &a.memberID, &period, "in"
+			p.DuesPaymentID = otherPayment // fund B's, so only the payment is foreign
 		}},
 		{"reimbursement", func(p *store.CreateTransactionParams) {
 			p.Kind, p.ReimbursementID, p.Direction = "reimbursement", &otherReimb, "out"

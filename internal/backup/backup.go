@@ -28,7 +28,13 @@ package backup
 // is gone) and funds[].time_zone is one of Asia/Jakarta, Asia/Makassar,
 // Asia/Jayapura. Version 1 files are upgraded in ParseUpload (the step fills
 // Asia/Jakarta); any other zone, a missing field included, is refused there.
-const FormatVersion int64 = 2
+//
+// 3 (ADR-048): a dues payment is one record. The dues_payments array carries
+// every dues_payment row and transactions[].dues_payment_id names the payment
+// of each kind='dues' row (null on every other kind). Version 1 and 2 files are
+// upgraded in ParseUpload: the 2-to-3 step binds the dues rows by the rule in
+// upgrade.go.
+const FormatVersion int64 = 3
 
 // Document is uruni.json's root object: every table but session and
 // idempotency_key (ADR-012: neither is exported, so a restore logs everyone out
@@ -45,7 +51,7 @@ const FormatVersion int64 = 2
 //
 // Table order follows the migration's CREATE TABLE order (00001_schema.sql),
 // already the dependency order ADR-024 documents (fund ->
-// account/purpose/dues_tier/dues_rate/member/member_tier/transfer/reimbursement ->
+// account/purpose/dues_tier/dues_rate/member/member_tier/transfer/dues_payment/reimbursement ->
 // transaction -> receipt -> reconciliation/reconciliation_line ->
 // incidental/incidental_recipient), plus "user" first since nothing depends
 // on it. Row order within a table is whatever query already existed for it
@@ -69,7 +75,9 @@ type Document struct {
 	// the data (ADR-040).
 	MemberTiers []MemberTier `json:"member_tiers"`
 
-	Transfers      []Transfer      `json:"transfers"`
+	Transfers []Transfer `json:"transfers"`
+	// DuesPayments binds each payment's dues rows (ADR-048).
+	DuesPayments   []DuesPayment   `json:"dues_payments"`
 	Reimbursements []Reimbursement `json:"reimbursements"`
 	Transactions   []Transaction   `json:"transactions"`
 	Receipts       []Receipt       `json:"receipts"`
@@ -185,6 +193,14 @@ type Transfer struct {
 	CreatedAt int64   `json:"created_at"`
 }
 
+// DuesPayment mirrors the "dues_payment" table verbatim: the record binding the
+// dues rows of one payment (ADR-048). It holds nothing but its fund and time.
+type DuesPayment struct {
+	ID        int64 `json:"id"`
+	FundID    int64 `json:"fund_id"`
+	CreatedAt int64 `json:"created_at"`
+}
+
 // Reimbursement mirrors the "reimbursement" table verbatim: a member's claim,
 // off the ledger until settled (CONTEXT.md). Its "settled" state is derived,
 // not stored; see convert.go's toReimbursements.
@@ -215,6 +231,7 @@ type Transaction struct {
 	DuesPeriod            *string `json:"dues_period"`
 	ReimbursementID       *int64  `json:"reimbursement_id"`
 	TransferID            *int64  `json:"transfer_id"`
+	DuesPaymentID         *int64  `json:"dues_payment_id"`
 	ReversesTransactionID *int64  `json:"reverses_transaction_id"`
 	Note                  *string `json:"note"`
 	CreatedAt             int64   `json:"created_at"`

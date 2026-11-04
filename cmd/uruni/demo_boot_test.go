@@ -133,8 +133,10 @@ func TestServeDemoExitsCleanlyAfterTheUptimeLimit(t *testing.T) {
 	t.Cleanup(func() { demoMaxUptime = old })
 
 	// No cancel and no signal: only the limit can end this. The deadline is the
-	// failure mode, a serve that never stops.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// failure mode, a serve that never stops. It covers the demo seed too, which
+	// takes ~2s locally but ~14s on a CI runner under -race and coverage, so it
+	// is generous: a passing run returns 300ms after the seed whatever it is.
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	start := time.Now()
 	if err := serveContext(ctx); err != nil {
