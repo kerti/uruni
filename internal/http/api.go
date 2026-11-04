@@ -152,6 +152,7 @@ func (a *api) routes(r chi.Router) {
 		r.Get("/fund", a.getFund)
 		r.Patch("/fund", a.updateFund)
 		r.Post("/fund/report-slug", a.replaceReportSlug)
+		r.Get("/report/months", a.getReportMonths)
 
 		// The fund's structure. A POST may carry an opening balance that must post in
 		// the same transaction as the account, so it is keyed (ADR-043). Purposes are

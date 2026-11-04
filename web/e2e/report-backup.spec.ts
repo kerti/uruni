@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { formatPeriod } from '../src/lib/dates'
 import { expect, logIn, seedPassword, test } from './fixtures'
 
 // The public report's month walk, its pos / anggota / status iuran filters, its
@@ -234,17 +235,28 @@ test.describe('report and backup', () => {
     expect(readFileSync(await download.path()).length).toBeGreaterThan(1_000)
   })
 
-  test('downloads the current month as a PDF from Pengaturan', async ({ page }) => {
+  test('downloads a chosen month as a PDF from Pengaturan', async ({ page }) => {
     await logIn(page)
     await openSettings(page)
     const card = reportCard(page)
-    await expect(card.getByRole('button', { name: copy.settings.report.downloadPdf })).toBeEnabled()
+    await card.getByRole('button', { name: copy.settings.report.downloadPdf }).click()
+
+    // The picker opens on the current month and offers last month, where the
+    // first transaction sits; the month after the current one is closed.
+    const dialog = page.getByRole('dialog', { name: copy.settings.report.downloadPdf })
+    const field = dialog.getByRole('button', { name: copy.settings.report.pdfMonthLabel })
+    await expect(field).toHaveText(formatPeriod(thisMonth))
+    await field.click()
+    if (prevMonth.slice(0, 4) !== thisMonth.slice(0, 4)) await page.getByRole('button', { name: copy.dateField.previousYear }).click()
+    await page.getByRole('button', { name: formatPeriod(prevMonth) }).click()
+    await expect(field).toHaveText(formatPeriod(prevMonth))
 
     const downloadEvent = page.waitForEvent('download')
-    await card.getByRole('button', { name: copy.settings.report.downloadPdf }).click()
+    await dialog.getByRole('button', { name: copy.settings.report.downloadPdf }).click()
     const download = await downloadEvent
+    await expect(dialog).toBeHidden()
 
-    expect(download.suggestedFilename()).toBe(`laporan-kas-${thisMonth}.pdf`)
+    expect(download.suggestedFilename()).toBe(`laporan-kas-${prevMonth}.pdf`)
     expect((await fileHead(download, 5)).toString('latin1')).toBe('%PDF-')
     expect(readFileSync(await download.path()).length).toBeGreaterThan(1_000)
   })

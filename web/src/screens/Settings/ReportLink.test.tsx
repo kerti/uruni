@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -38,6 +38,8 @@ const fund: Fund = {
 
 const PDF_PATH = '/report/oldoldoldoldoldoldoldoldoldoldol/pdf'
 const PDF_NAME = 'laporan-kas-2026-10.pdf'
+// The report's months: the first transaction's (June) through the current one.
+const REPORT_MONTHS = { min: '2026-06', max: '2026-10' }
 
 function pdfResponse() {
   // A string body: Node's Response cannot read a jsdom Blob.
@@ -52,7 +54,10 @@ function stubFund({ pdf = 'ok' }: { pdf?: 'ok' | 'down' } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
-    if (url === PDF_PATH && method === 'GET') {
+    if (url === '/api/report/months' && method === 'GET') {
+      return Promise.resolve(jsonResponse(REPORT_MONTHS))
+    }
+    if (url.startsWith(`${PDF_PATH}?`) && method === 'GET') {
       pdfGets.push(url)
       return pdf === 'ok' ? Promise.resolve(pdfResponse()) : Promise.reject(new TypeError('Failed to fetch'))
     }
@@ -127,40 +132,70 @@ describe('ReportLink', () => {
     expect(open).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  it("saves the current month's PDF on the tap, fetched same-origin, even where files could be shared", async () => {
+  it("opens a month picker on the current month, and saves that month's PDF, fetched same-origin", async () => {
     const { pdfGets } = stubFund()
     const share = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() }, share, canShare: () => true })
     const user = userEvent.setup()
     renderCard()
 
-    const button = await screen.findByRole('button', { name: text.downloadPdf })
-    // Nothing is fetched until the tap: no share sheet to race any more.
+    await user.click(await screen.findByRole('button', { name: text.downloadPdf }))
+    // Nothing is fetched until the month is confirmed.
     expect(pdfGets).toEqual([])
-    await user.click(button)
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?edit=report%3Apdf')
+    const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    expect(await within(dialog).findByRole('button', { name: text.pdfMonthLabel })).toHaveTextContent('Oktober 2026')
+
+    await user.click(within(dialog).getByRole('button', { name: text.downloadPdf }))
 
     // Fetched by path - the report_url's origin is not the app's.
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
-    expect(pdfGets).toEqual([PDF_PATH])
+    expect(pdfGets).toEqual([`${PDF_PATH}?month=2026-10`])
     const [blob, name] = vi.mocked(saveBlob).mock.calls[0]
     expect(name).toBe(PDF_NAME)
     expect(blob.type).toBe('application/pdf')
     expect(share).not.toHaveBeenCalled()
     expect(screen.queryByRole('link', { name: text.downloadPdf })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('offers only the months the report does, and saves the one chosen', async () => {
+    const { pdfGets } = stubFund()
+    stubNavigator({})
+    const user = userEvent.setup()
+    renderCard('/settings?edit=report:pdf')
+
+    const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    const field = await within(dialog).findByRole('button', { name: text.pdfMonthLabel })
+    await waitFor(() => expect(field).toBeEnabled())
+    await user.click(field)
+
+    // Before the first transaction's month and after the current one: closed.
+    expect(screen.getByRole('button', { name: 'Mei 2026' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'November 2026' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Juni 2026' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Agustus 2026' }))
+    expect(field).toHaveTextContent('Agustus 2026')
+
+    await user.click(within(dialog).getByRole('button', { name: text.downloadPdf }))
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
+    expect(pdfGets).toEqual([`${PDF_PATH}?month=2026-08`])
   })
 
   it('says why when the PDF cannot be fetched, and tries again on the next tap', async () => {
     const { pdfGets } = stubFund({ pdf: 'down' })
     stubNavigator({})
     const user = userEvent.setup()
-    renderCard()
+    renderCard('/settings?edit=report:pdf')
 
-    const button = await screen.findByRole('button', { name: text.downloadPdf })
-    await user.click(button)
-    expect(await screen.findByText(copy.common.errors.network_error)).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: text.downloadPdf })
+    const download = within(dialog).getByRole('button', { name: text.downloadPdf })
+    await waitFor(() => expect(download).toBeEnabled())
+    await user.click(download)
+    expect(await within(dialog).findByText(copy.common.errors.network_error)).toBeInTheDocument()
     expect(saveBlob).not.toHaveBeenCalled()
 
-    await user.click(button)
+    await user.click(download)
     await waitFor(() => expect(pdfGets).toHaveLength(2))
     expect(saveBlob).not.toHaveBeenCalled()
   })

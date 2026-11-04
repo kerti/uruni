@@ -10,16 +10,19 @@
  * where it is. Only a value with this section's prefix and an unusable rest
  * is `invalid`, and only that is ever cleared.
  */
-export type DialogTarget = { kind: 'new' } | { kind: 'edit'; id: number } | { kind: 'foreign' } | { kind: 'invalid' }
+export type DialogTarget =
+  { kind: 'new' } | { kind: 'edit'; id: number } | { kind: 'named'; name: string } | { kind: 'foreign' } | { kind: 'invalid' }
 
 /**
  * Parses `?edit=<prefix>:<rest>` for the section owning `prefix`.
  *
  * `<prefix>:new` is the add dialog; `<prefix>:<positive integer>` names an
- * existing row. A section that owns no add or edit dialog never opens that
- * value and treats it as unusable when it arrives by hand.
+ * existing row; a word the section lists in `named` is one of its other
+ * dialogs (Laporan publik's `report:pdf`, the PDF's month). A section that owns
+ * no add or edit dialog never opens that value and treats it as unusable when
+ * it arrives by hand.
  */
-export function parseDialogTarget(prefix: string, value: string | null): DialogTarget {
+export function parseDialogTarget(prefix: string, value: string | null, named: readonly string[] = []): DialogTarget {
   if (value === null) return { kind: 'foreign' }
   const separator = value.indexOf(':')
   if (separator < 0) return { kind: 'foreign' }
@@ -27,6 +30,7 @@ export function parseDialogTarget(prefix: string, value: string | null): DialogT
 
   const rest = value.slice(separator + 1)
   if (rest === 'new') return { kind: 'new' }
+  if (named.includes(rest)) return { kind: 'named', name: rest }
 
   const id = Number(rest)
   return Number.isInteger(id) && id > 0 ? { kind: 'edit', id } : { kind: 'invalid' }

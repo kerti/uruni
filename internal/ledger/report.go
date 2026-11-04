@@ -586,6 +586,21 @@ func parseReportMonth(month string) (time.Time, error) {
 	return t, nil
 }
 
+// ReportMonths is the months the public report offers, oldest first - the
+// same list MonthlyReport carries as Months, read in the fund's zone - for the
+// app's PDF month picker, which offers exactly what the report does.
+func (l *Ledger) ReportMonths(ctx context.Context, fundID int64) ([]string, error) {
+	fund, err := l.q.GetFund(ctx, fundID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return nil, err
+	}
+	return l.reportMonths(ctx, fundID, l.now().In(loc))
+}
+
 // reportMonths lists the months the report offers, oldest first: the first
 // transaction's month through the current month in the fund's zone. An empty fund, or one
 // whose first row is dated after today, offers the current month alone.
