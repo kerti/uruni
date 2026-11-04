@@ -221,6 +221,7 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 		Members:              []Member{},
 		MemberTiers:          []MemberTier{},
 		Transfers:            []Transfer{},
+		DuesPayments:         []DuesPayment{},
 		Reimbursements:       []Reimbursement{},
 		Transactions:         []Transaction{},
 		Receipts:             []Receipt{},
@@ -284,6 +285,12 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 			return Document{}, nil, fmt.Errorf("backup: listing transfers for fund %d: %w", fund.ID, err)
 		}
 		doc.Transfers = append(doc.Transfers, toTransfers(transfers)...)
+
+		duesPayments, err := q.ListDuesPaymentsByFund(ctx, fund.ID)
+		if err != nil {
+			return Document{}, nil, fmt.Errorf("backup: listing dues payments for fund %d: %w", fund.ID, err)
+		}
+		doc.DuesPayments = append(doc.DuesPayments, toDuesPayments(duesPayments)...)
 
 		reimbursements, err := q.ListReimbursementsByFund(ctx, fund.ID)
 		if err != nil {

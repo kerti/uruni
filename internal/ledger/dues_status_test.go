@@ -1493,10 +1493,18 @@ func TestDuesStatusForPeriodPaidThroughStopsWhereARateRiseLeavesAPeriodShort(t *
 
 func TestDuesStatusForPeriodPaidThroughIgnoresAReversedPayment(t *testing.T) {
 	t.Parallel()
-	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12")
+	// December is a payment of its own: a payment is reversed whole (ADR-048).
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11")
 	ctx := context.Background()
 
-	december := p.posted[2] // posted in Periods order
+	posted, err := p.l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: p.f.fundID, AccountID: p.f.cashID, MemberID: p.memberID, OccurredOn: "2026-10-01",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-12", Amount: 25_000}},
+	})
+	if err != nil {
+		t.Fatalf("PostDuesPayments(december) = %v, want no error", err)
+	}
+	december := posted[0]
 	if _, err := p.l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: p.f.fundID, TransactionID: december.ID}); err != nil {
 		t.Fatalf("ReverseTransaction = %v, want no error", err)
 	}

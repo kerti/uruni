@@ -335,12 +335,17 @@ func TestDuesGridFollowsPaymentsAndTheirReversal(t *testing.T) {
 	}
 	want("nothing paid", DuesCellUnpaid, DuesCellUnpaid, DuesCellUnpaid)
 
-	posted, err := l.at(now).PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-10",
-		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: money.Amount(10_000)}, {DuesPeriod: "2026-09", Amount: money.Amount(4_000)}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	// Two payments, not one of two months: a payment is reversed whole (ADR-048),
+	// and this reverses the paid month alone.
+	var posted []store.Transaction
+	for _, pa := range []PeriodAmount{{DuesPeriod: "2026-08", Amount: money.Amount(10_000)}, {DuesPeriod: "2026-09", Amount: money.Amount(4_000)}} {
+		rows, err := l.at(now).PostDuesPayments(ctx, PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-10", Periods: []PeriodAmount{pa},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		posted = append(posted, rows...)
 	}
 	want("one paid, one part-paid", DuesCellPaid, DuesCellPartial, DuesCellUnpaid)
 

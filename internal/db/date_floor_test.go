@@ -43,10 +43,11 @@ var dateColumns = []dateColumn{
 		})
 		return err
 	}},
-	{table: "transaction", column: "dues_period", month: true, write: func(_ *testing.T, w *floorWriter, v string) error {
+	{table: "transaction", column: "dues_period", month: true, write: func(t *testing.T, w *floorWriter, v string) error {
 		_, err := w.q.CreateTransaction(w.ctx, store.CreateTransactionParams{
 			FundID: w.f.fundID, AccountID: w.f.accountID, PurposeID: w.f.purposeID,
 			Direction: "in", Amount: 1, OccurredOn: "2026-08-12", Kind: "dues", MemberID: &w.f.memberID, DuesPeriod: &v, CreatedAt: 1,
+			DuesPaymentID: createDuesPayment(t, w.db, w.f.fundID),
 		})
 		return err
 	}},

@@ -54,11 +54,26 @@ func v1Of(doc Document) documentV1 {
 		FormatVersion: 1,
 		Users:         doc.Users, Funds: fundsV1Of(doc.Funds), Accounts: doc.Accounts, Purposes: doc.Purposes,
 		DuesTiers: doc.DuesTiers, DuesRates: rates, Members: members,
-		Transfers: doc.Transfers, Reimbursements: doc.Reimbursements, Transactions: doc.Transactions, Receipts: doc.Receipts,
+		Transfers: doc.Transfers, Reimbursements: doc.Reimbursements, Transactions: transactionsV2Of(doc.Transactions), Receipts: doc.Receipts,
 		Reconciliations: doc.Reconciliations, ReconciliationLines: doc.ReconciliationLines,
 		Incidentals: doc.Incidentals, IncidentalRecipients: doc.IncidentalRecipients,
 		Totals: doc.Totals,
 	}
+}
+
+// transactionsV2Of drops the dues_payment_id format 1 and 2 never had.
+func transactionsV2Of(txns []Transaction) []transactionV2 {
+	out := make([]transactionV2, 0, len(txns))
+	for _, t := range txns {
+		out = append(out, transactionV2{
+			ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,
+			Direction: t.Direction, Amount: t.Amount, OccurredOn: t.OccurredOn, Kind: t.Kind,
+			MemberID: t.MemberID, DuesPeriod: t.DuesPeriod, ReimbursementID: t.ReimbursementID,
+			TransferID: t.TransferID, ReversesTransactionID: t.ReversesTransactionID,
+			Note: t.Note, CreatedAt: t.CreatedAt,
+		})
+	}
+	return out
 }
 
 // fundsV1Of drops the funds' time_zone, which format 1 never had.
@@ -91,8 +106,8 @@ func TestCanUpgradeFormat(t *testing.T) {
 			t.Errorf("CanUpgradeFormat(%d) = %v, want %v", tt.version, got, tt.want)
 		}
 	}
-	if FormatVersion != 2 {
-		t.Errorf("FormatVersion = %d, want 2 (ADR-040 bumps it once for the epic)", FormatVersion)
+	if FormatVersion != 3 {
+		t.Errorf("FormatVersion = %d, want 3 (ADR-040 took it to 2, ADR-048 to 3)", FormatVersion)
 	}
 }
 
@@ -236,7 +251,7 @@ func TestParseUploadSplitsOlderAndNewerVersions(t *testing.T) {
 	}{
 		{`{"format_version":0}`, ErrFormatVersionOlder},
 		{`{}`, ErrFormatVersionOlder},
-		{`{"format_version":3}`, ErrFormatVersionNewer},
+		{`{"format_version":4}`, ErrFormatVersionNewer},
 	} {
 		_, err := parseUploadBytes(t, zipOf(t, []byte(tt.raw), nil))
 		if !errors.Is(err, tt.want) {
@@ -347,7 +362,7 @@ func TestUpgradeV1AdoptionFallsBackToTheFundsCreationDayWhenItHasNoOpening(t *te
 			{ID: 1, FundID: 1, Name: "Tanpa pembukaan", TierID: &one, JoinedOn: nil, CreatedAt: 5},
 			{ID: 2, FundID: 2, Name: "Dengan pembukaan", TierID: &one, JoinedOn: nil, CreatedAt: 6},
 		},
-		Transactions: []Transaction{{ID: 1, FundID: 2, AccountID: 1, PurposeID: 1, Direction: "in", Amount: 1, OccurredOn: "2025-11-20", Kind: "opening"}},
+		Transactions: []transactionV2{{ID: 1, FundID: 2, AccountID: 1, PurposeID: 1, Direction: "in", Amount: 1, OccurredOn: "2025-11-20", Kind: "opening"}},
 	}
 	doc, err := upgradeV1(v1)
 	if err != nil {

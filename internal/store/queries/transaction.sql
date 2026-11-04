@@ -1,17 +1,17 @@
 -- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+  member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
   note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-          member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+          member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
           note, created_at;
 
 -- name: GetTransaction :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE id = ?;
@@ -23,7 +23,7 @@ WHERE id = ?;
 -- id from an untrusted request.
 -- name: GetTransactionForFund :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND id = ?;
@@ -49,7 +49,7 @@ WHERE fund_id = ? AND id = ?;
 --                   ADR-012). A NULL cutoff compares NULL and counts nothing.
 -- name: GetReversalTarget :one
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        t.effective_purpose_id,
        t.reversed,
@@ -71,7 +71,7 @@ WHERE fund_id = ? AND id = ?;
 
 -- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ?
@@ -205,7 +205,7 @@ kept AS (
   SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
 )
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        a.name AS account_name,
        p.kind AS purpose_kind,
@@ -300,7 +300,7 @@ WHERE fund_id = ? AND account_id = ? AND id <= ?;
 
 -- name: ListDuesPaymentsByMember :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id;
@@ -524,7 +524,7 @@ GROUP BY member_id;
 -- the settling row when it is.
 -- name: GetReimbursementSettlement :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND reimbursement_id = ? AND kind = 'reimbursement';
 

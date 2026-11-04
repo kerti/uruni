@@ -18,6 +18,15 @@ func (q *Queries) DeleteAllAccounts(ctx context.Context) error {
 	return err
 }
 
+const deleteAllDuesPayments = `-- name: DeleteAllDuesPayments :exec
+DELETE FROM dues_payment
+`
+
+func (q *Queries) DeleteAllDuesPayments(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllDuesPayments)
+	return err
+}
+
 const deleteAllDuesRates = `-- name: DeleteAllDuesRates :exec
 DELETE FROM dues_rate
 `
@@ -167,6 +176,22 @@ func (q *Queries) RestoreAccount(ctx context.Context, arg RestoreAccountParams) 
 		arg.CreatedAt,
 		arg.InactiveOn,
 	)
+	return err
+}
+
+const restoreDuesPayment = `-- name: RestoreDuesPayment :exec
+INSERT INTO dues_payment (id, fund_id, created_at)
+VALUES (?, ?, ?)
+`
+
+type RestoreDuesPaymentParams struct {
+	ID        int64
+	FundID    int64
+	CreatedAt int64
+}
+
+func (q *Queries) RestoreDuesPayment(ctx context.Context, arg RestoreDuesPaymentParams) error {
+	_, err := q.db.ExecContext(ctx, restoreDuesPayment, arg.ID, arg.FundID, arg.CreatedAt)
 	return err
 }
 
@@ -490,9 +515,9 @@ func (q *Queries) RestoreReimbursement(ctx context.Context, arg RestoreReimburse
 const restoreTransaction = `-- name: RestoreTransaction :exec
 INSERT INTO "transaction" (
   id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id, note, created_at
+  member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id, note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type RestoreTransactionParams struct {
@@ -508,6 +533,7 @@ type RestoreTransactionParams struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64
@@ -531,6 +557,7 @@ func (q *Queries) RestoreTransaction(ctx context.Context, arg RestoreTransaction
 		arg.DuesPeriod,
 		arg.ReimbursementID,
 		arg.TransferID,
+		arg.DuesPaymentID,
 		arg.ReversesTransactionID,
 		arg.Note,
 		arg.CreatedAt,

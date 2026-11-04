@@ -180,10 +180,14 @@ func newRichFund(t *testing.T) richFund {
 	pay(eka, 30_000, "2026-08", "2026-09", "2026-10", "2026-12") // a gap in November, then ahead
 	pay(fajar, 15_000, span("2026-06", 6)...)
 	pay(gita, 10_000, span("2025-01", 6)...)
-	reversed := pay(hari, 10_000, "2026-01", "2026-02", "2026-03", "2026-04")
-	if _, err := l.at(richNow).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: reversed[1].ID}); err != nil {
+	// A payment is reversed whole (ADR-048), so February is its own payment: the
+	// month taken back, between two that stand.
+	pay(hari, 10_000, "2026-01")
+	reversed := pay(hari, 10_000, "2026-02")
+	if _, err := l.at(richNow).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: reversed[0].ID}); err != nil {
 		t.Fatal(err)
 	}
+	pay(hari, 10_000, "2026-03", "2026-04")
 	pay(joko, 4_000, span("2025-03", 5)...) // short every month it paid
 	pay(joko, 10_000, span("2025-08", 3)...)
 	pay(lina, 10_000, span("2025-01", 12)...)

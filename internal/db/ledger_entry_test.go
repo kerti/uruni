@@ -28,7 +28,7 @@ func TestLedgerEntryDefinesTheSignAndTheReversal(t *testing.T) {
 	payment, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
 		Direction: "in", Amount: 25000, OccurredOn: "2026-08-12", Kind: "dues",
-		MemberID: &f.memberID, DuesPeriod: &period, CreatedAt: 1,
+		MemberID: &f.memberID, DuesPeriod: &period, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID), CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("posting the dues payment = %v, want no error", err)

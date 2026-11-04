@@ -50,6 +50,10 @@ type PostDuesPaymentsParams struct {
 // inserted inside one withTx: a failure on period N leaves zero rows, not N-1.
 // A single-period payment is a one-element Periods slice (ADR-027).
 //
+// The rows are bound by one dues_payment header inserted first in the same
+// transaction (ADR-048): a single-month payment has one too, so every reader
+// has one path. Nothing is ever updated.
+//
 // Argument-shape failures - an empty Periods (a caller mistake, not a silent
 // no-op), a non-positive amount, a malformed or calendar-invalid occurred_on or
 // dues_period - are rejected before any row is written (ADR-027), and so is a
@@ -95,9 +99,16 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		if err != nil {
 			return nil, err
 		}
+		// One header binds the payment's rows (ADR-048); inserted first, in this
+		// same transaction, and never updated. A replay returns the first call's
+		// rows and reaches none of this.
+		header, err := q.CreateDuesPayment(ctx, store.CreateDuesPaymentParams{FundID: p.FundID, CreatedAt: l.now().Unix()})
+		if err != nil {
+			return nil, fmt.Errorf("creating dues payment: %w", err)
+		}
 		rows := make([]store.Transaction, 0, len(p.Periods))
 		for _, period := range p.Periods {
-			row, err := l.postDuesPaymentTx(ctx, q, p, mainID, period)
+			row, err := l.postDuesPaymentTx(ctx, q, p, header.ID, mainID, period)
 			if err != nil {
 				return nil, err
 			}
@@ -112,16 +123,18 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 }
 
 // postDuesPaymentTx inserts one period's row on the caller's open querier
-// (ADR-027's ...Tx rule); PostDuesPayments validates once per batch.
-func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, purposeID int64, period PeriodAmount) (store.Transaction, error) {
+// (ADR-027's ...Tx rule), bound to its payment's header; PostDuesPayments
+// validates once per batch.
+func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, paymentID, purposeID int64, period PeriodAmount) (store.Transaction, error) {
 	return q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: p.FundID, AccountID: p.AccountID, PurposeID: purposeID,
 		Direction: string(DirectionIn), Amount: period.Amount.Int64(), OccurredOn: p.OccurredOn,
-		Kind:       string(TransactionKindDues),
-		MemberID:   &p.MemberID,
-		DuesPeriod: &period.DuesPeriod,
-		Note:       normalizeNote(p.Note),
-		CreatedAt:  l.now().Unix(),
+		Kind:          string(TransactionKindDues),
+		MemberID:      &p.MemberID,
+		DuesPeriod:    &period.DuesPeriod,
+		DuesPaymentID: &paymentID,
+		Note:          normalizeNote(p.Note),
+		CreatedAt:     l.now().Unix(),
 	})
 }
 

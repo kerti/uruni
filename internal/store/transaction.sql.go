@@ -150,12 +150,12 @@ func (q *Queries) ContributedByIncidentalMember(ctx context.Context, arg Contrib
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+  member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
   note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-          member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+          member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
           note, created_at
 `
 
@@ -171,6 +171,7 @@ type CreateTransactionParams struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64
@@ -189,6 +190,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.DuesPeriod,
 		arg.ReimbursementID,
 		arg.TransferID,
+		arg.DuesPaymentID,
 		arg.ReversesTransactionID,
 		arg.Note,
 		arg.CreatedAt,
@@ -207,6 +209,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -431,7 +434,7 @@ func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) 
 
 const getReimbursementSettlement = `-- name: GetReimbursementSettlement :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND reimbursement_id = ? AND kind = 'reimbursement'
 `
@@ -454,6 +457,7 @@ type GetReimbursementSettlementRow struct {
 	DuesPeriod      *string
 	ReimbursementID *int64
 	TransferID      *int64
+	DuesPaymentID   *int64
 	Note            *string
 	CreatedAt       int64
 }
@@ -476,6 +480,7 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.Note,
 		&i.CreatedAt,
 	)
@@ -484,7 +489,7 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 
 const getReversalTarget = `-- name: GetReversalTarget :one
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        t.effective_purpose_id,
        t.reversed,
@@ -516,6 +521,7 @@ type GetReversalTargetRow struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64
@@ -561,6 +567,7 @@ func (q *Queries) GetReversalTarget(ctx context.Context, arg GetReversalTargetPa
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -575,7 +582,7 @@ func (q *Queries) GetReversalTarget(ctx context.Context, arg GetReversalTargetPa
 
 const getTransaction = `-- name: GetTransaction :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE id = ?
@@ -597,6 +604,7 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -606,7 +614,7 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 
 const getTransactionForFund = `-- name: GetTransactionForFund :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND id = ?
@@ -638,6 +646,7 @@ func (q *Queries) GetTransactionForFund(ctx context.Context, arg GetTransactionF
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -801,7 +810,7 @@ func (q *Queries) LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64
 
 const listDuesPaymentsByMember = `-- name: ListDuesPaymentsByMember :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id
@@ -820,6 +829,7 @@ type ListDuesPaymentsByMemberRow struct {
 	DuesPeriod      *string
 	ReimbursementID *int64
 	TransferID      *int64
+	DuesPaymentID   *int64
 	Note            *string
 	CreatedAt       int64
 }
@@ -846,6 +856,7 @@ func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64)
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.Note,
 			&i.CreatedAt,
 		); err != nil {
@@ -974,7 +985,7 @@ func (q *Queries) ListDuesPaymentsPage(ctx context.Context, arg ListDuesPayments
 
 const listTransactionsByFund = `-- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ?
@@ -1003,6 +1014,7 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
@@ -1046,7 +1058,7 @@ kept AS (
   SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
 )
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        a.name AS account_name,
        p.kind AS purpose_kind,
@@ -1124,6 +1136,7 @@ type ListTransactionsPageRow struct {
 	DuesPeriod                    *string
 	ReimbursementID               *int64
 	TransferID                    *int64
+	DuesPaymentID                 *int64
 	ReversesTransactionID         *int64
 	Note                          *string
 	CreatedAt                     int64
@@ -1296,6 +1309,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
