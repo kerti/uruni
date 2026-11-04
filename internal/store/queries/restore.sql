@@ -77,6 +77,13 @@ DELETE FROM reimbursement;
 INSERT INTO reimbursement (id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+-- name: DeleteAllDuesPayments :exec
+DELETE FROM dues_payment;
+
+-- name: RestoreDuesPayment :exec
+INSERT INTO dues_payment (id, fund_id, created_at)
+VALUES (?, ?, ?);
+
 -- name: DeleteAllTransactions :exec
 DELETE FROM "transaction";
 
@@ -87,9 +94,9 @@ DELETE FROM "transaction";
 -- name: RestoreTransaction :exec
 INSERT INTO "transaction" (
   id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id, note, created_at
+  member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id, note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteAllReceipts :exec
 DELETE FROM receipt;

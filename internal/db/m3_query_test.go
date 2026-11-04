@@ -139,11 +139,11 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 	// GROUP BY member_id only sees members who posted a dues row for the period.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &jane.ID, DuesPeriod: &period,
+		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &jane.ID, DuesPeriod: &period, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 10_000,
-		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &john.ID, DuesPeriod: &period,
+		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &john.ID, DuesPeriod: &period, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 
 	rows, err := q.DuesPaidByPeriod(ctx, store.DuesPaidByPeriodParams{
@@ -184,11 +184,12 @@ func TestLatestDuesPeriodPaidByMemberIsTheChronologicalMax(t *testing.T) {
 
 	// Posted out of order, so a lexicographic MAX genuinely has to sort them,
 	// not just echo insertion order.
+	payment := createDuesPayment(t, sqlDB, f.fundID)
 	for _, period := range []string{"2026-08", "2026-06", "2026-12", "2026-07"} {
 		p := period
 		f.entry(t, sqlDB, store.CreateTransactionParams{
 			AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-			OccurredOn: "2026-08-12", Kind: "dues", MemberID: &memberID, DuesPeriod: &p,
+			OccurredOn: "2026-08-12", Kind: "dues", MemberID: &memberID, DuesPeriod: &p, DuesPaymentID: payment,
 		})
 	}
 

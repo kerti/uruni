@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MemberPayments from '@/screens/Dues/MemberPayments'
+import { PERIOD_HYPHEN } from '@/lib/dates'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { Transaction } from '@/lib/setup'
@@ -34,6 +35,10 @@ function transaction(overrides: Partial<Transaction>): Transaction {
     reverses_transaction_id: null,
     note: 'Iuran - Warga Satu',
     created_at: 1,
+    // The list item's per-payment answers (ADR-048): a standing payment.
+    reversible: true,
+    reversal_state: 'none',
+    periods: [],
     ...overrides,
   }
 }
@@ -186,8 +191,8 @@ describe('MemberPayments', () => {
     vi.stubGlobal(
       'fetch',
       stubTransactions([
-        transaction({ id: 10 }),
-        transaction({ id: 99, kind: 'adjustment', direction: 'out', reverses_transaction_id: 10, note: 'Salah orang' }),
+        transaction({ id: 10, reversed: true, reversible: false, reversal_state: 'all' }),
+        transaction({ id: 99, kind: 'adjustment', direction: 'out', reverses_transaction_id: 10, reversible: false, note: 'Salah orang' }),
       ]),
     )
     renderPayments()
@@ -196,6 +201,34 @@ describe('MemberPayments', () => {
     expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
     // The correction is visible, never a silent removal.
     expect(screen.getByText(new RegExp(text.reversalRow))).toBeInTheDocument()
+  })
+
+  // A payment covering several months is one item (ADR-048): its amount is the
+  // whole payment's, so the row names its months. Data from before ADR-048 may
+  // hold a reversal of the payment's first month alone; the panel trusts the
+  // server's per-payment answer, so the rest can still be reversed.
+  it('names the months of a several-month payment and offers to reverse what still stands', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubTransactions([
+        transaction({
+          id: 10,
+          amount: 150_000,
+          reversal_state: 'partial',
+          periods: [
+            { dues_period: '2026-01', amount: 50_000, reversed: true },
+            { dues_period: '2026-02', amount: 50_000, reversed: false },
+            { dues_period: '2026-03', amount: 50_000, reversed: false },
+          ],
+        }),
+        transaction({ id: 99, kind: 'adjustment', direction: 'out', reverses_transaction_id: 10, reversible: false }),
+      ]),
+    )
+    renderPayments()
+
+    expect(await screen.findByText(`Jan${PERIOD_HYPHEN}Mar 2026`)).toBeInTheDocument()
+    expect(screen.getByText(copy.dues.history.partlyReversedBadge)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.reverse })).toBeInTheDocument()
   })
 
   it('says so when the member has no payment for this period', async () => {

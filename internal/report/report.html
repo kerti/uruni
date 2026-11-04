@@ -122,6 +122,7 @@
           {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
           <span class="muted">{{.Date}}{{if .HasReceipt}} &middot; {{$.Text.HasReceipt}}{{end}}</span>
           {{if .Reversed}}<span class="muted">{{$.Text.RowReversed}}</span>{{end}}
+          {{if .PartlyReversed}}<span class="muted">{{$.Text.RowPartlyReversed}}</span>{{end}}
         </span>
       </span>
       <span class="tabular amt">{{if .DirectionWord}}<span class="sr-only">{{.DirectionWord}} </span>{{end}}{{.Figure}}</span>

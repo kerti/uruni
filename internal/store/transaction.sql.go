@@ -150,12 +150,12 @@ func (q *Queries) ContributedByIncidentalMember(ctx context.Context, arg Contrib
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+  member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
   note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-          member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+          member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
           note, created_at
 `
 
@@ -171,6 +171,7 @@ type CreateTransactionParams struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64
@@ -189,6 +190,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.DuesPeriod,
 		arg.ReimbursementID,
 		arg.TransferID,
+		arg.DuesPaymentID,
 		arg.ReversesTransactionID,
 		arg.Note,
 		arg.CreatedAt,
@@ -207,6 +209,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -431,7 +434,7 @@ func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) 
 
 const getReimbursementSettlement = `-- name: GetReimbursementSettlement :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND reimbursement_id = ? AND kind = 'reimbursement'
 `
@@ -454,6 +457,7 @@ type GetReimbursementSettlementRow struct {
 	DuesPeriod      *string
 	ReimbursementID *int64
 	TransferID      *int64
+	DuesPaymentID   *int64
 	Note            *string
 	CreatedAt       int64
 }
@@ -476,6 +480,7 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.Note,
 		&i.CreatedAt,
 	)
@@ -484,7 +489,7 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 
 const getReversalTarget = `-- name: GetReversalTarget :one
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        t.effective_purpose_id,
        t.reversed,
@@ -516,6 +521,7 @@ type GetReversalTargetRow struct {
 	DuesPeriod            *string
 	ReimbursementID       *int64
 	TransferID            *int64
+	DuesPaymentID         *int64
 	ReversesTransactionID *int64
 	Note                  *string
 	CreatedAt             int64
@@ -561,6 +567,7 @@ func (q *Queries) GetReversalTarget(ctx context.Context, arg GetReversalTargetPa
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -575,7 +582,7 @@ func (q *Queries) GetReversalTarget(ctx context.Context, arg GetReversalTargetPa
 
 const getTransaction = `-- name: GetTransaction :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE id = ?
@@ -597,6 +604,7 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -606,7 +614,7 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 
 const getTransactionForFund = `-- name: GetTransactionForFund :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND id = ?
@@ -638,6 +646,7 @@ func (q *Queries) GetTransactionForFund(ctx context.Context, arg GetTransactionF
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.DuesPaymentID,
 		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
@@ -801,7 +810,7 @@ func (q *Queries) LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64
 
 const listDuesPaymentsByMember = `-- name: ListDuesPaymentsByMember :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, note, created_at
 FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id
@@ -820,6 +829,7 @@ type ListDuesPaymentsByMemberRow struct {
 	DuesPeriod      *string
 	ReimbursementID *int64
 	TransferID      *int64
+	DuesPaymentID   *int64
 	Note            *string
 	CreatedAt       int64
 }
@@ -846,6 +856,7 @@ func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64)
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.Note,
 			&i.CreatedAt,
 		); err != nil {
@@ -974,7 +985,7 @@ func (q *Queries) ListDuesPaymentsPage(ctx context.Context, arg ListDuesPayments
 
 const listTransactionsByFund = `-- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       member_id, dues_period, reimbursement_id, transfer_id, dues_payment_id, reverses_transaction_id,
        note, created_at
 FROM "transaction"
 WHERE fund_id = ?
@@ -1003,6 +1014,7 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
@@ -1021,10 +1033,37 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 }
 
 const listTransactionsPage = `-- name: ListTransactionsPage :many
-WITH matched AS (
-  SELECT t.id, t.transfer_id,
+WITH keyed AS (
+  SELECT t.id, t.dues_period, t.amount,
+         CAST(CASE
+           WHEN t.kind = 'dues' THEN 'p' || t.dues_payment_id
+           WHEN o.kind = 'dues' THEN 'r' || o.dues_payment_id || ':' || t.occurred_on
+         END AS TEXT) AS gkey
+  FROM "transaction" t
+  LEFT JOIN "transaction" o ON o.id = t.reverses_transaction_id
+  WHERE t.fund_id = ?4
+),
+grp_stats AS (
+  SELECT gkey, CAST(SUM(amount) AS INTEGER) AS group_amount
+  FROM keyed
+  WHERE gkey IS NOT NULL
+  GROUP BY gkey
+),
+anchors AS (
+  SELECT id, gkey
+  FROM (
+    SELECT id, gkey, ROW_NUMBER() OVER (PARTITION BY gkey ORDER BY dues_period, id) AS rn
+    FROM keyed
+    WHERE gkey IS NOT NULL
+  )
+  WHERE rn = 1
+),
+matched AS (
+  SELECT t.id, t.transfer_id, k.gkey,
          ROW_NUMBER() OVER (PARTITION BY t.transfer_id ORDER BY (t.direction <> 'out'), t.id) AS leg_rank
   FROM ledger_entry t
+  JOIN keyed k ON k.id = t.id
+  LEFT JOIN grp_stats gs ON gs.gkey = k.gkey
   JOIN purpose p ON p.id = t.purpose_id
   LEFT JOIN member m ON m.id = t.member_id
   WHERE t.fund_id = ?4
@@ -1034,6 +1073,7 @@ WITH matched AS (
       OR INSTR(LOWER(p.name), LOWER(?5)) > 0
       OR INSTR(LOWER(m.name), LOWER(?5)) > 0
       OR t.amount = ?6
+      OR gs.group_amount = ?6
     )
     AND (?7 IS NULL OR t.member_id = ?7)
     AND (?8 IS NULL OR t.dues_period = ?8)
@@ -1043,10 +1083,12 @@ WITH matched AS (
     AND (?12 IS NULL OR (t.direction = ?12 AND t.kind <> 'transfer'))
 ),
 kept AS (
-  SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
+  SELECT id FROM matched WHERE gkey IS NULL AND (transfer_id IS NULL OR leg_rank = 1)
+  UNION
+  SELECT a.id FROM anchors a WHERE a.gkey IN (SELECT gkey FROM matched WHERE gkey IS NOT NULL)
 )
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
-       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
        a.name AS account_name,
        p.kind AS purpose_kind,
@@ -1064,6 +1106,8 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        t.effective_purpose_id,
        t.reversed,
        orig.occurred_on AS reverses_occurred_on,
+       orig.dues_payment_id AS reverses_dues_payment_id,
+       CAST(COALESCE(gs.group_amount, t.amount) AS INTEGER) AS group_amount,
        CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
                     WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        ei.closed_on AS effective_closed_on,
@@ -1087,6 +1131,8 @@ LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
+LEFT JOIN keyed gk ON gk.id = t.id
+LEFT JOIN grp_stats gs ON gs.gkey = gk.gkey
 WHERE t.id IN (SELECT id FROM kept)
   AND (
     ?1 IS NULL
@@ -1124,6 +1170,7 @@ type ListTransactionsPageRow struct {
 	DuesPeriod                    *string
 	ReimbursementID               *int64
 	TransferID                    *int64
+	DuesPaymentID                 *int64
 	ReversesTransactionID         *int64
 	Note                          *string
 	CreatedAt                     int64
@@ -1143,6 +1190,8 @@ type ListTransactionsPageRow struct {
 	EffectivePurposeID            int64
 	Reversed                      int64
 	ReversesOccurredOn            *string
+	ReversesDuesPaymentID         *int64
+	GroupAmount                   int64
 	IsReconciliationFix           int64
 	EffectiveClosedOn             *string
 	TransferOutLegID              *int64
@@ -1261,6 +1310,26 @@ type ListTransactionsPageRow struct {
 // next page cannot return the other leg of a pair already shown. A transfer is
 // neither in nor out, so a direction filter excludes it outright. Non-transfer
 // rows (transfer_id NULL) pass untouched.
+//
+// One row per dues payment and per dues-reversal group (ADR-048), by the same
+// device: `keyed` gives every ledger row of the fund a group key - 'p'+payment
+// for a dues row, 'r'+payment+':'+date for a reversal of one (its original names
+// the payment, so a reversal group is derived: the reversed rows' payment and the
+// reversal's date) - and NULL for every other row. `matched` applies the filters
+// to every row first, so a group is in when ANY of its rows matches (they share
+// member, location, date, pos, note and direction, so only dues_period and the
+// amount differ: a dues_period filter finds the payment covering that month, and
+// a q that is an amount finds a row's amount or the group's sum). `kept` then
+// keeps the group's ANCHOR row - the row of its earliest dues_period, taken over
+// the whole group, not over the matched rows, so the representative is fixed by
+// the group alone and a new photo always lands on the same row - and only then
+// does the keyset cut the page, on the anchor's (occurred_on, id). A page can
+// never split a group, repeat one or omit one.
+//
+// group_amount is the sum of the group's rows (the row's own amount for every
+// other row). reverses_dues_payment_id is, on a reversal of a dues row, the
+// payment it reverses: with dues_payment_id it names the payment a group item
+// belongs to, so ListDuesGroupRows can fetch its months.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
 		arg.CursorOccurredOn,
@@ -1296,6 +1365,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.DuesPaymentID,
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
@@ -1315,6 +1385,8 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.EffectivePurposeID,
 			&i.Reversed,
 			&i.ReversesOccurredOn,
+			&i.ReversesDuesPaymentID,
+			&i.GroupAmount,
 			&i.IsReconciliationFix,
 			&i.EffectiveClosedOn,
 			&i.TransferOutLegID,

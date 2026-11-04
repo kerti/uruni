@@ -114,11 +114,13 @@ func TestSeveralMonthsOfDuesPaidInOneVisit(t *testing.T) {
 
 	// Three months settled at the door: one row per period, never one for 75000,
 	// or "which months has she paid?" is unanswerable.
+	// One payment binds the three rows (ADR-048).
+	payment := createDuesPayment(t, sqlDB, f.fundID)
 	for _, period := range []string{"2026-06", "2026-07", "2026-08"} {
 		p := period
 		f.entry(t, sqlDB, store.CreateTransactionParams{
 			AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-			OccurredOn: "2026-08-12", Kind: "dues", MemberID: &memberID, DuesPeriod: &p,
+			OccurredOn: "2026-08-12", Kind: "dues", MemberID: &memberID, DuesPeriod: &p, DuesPaymentID: payment,
 		})
 	}
 
@@ -164,18 +166,18 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 	august := "2026-08"
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 10_000,
-		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &august,
+		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &august, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 15_000,
-		OccurredOn: "2026-08-20", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &august,
+		OccurredOn: "2026-08-20", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &august, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 
 	// And a month paid before it starts, recorded the day the money arrived.
 	december := "2026-12"
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-		OccurredOn: "2026-08-20", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &december,
+		OccurredOn: "2026-08-20", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &december, DuesPaymentID: createDuesPayment(t, sqlDB, f.fundID),
 	})
 
 	rate, err := q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{

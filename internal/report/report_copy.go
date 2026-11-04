@@ -1,7 +1,9 @@
 package report
 
 import (
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
@@ -110,11 +112,14 @@ type Copy struct {
 	// RowReversal labels a reversal that names no member (ADR-042), stating the
 	// original's date (already long-formatted).
 	RowReversal func(date string) string
-	// RowReversed is the mark on a row something reverses.
-	RowReversed   string
-	RowOpening    string
-	RowAdjustment string
-	RowMoved      func(from, to string) string
+	// RowReversed is the mark on a row something reverses; RowPartlyReversed on a
+	// dues payment only some of whose months are reversed (data from before
+	// ADR-048).
+	RowReversed       string
+	RowPartlyReversed string
+	RowOpening        string
+	RowAdjustment     string
+	RowMoved          func(from, to string) string
 
 	// A row's kind (#257's kind words, as Riwayat's screen reader hears them):
 	// the PDF's Jenis column, and the page's sr-only word beside the kind icon.
@@ -158,6 +163,10 @@ type Copy struct {
 	// Months are January through December, for "2 Oktober 2026" and the
 	// month selector's "Oktober 2026".
 	Months [12]string
+	// MonthsShort are the three-letter months of a multi-month payment's row
+	// ("Mei-Jun, Okt 2026"), as the app's formatDuesPeriods prints them
+	// (ADR-048).
+	MonthsShort [12]string
 }
 
 // Text is the report's copy, the only value of Copy.
@@ -236,6 +245,7 @@ var Text = Copy{
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
 	RowReversal:             func(date string) string { return "Pembatalan \u00b7 transaksi " + date },
 	RowReversed:             "Sudah dibatalkan",
+	RowPartlyReversed:       "Sebagian dibatalkan",
 	RowOpening:              "Saldo awal",
 	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
@@ -273,6 +283,10 @@ var Text = Copy{
 		"Januari", "Februari", "Maret", "April", "Mei", "Juni",
 		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
 	},
+	MonthsShort: [12]string{
+		"Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+		"Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+	},
 }
 
 // reportMonthLayout is "YYYY-MM", the ?month= value and the ledger's.
@@ -296,6 +310,77 @@ func (c Copy) monthName(month string) string {
 		return month
 	}
 	return c.Months[t.Month()-1] + " " + strconv.Itoa(t.Year())
+}
+
+// PeriodHyphen joins the two ends of a range of months. It is U+2011, a
+// non-breaking hyphen, so a narrow screen never wraps "Jan-" from "Jul 2027";
+// the PDF, whose font is not trusted with it and whose column does not wrap a
+// label mid-range, writes a plain hyphen (pdfText).
+const PeriodHyphen = "\u2011"
+
+// periodsText renders the months of a dues payment ("YYYY-MM", any order,
+// repeats ignored) for its row (ADR-048). One month reads as monthName does
+// ("Oktober 2026"). Several read in three-letter months, consecutive months
+// joined as a range by PeriodHyphen (shown as "-" below), runs separated by
+// ", ", and the year after a run when the next run starts in another year or
+// none follows. A range may cross the new year, and then names both years:
+//
+//	Mei-Jun, Okt 2026
+//	Nov 2025-Jan 2026
+//	Agu, Okt 2026-Jul 2027
+//	Jan, Mar 2026
+//
+// A value that is not a month comes back as given, as monthName does.
+func (c Copy) periodsText(periods []string) string {
+	var months []int // year*12 + month index
+	seen := map[int]bool{}
+	for _, period := range periods {
+		t, err := time.Parse(reportMonthLayout, period)
+		if err != nil {
+			return strings.Join(periods, ", ")
+		}
+		m := t.Year()*12 + int(t.Month()) - 1
+		if !seen[m] {
+			seen[m] = true
+			months = append(months, m)
+		}
+	}
+	sort.Ints(months)
+	switch len(months) {
+	case 0:
+		return ""
+	case 1:
+		return c.Months[months[0]%12] + " " + strconv.Itoa(months[0]/12)
+	}
+
+	type run struct{ from, to int }
+	var runs []run
+	for i := 0; i < len(months); {
+		j := i
+		for j+1 < len(months) && months[j+1] == months[j]+1 {
+			j++
+		}
+		runs = append(runs, run{months[i], months[j]})
+		i = j + 1
+	}
+
+	var b strings.Builder
+	for i, r := range runs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(c.MonthsShort[r.from%12])
+		if r.from/12 != r.to/12 {
+			b.WriteString(" " + strconv.Itoa(r.from/12))
+		}
+		if r.to != r.from {
+			b.WriteString(PeriodHyphen + c.MonthsShort[r.to%12])
+		}
+		if i == len(runs)-1 || runs[i+1].from/12 != r.to/12 {
+			b.WriteString(" " + strconv.Itoa(r.to/12))
+		}
+	}
+	return b.String()
 }
 
 // duesStatus is the app's own word for a dues status.

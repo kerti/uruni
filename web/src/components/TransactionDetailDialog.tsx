@@ -3,14 +3,15 @@ import { useRef } from 'react'
 
 import DetailActions from '@/components/DetailActions'
 import DetailField from '@/components/DetailField'
-import { isPurposePair, isTransfer, rowLabelFor, transferKind } from '@/components/rowLabel'
+import { FigureRow, Figures } from '@/components/Figures'
+import { isPurposePair, isTransfer, reversalBadge, rowLabelFor, transferKind } from '@/components/rowLabel'
 import { ACCEPTED_TYPES } from '@/components/ReceiptPicker'
 import ErrorState from '@/components/states/ErrorState'
 import { useToast } from '@/components/toast/useToast'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { copy } from '@/copy/id'
-import { formatIsoDate, formatUnixSecondsWithTime } from '@/lib/dates'
+import { formatIsoDate, formatPeriod, formatUnixSecondsWithTime } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { receiptUrl, uploadReceipt } from '@/lib/receipts'
 import { canCorrectPurpose, noteForDisplay } from '@/lib/transactions'
@@ -114,6 +115,7 @@ function Detail({
   const corrected = transaction.effective_purpose_id !== undefined && transaction.effective_purpose_id !== transaction.purpose_id
   const note = noteForDisplay(transaction)
   const receiptIds = transaction.receipt_ids ?? []
+  const periods = transaction.periods ?? []
   const canCorrect = onCorrectPurpose !== undefined && !transfer && canCorrectPurpose(transaction)
   const canReverse = onReverse !== undefined && transaction.reversible && !transfer
   const uploading = upload.status === 'loading'
@@ -158,8 +160,27 @@ function Detail({
         )}
         <span className="tabular text-2xl font-semibold">{formatIDR(transaction.amount)}</span>
         <TransactionRowLabel transaction={transaction} wrap bare={transfer} kindShown={transfer} />
-        {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
+        {reversalBadge(transaction) && <span className="text-sm text-muted-foreground">{reversalBadge(transaction)}</span>}
       </div>
+
+      {/* A payment of several months, or the reversal of one, lists them
+          (ADR-048); a month undone inside a part-reversed payment says so. */}
+      {periods.length > 1 && (
+        <Figures>
+          {periods.map((part) => (
+            <FigureRow
+              key={part.dues_period}
+              label={
+                <>
+                  {formatPeriod(part.dues_period)}
+                  {part.reversed && <span className="ml-2 text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
+                </>
+              }
+              amount={part.amount}
+            />
+          ))}
+        </Figures>
+      )}
 
       <dl className="flex flex-col gap-3 text-sm">
         {!isPurposePair(transaction) && (

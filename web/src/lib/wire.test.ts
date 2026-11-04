@@ -143,6 +143,9 @@ const transactionKeys: Keys<Transaction> = {
   counted: true,
   reverses_occurred_on: true,
   receipt_ids: true,
+  dues_payment_id: true,
+  periods: true,
+  reversal_state: true,
 }
 const memberKeys: Keys<Member> = {
   id: true,

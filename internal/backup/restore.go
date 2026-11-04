@@ -503,6 +503,9 @@ func newestMoment(doc Document) (string, error) {
 	for _, x := range doc.Transfers {
 		consider(x.CreatedAt)
 	}
+	for _, x := range doc.DuesPayments {
+		consider(x.CreatedAt)
+	}
 	for _, x := range doc.Reimbursements {
 		consider(x.CreatedAt)
 	}
@@ -524,11 +527,11 @@ func newestMoment(doc Document) (string, error) {
 	return time.Unix(latest, 0).In(loc).Format("2006-01-02"), nil
 }
 
-// immutableTriggers names 00001_schema.sql's eight BEFORE UPDATE/DELETE
-// triggers guarding "transaction", transfer, reconciliation and
+// immutableTriggers names 00001_schema.sql's ten BEFORE UPDATE/DELETE
+// triggers guarding "transaction", transfer, dues_payment, reconciliation and
 // reconciliation_line. Restore drops them for the width of its write
 // transaction (SQLite cannot disable a trigger short of dropping it), clears
-// and re-populates the four tables, then recreates each before COMMIT.
+// and re-populates the five tables, then recreates each before COMMIT.
 // ADR-004's single connection means nothing else can be in flight meanwhile.
 //
 // Only the names live here. Each body is read back from sqlite_master in the
@@ -540,6 +543,8 @@ var immutableTriggers = []string{
 	"transaction_immutable_delete",
 	"transfer_immutable_update",
 	"transfer_immutable_delete",
+	"dues_payment_immutable_update",
+	"dues_payment_immutable_delete",
 	"reconciliation_immutable_update",
 	"reconciliation_immutable_delete",
 	"reconciliation_line_immutable_update",
@@ -738,6 +743,7 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 		{"receipt", q.DeleteAllReceipts},
 		{"transaction", q.DeleteAllTransactions},
 		{"reimbursement", q.DeleteAllReimbursements},
+		{"dues_payment", q.DeleteAllDuesPayments},
 		{"transfer", q.DeleteAllTransfers},
 		{"member_tier", q.DeleteAllMemberTiers},
 		{"member", q.DeleteAllMembers},
@@ -820,6 +826,13 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 			ID: tr.ID, FundID: tr.FundID, Kind: tr.Kind, CorrectsTransactionID: tr.CorrectsTransactionID, Reason: tr.Reason, CreatedAt: tr.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring transfer %d: %w", tr.ID, err)
+		}
+	}
+	for _, dp := range doc.DuesPayments {
+		if err := q.RestoreDuesPayment(ctx, store.RestoreDuesPaymentParams{
+			ID: dp.ID, FundID: dp.FundID, CreatedAt: dp.CreatedAt,
+		}); err != nil {
+			return fmt.Errorf("backup: restoring dues payment %d: %w", dp.ID, err)
 		}
 	}
 	for _, rb := range doc.Reimbursements {
@@ -915,7 +928,7 @@ func restoreTransactionsInOrder(ctx context.Context, q store.Querier, txns []Tra
 			ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,
 			Direction: t.Direction, Amount: t.Amount, OccurredOn: t.OccurredOn, Kind: t.Kind,
 			MemberID: t.MemberID, DuesPeriod: t.DuesPeriod, ReimbursementID: t.ReimbursementID,
-			TransferID: t.TransferID, ReversesTransactionID: t.ReversesTransactionID,
+			TransferID: t.TransferID, DuesPaymentID: t.DuesPaymentID, ReversesTransactionID: t.ReversesTransactionID,
 			Note: t.Note, CreatedAt: t.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring transaction %d: %w", id, err)

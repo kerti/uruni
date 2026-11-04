@@ -186,12 +186,31 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	// A dues payment, then its reversal (ADR-029): pins kind=dues and
 	// kind=adjustment/reverses_transaction_id.
 	duesPeriod := "2026-01"
+	janPayment, err := q.CreateDuesPayment(ctx, store.CreateDuesPaymentParams{FundID: fund.ID, CreatedAt: 1700000100})
+	if err != nil {
+		t.Fatalf("CreateDuesPayment(jan): %v", err)
+	}
 	duesPayment, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 50000,
-		OccurredOn: "2026-01-10", Kind: "dues", MemberID: &andi.ID, DuesPeriod: &duesPeriod, CreatedAt: 1700000100,
+		OccurredOn: "2026-01-10", Kind: "dues", MemberID: &andi.ID, DuesPeriod: &duesPeriod, DuesPaymentID: &janPayment.ID,
+		CreatedAt: 1700000100,
 	})
 	if err != nil {
 		t.Fatalf("CreateTransaction(dues): %v", err)
+	}
+	// A payment of two months in one act (ADR-048): one header, one row per month.
+	febMar, err := q.CreateDuesPayment(ctx, store.CreateDuesPaymentParams{FundID: fund.ID, CreatedAt: 1700000110})
+	if err != nil {
+		t.Fatalf("CreateDuesPayment(feb-mar): %v", err)
+	}
+	for i, period := range []string{"2026-02", "2026-03"} {
+		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+			FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 50000,
+			OccurredOn: "2026-01-12", Kind: "dues", MemberID: &andi.ID, DuesPeriod: &period, DuesPaymentID: &febMar.ID,
+			CreatedAt: 1700000110 + int64(i),
+		}); err != nil {
+			t.Fatalf("CreateTransaction(dues %s): %v", period, err)
+		}
 	}
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "out", Amount: 50000,

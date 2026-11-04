@@ -907,6 +907,12 @@ func TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase(t *tes
 	rewriteRawBackup(t, f.zipPath, func(doc map[string]any) {
 		doc["format_version"] = 1
 		delete(doc, "member_tiers")
+		// Nor did it have dues payments (ADR-048); the step binds the dues rows.
+		delete(doc, "dues_payments")
+		txns, _ := doc["transactions"].([]any)
+		for _, tx := range txns {
+			delete(tx.(map[string]any), "dues_payment_id")
+		}
 		members, _ := doc["members"].([]any)
 		for _, m := range members {
 			m.(map[string]any)["tier_id"] = nil

@@ -70,7 +70,7 @@ func richV1Fixture() documentV1 {
 	id := int64(0)
 	post := func(kind, direction string, amount int64, memberID int64, period, on string, reverses *int64) int64 {
 		id++
-		row := Transaction{
+		row := transactionV2{
 			ID: id, FundID: 1, AccountID: 1, PurposeID: 1, Direction: direction, Amount: amount,
 			OccurredOn: on, Kind: kind, CreatedAt: created + id, ReversesTransactionID: reverses,
 		}
@@ -105,7 +105,7 @@ func richV1Fixture() documentV1 {
 	pay(8, 60_000, "2025-10", "2025-12")
 	pay(9, 30_000, "2027-06", "2027-07")
 
-	doc, err := upgradeV1(v1)
+	doc, err := upgradeToCurrent(v1)
 	if err != nil {
 		panic(err) // a fixture bug
 	}
@@ -115,6 +115,15 @@ func richV1Fixture() documentV1 {
 	}
 	v1.Totals = totals
 	return v1
+}
+
+// upgradeToCurrent runs a v1 document through the whole chain, as ParseUpload does.
+func upgradeToCurrent(v1 documentV1) (Document, error) {
+	v2, err := upgradeV1(v1)
+	if err != nil {
+		return Document{}, err
+	}
+	return upgradeV2(v2)
 }
 
 // --- the old rule, as a test oracle ---------------------------------------------
@@ -167,14 +176,14 @@ func (w legacyWorld) paid(memberID int64, period string) int64 {
 	return total
 }
 
-func (w legacyWorld) liveDues(memberID int64) []Transaction {
+func (w legacyWorld) liveDues(memberID int64) []transactionV2 {
 	reversed := map[int64]bool{}
 	for _, t := range w.v1.Transactions {
 		if t.ReversesTransactionID != nil {
 			reversed[*t.ReversesTransactionID] = true
 		}
 	}
-	var out []Transaction
+	var out []transactionV2
 	for _, t := range w.v1.Transactions {
 		if t.Kind == "dues" && t.MemberID != nil && *t.MemberID == memberID && !reversed[t.ID] {
 			out = append(out, t)

@@ -115,6 +115,22 @@ export interface Transaction {
    * test fixtures need not grow the field; TransactionList reads it as
    * `transaction.receipt_ids ?? []`. */
   receipt_ids?: number[]
+  /** The dues payment this row stands for (ADR-048): `id` is the payment's
+   * anchor row (its earliest month) and `amount` the sum of its months. Null
+   * on every other row. List-only. */
+  dues_payment_id?: number | null
+  /** The months of a dues payment, oldest first; a dues-reversal group lists
+   * the months it undoes (all reversed: false). [] on every non-dues row. */
+  periods?: DuesPeriodPart[]
+  /** How much of a dues payment is undone: none, some months, or all. */
+  reversal_state?: 'none' | 'partial' | 'all'
+}
+
+/** One month of a dues payment on the list's wire. */
+export interface DuesPeriodPart {
+  dues_period: string
+  amount: number
+  reversed: boolean
 }
 
 export interface DuesTier {

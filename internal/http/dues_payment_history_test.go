@@ -413,10 +413,14 @@ func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
 		t.Fatalf("CreateMember(other) = %v, want no error", err)
 	}
 	otherPeriod := "2026-08"
+	otherPayment, err := q.CreateDuesPayment(ctx, store.CreateDuesPaymentParams{FundID: otherFund.ID, CreatedAt: 1})
+	if err != nil {
+		t.Fatalf("CreateDuesPayment(other) = %v, want no error", err)
+	}
 	otherRow, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: otherFund.ID, AccountID: otherAccount.ID, PurposeID: otherPurpose.ID,
 		Direction: "in", Amount: 999_000, OccurredOn: "2026-08-01", Kind: "dues",
-		MemberID: &otherMember.ID, DuesPeriod: &otherPeriod, CreatedAt: 1,
+		MemberID: &otherMember.ID, DuesPeriod: &otherPeriod, DuesPaymentID: &otherPayment.ID, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateTransaction(other) = %v, want no error", err)
