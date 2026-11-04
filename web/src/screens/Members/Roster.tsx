@@ -16,7 +16,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError, errorCode } from '@/lib/api'
-import { todayISODate, dateBounds, periodBounds } from '@/lib/dates'
+import { todayISODate, dateBounds, formatPeriod, periodBounds } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { createMember, deleteMember, listDuesTiers, listMembersPage, updateMember } from '@/lib/setup'
@@ -453,6 +453,9 @@ function EditMemberDialog({
   const [name, setName] = useState(shown?.name ?? '')
   const [tierId, setTierId] = useState<number | null>(shown?.tier_id ?? null)
   const [joinedOn, setJoinedOn] = useState(shown?.joined_on ?? '')
+  // The day she left (#803): the recorded one for a retired member, today as
+  // the confirm's default for an active one. Dues are owed through its month.
+  const [inactiveOn, setInactiveOn] = useState(shown?.inactive_on ?? todayISODate())
   // Null until she picks a month: the field then follows the ceiling (the
   // current month, or the join month if later), which moves with joinedOn.
   const [tierFromPick, setTierFromPick] = useState<string | null>(null)
@@ -466,6 +469,12 @@ function EditMemberDialog({
   const tierBounds = periodBounds.tierStart(joinedOn)
   const tierFrom = tierFromPick !== null && tierFromPick >= tierBounds.min && tierFromPick <= tierBounds.max ? tierFromPick : tierBounds.max
   const inactive = shown?.inactive_on !== null && shown?.inactive_on !== undefined
+  // Leaving is a day that already happened, from the join day on; the server
+  // refuses a leaving day before the join day. The later of today and either
+  // recorded day keeps a date set ahead (the API allows a year) inside the field.
+  const today = todayISODate()
+  const inactiveBounds = { min: joinedOn, max: [today, joinedOn, shown?.inactive_on ?? today].reduce((a, b) => (a > b ? a : b)) }
+  const joinedBounds = inactive ? { ...dateBounds.membership(), max: inactiveOn } : dateBounds.membership()
 
   // A fresh copy of the member's fields each time the dialog opens for it, and
   // the confirm footer starts closed - reopening never shows a stale edit or a
@@ -475,6 +484,7 @@ function EditMemberDialog({
       setName(shown.name)
       setTierId(shown.tier_id)
       setJoinedOn(shown.joined_on)
+      setInactiveOn(shown.inactive_on ?? todayISODate())
       setTierFromPick(null)
       setConfirming(null)
     }
@@ -507,7 +517,8 @@ function EditMemberDialog({
     // server-side, an explicit null means "clear it" - how a member's tier is
     // dropped. The joined-on date only ever moves: DateField has no empty
     // state to send.
-    if (trimmed === shown.name && tierId === shown.tier_id && joinedOn === shown.joined_on) {
+    const inactiveChanged = inactive && inactiveOn !== shown.inactive_on
+    if (trimmed === shown.name && tierId === shown.tier_id && joinedOn === shown.joined_on && !inactiveChanged) {
       onClose()
       return
     }
@@ -518,6 +529,7 @@ function EditMemberDialog({
           tierId: tierChanged ? tierId : undefined,
           tierEffectiveFrom: tierChanged ? tierFrom : undefined,
           joinedOn: joinedOn === shown.joined_on ? undefined : joinedOn,
+          inactiveOn: inactiveChanged ? inactiveOn : undefined,
         }),
       text.saved,
     )
@@ -575,10 +587,24 @@ function EditMemberDialog({
               id="edit-member-joined"
               value={joinedOn}
               onChange={setJoinedOn}
-              bounds={dateBounds.membership()}
+              bounds={joinedBounds}
               disabled={confirming !== null}
             />
           </div>
+          {/* A retired member's leaving day, fixed in place like the join day;
+              an active member is asked it on the Nonaktifkan confirm below. */}
+          {(inactive || confirming === 'deactivate') && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-member-inactive">{text.inactiveOnLabel}</Label>
+              <DateField
+                id="edit-member-inactive"
+                value={inactiveOn}
+                onChange={setInactiveOn}
+                bounds={inactiveBounds}
+                disabled={confirming === 'delete'}
+              />
+            </div>
+          )}
 
           {confirming === null ? (
             // The record's own actions, laid out as every detail lays them
@@ -600,9 +626,11 @@ function EditMemberDialog({
               />
             </div>
           ) : (
-            <p className="border-t border-border pt-3 text-sm text-attention-text">
-              {confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}
-            </p>
+            <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm text-attention-text">
+              {/* What the chosen day means, on its own line: the last month she owes. */}
+              {confirming === 'deactivate' && <p>{text.owedThrough(formatPeriod(inactiveOn.slice(0, 7)))}</p>}
+              <p>{confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}</p>
+            </div>
           )}
 
           {/* The 409 gets its own sentence rather than the shared error
@@ -639,7 +667,7 @@ function EditMemberDialog({
                   disabled={busy}
                   onClick={() =>
                     void submit(
-                      () => (confirming === 'deactivate' ? updateMember(shown.id, { inactiveOn: todayISODate() }) : deleteMember(shown.id)),
+                      () => (confirming === 'deactivate' ? updateMember(shown.id, { inactiveOn }) : deleteMember(shown.id)),
                       confirming === 'deactivate' ? text.deactivated : text.deleted,
                     )
                   }

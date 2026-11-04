@@ -15,7 +15,8 @@ export async function pickDate(label: string, iso: string): Promise<void> {
   const date = parseIsoDate(iso)
   if (!date) throw new Error(`pickDate: ${iso} is not a YYYY-MM-DD date`)
   await userEvent.click(screen.getByLabelText(label))
-  const dialog = await screen.findByRole('dialog')
+  // The calendar is the newest dialog: a field inside a dialog opens it on top.
+  const dialog = (await screen.findAllByRole('dialog')).at(-1)!
   const [monthList, yearList] = within(dialog).getAllByRole('combobox')
   await userEvent.selectOptions(yearList, String(date.getFullYear()))
   await userEvent.selectOptions(monthList, String(date.getMonth()))
