@@ -50,7 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.25rem)] z-30"
+        className="pointer-events-none fixed inset-x-0 top-[calc(var(--shell-header,calc(env(safe-area-inset-top)+3.75rem+1px))+0.5rem)] z-30"
       >
         <div className="mx-auto w-full max-w-xl pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           {toast && (
