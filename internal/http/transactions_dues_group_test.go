@@ -169,8 +169,9 @@ func TestListShowsAMultiMonthPaymentAsOneItem(t *testing.T) {
 	if item.DuesPaymentID == nil || posted[0].DuesPaymentID == nil || *item.DuesPaymentID != *posted[0].DuesPaymentID {
 		t.Errorf("DuesPaymentID = %v, want the payment's %v", item.DuesPaymentID, posted[0].DuesPaymentID)
 	}
-	if item.ReversalState != "none" || item.Reversed || !item.Reversible {
-		t.Errorf("state %q reversed %v reversible %v, want none false true", item.ReversalState, item.Reversed, item.Reversible)
+	if item.ReversalState != "none" || item.Reversed || !item.Reversible || item.ReversalRefusal != nil {
+		t.Errorf("state %q reversed %v reversible %v refusal %v, want none false true nil",
+			item.ReversalState, item.Reversed, item.Reversible, item.ReversalRefusal)
 	}
 	if item.MemberName == nil || *item.MemberName != "Ani" || item.OccurredOn != "2026-08-12" {
 		t.Errorf("member %v on %s, want Ani on 2026-08-12", item.MemberName, item.OccurredOn)
@@ -306,6 +307,10 @@ func TestListShowsAPartlyReversedPaymentHonestly(t *testing.T) {
 	payment = itemsOfKind(rows, "dues")[0]
 	if payment.ReversalState != "all" || payment.Reversible {
 		t.Errorf("after batalkan: state %q reversible %v, want all false", payment.ReversalState, payment.Reversible)
+	}
+	// The payment's refusal is DuesPaymentRefusal's code (#809).
+	if payment.ReversalRefusal == nil || *payment.ReversalRefusal != "transaction_already_reversed" {
+		t.Errorf("after batalkan: reversal_refusal %v, want transaction_already_reversed", payment.ReversalRefusal)
 	}
 	reversals := itemsOfKind(rows, "adjustment")
 	if len(reversals) != 1 || reversals[0].Amount != 75_000 || len(reversals[0].Periods) != 3 {

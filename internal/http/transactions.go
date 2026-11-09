@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -123,6 +124,12 @@ type transactionResponse struct {
 	// works out eligibility itself. False on a row the page did not compute it for
 	// (POST's reply).
 	Reversible bool `json:"reversible"`
+	// ReversalRefusal is the named-error code of the refusal behind a false
+	// Reversible (#809), from the same ReversalRefusal / DuesPaymentRefusal
+	// call, so the flag and its reason cannot drift. Null when the row is
+	// reversible, or on a row the page did not compute it for. The client
+	// explains only the refusals she can act on or would wonder about.
+	ReversalRefusal *string `json:"reversal_refusal"`
 	// Counted is true when a cek kas has counted this row, which picks the date a
 	// reversal would take (the original's own day, or today).
 	Counted bool `json:"counted"`
@@ -250,7 +257,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.L
 	resp.Reversed = t.Reversed != 0
 	resp.Counted = t.Counted != 0
 	resp.ReversesOccurredOn = t.ReversesOccurredOn
-	resp.Reversible = ledger.ReversalRefusal(ledger.ReversalFacts{
+	resp.setReversal(ledger.ReversalRefusal(ledger.ReversalFacts{
 		Kind:                ledger.TransactionKind(t.Kind),
 		OccurredOn:          t.OccurredOn,
 		IsReversal:          t.ReversesTransactionID != nil,
@@ -258,7 +265,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.L
 		IsReconciliationFix: t.IsReconciliationFix != 0,
 		EffectiveClosed:     t.EffectiveClosedOn != nil,
 		Counted:             resp.Counted,
-	}, today) == nil
+	}, today))
 	if resp.Reversed {
 		resp.ReversalState = reversalStateAll
 	}
@@ -340,7 +347,20 @@ func applyDuesGroup(resp *transactionResponse, t store.ListTransactionsPageRow, 
 		resp.ReversalState = reversalStatePartial
 	}
 	resp.Reversed = resp.ReversalState == reversalStateAll
-	resp.Reversible = ledger.DuesPaymentRefusal(facts, today) == nil
+	resp.setReversal(ledger.DuesPaymentRefusal(facts, today))
+}
+
+// setReversal sets Reversible and ReversalRefusal from one refusal answer:
+// nil is reversible; a named ledger error gives its code. An error with no
+// code (a kind with no reversal rule) is still not reversible, with no reason.
+func (resp *transactionResponse) setReversal(refusal error) {
+	resp.Reversible = refusal == nil
+	resp.ReversalRefusal = nil
+	var named *ledger.Error
+	if errors.As(refusal, &named) {
+		code := named.Code()
+		resp.ReversalRefusal = &code
+	}
 }
 
 // duesGroupOf is the rows of the dues payment or dues-reversal group a listed row

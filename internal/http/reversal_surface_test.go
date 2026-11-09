@@ -88,9 +88,10 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 		rows[row.ID] = row
 	}
 
+	// refusal is reversal_refusal (#809): the code behind a false reversible.
 	type facts struct {
 		reversed, reversible, counted bool
-		reversesOccurredOn            string
+		reversesOccurredOn, refusal   string
 	}
 	for _, tc := range []struct {
 		name string
@@ -98,25 +99,28 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 		want facts
 	}{
 		{"a counted row may be reversed (today, with a count since)", counted, facts{counted: true, reversible: true}},
-		{"a reversed row is not reversible again", countedOut, facts{reversed: true, counted: true}},
+		{"a reversed row is not reversible again", countedOut, facts{reversed: true, counted: true, refusal: "transaction_already_reversed"}},
 		{"a row no count has covered", uncounted, facts{reversible: true}},
-		{"an uncounted row, reversed", uncountedReversed, facts{reversed: true}},
-		{"the reversal of a counted row, dated today", reversalOfCounted.ID, facts{reversesOccurredOn: "2026-07-25"}},
-		{"the reversal of an uncounted row, dated its day", reversalOfUncounted.ID, facts{reversesOccurredOn: "2026-10-01"}},
-		{"a counted row dated after today cannot be reversed", ahead, facts{counted: true}},
-		{"the fix a cek kas line names", fix, facts{}},
+		{"an uncounted row, reversed", uncountedReversed, facts{reversed: true, refusal: "transaction_already_reversed"}},
+		{"the reversal of a counted row, dated today", reversalOfCounted.ID, facts{reversesOccurredOn: "2026-07-25", refusal: "reversal_of_reversal"}},
+		{"the reversal of an uncounted row, dated its day", reversalOfUncounted.ID, facts{reversesOccurredOn: "2026-10-01", refusal: "reversal_of_reversal"}},
+		{"a counted row dated after today cannot be reversed", ahead, facts{counted: true, refusal: "reversal_before_original"}},
+		{"the fix a cek kas line names", fix, facts{refusal: "reversal_reconciliation_fix"}},
 	} {
 		got, ok := rows[tc.id]
 		if !ok {
 			t.Errorf("%s: row %d is missing from GET /api/transactions", tc.name, tc.id)
 			continue
 		}
-		have := facts{got.Reversed, got.Reversible, got.Counted, ""}
+		have := facts{got.Reversed, got.Reversible, got.Counted, "", ""}
 		if got.ReversesOccurredOn != nil {
 			have.reversesOccurredOn = *got.ReversesOccurredOn
 		}
+		if got.ReversalRefusal != nil {
+			have.refusal = *got.ReversalRefusal
+		}
 		if have != tc.want {
-			t.Errorf("%s: reversed/reversible/counted/reverses_occurred_on = %+v, want %+v", tc.name, have, tc.want)
+			t.Errorf("%s: reversed/reversible/counted/reverses_occurred_on/reversal_refusal = %+v, want %+v", tc.name, have, tc.want)
 		}
 	}
 }
@@ -328,6 +332,14 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 		t.Fatalf("TakeReconciliation(second) = %v", err)
 	}
 
+	// The list answers before any POST is tried: every refused row reads
+	// reversible false with the very code the POST then refuses it with
+	// (#809), since both come from one ReversalRefusal call.
+	listed := map[int64]transactionResponse{}
+	for _, row := range decodeTransactionsPage(t, getTransactions(t, r)).Transactions {
+		listed[row.ID] = row
+	}
+
 	for _, tc := range []struct {
 		name   string
 		id     int64
@@ -341,6 +353,14 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 		{"a counted row dated after today", aheadRow, http.StatusConflict, "reversal_before_original"},
 		{"a row in a closed envelope", inEnvelope, http.StatusConflict, "incidental_closed"},
 	} {
+		if row, ok := listed[tc.id]; ok {
+			if row.Reversible || row.ReversalRefusal == nil || *row.ReversalRefusal != tc.code {
+				t.Errorf("%s: listed reversible %v, reversal_refusal %v, want false and %q", tc.name, row.Reversible, row.ReversalRefusal, tc.code)
+			}
+		} else if tc.id != leg {
+			// A transfer is listed once for its two legs (#738), under the other one.
+			t.Errorf("%s: row %d is missing from GET /api/transactions", tc.name, tc.id)
+		}
 		rec := postReversal(t, r, tc.id, reverseTransactionRequest{})
 		if rec.Code != tc.status {
 			t.Errorf("%s: POST reversal = %d, want %d (body: %s)", tc.name, rec.Code, tc.status, rec.Body.String())

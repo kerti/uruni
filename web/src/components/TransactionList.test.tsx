@@ -459,6 +459,54 @@ describe('TransactionList reversal (ADR-042)', () => {
     expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
   })
 
+  // #809: where the door is absent, the detail says why - for the refusals
+  // she can act on or would wonder about, keyed on the server's code.
+  it.each([
+    ['a row in a closed envelope', 'incidental_closed', copy.transactionDetail.reversalRefusedClosedEnvelope],
+    ['the fix a cek kas line names', 'reversal_reconciliation_fix', copy.common.errors.reversal_reconciliation_fix],
+    ['a counted row dated after today', 'reversal_before_original', copy.common.errors.reversal_before_original],
+  ])('says why on %s, in place of the door', async (_name, code, line) => {
+    renderReversible([transaction({ id: 32, reversible: false, reversal_refusal: code })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+    expect(within(dialog).getByText(line)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a reversible row', { reversible: true, reversal_refusal: null }],
+    ['a row already reversed', { reversed: true, reversible: false, reversal_refusal: 'transaction_already_reversed' }],
+    ['an opening balance', { kind: 'opening' as const, reversible: false, reversal_refusal: 'reversal_opening' }],
+    [
+      'a reversal',
+      { kind: 'adjustment' as const, reverses_transaction_id: 9, reversible: false, reversal_refusal: 'reversal_of_reversal' },
+    ],
+  ])('gives no reason on %s', async (_name, fields) => {
+    renderReversible([transaction({ id: 32, ...fields })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
+
+    const dialog = await screen.findByRole('dialog')
+    for (const line of [
+      copy.transactionDetail.reversalRefusedClosedEnvelope,
+      copy.common.errors.reversal_reconciliation_fix,
+      copy.common.errors.reversal_before_original,
+    ]) {
+      expect(within(dialog).queryByText(line)).not.toBeInTheDocument()
+    }
+  })
+
+  it('gives no reason where no handler is passed: Beranda offers no reversal to explain', async () => {
+    renderRows([transaction({ id: 35, reversible: false, reversal_refusal: 'incidental_closed' })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText(copy.transactionDetail.reversalRefusedClosedEnvelope)).not.toBeInTheDocument()
+  })
+
   it('shows no door where no handler is passed (Beranda)', async () => {
     renderRows([transaction({ id: 35, reversible: true })])
 
