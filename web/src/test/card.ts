@@ -11,6 +11,16 @@
  *
  *   screen.getByRole('button', { name: cardName(text.editVerb, 'Bank Jago') })
  */
+/**
+ * An accessible-name matcher for one visible piece of a card, taken
+ * literally (every regex metacharacter escaped, backslash included):
+ *
+ *   expect(button).toHaveAccessibleName(containing(formatIDR(25_000)))
+ */
+export function containing(part: string): RegExp {
+  return new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+}
+
 export function cardName(verb: string, name: string): (accessibleName: string, element: Element) => boolean {
   return (accessibleName, element) =>
     accessibleName.startsWith(`${verb} `) &&

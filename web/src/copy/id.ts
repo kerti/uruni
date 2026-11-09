@@ -1446,13 +1446,13 @@ export const copy = {
   // entry was recorded, as opposed to its Tanggal.
   transactionDetail: {
     heading: 'Rincian transaksi',
-    // Names the card's full-width tap target for a screen reader, with the
-    // row's facts, since a list of twenty-five identical "lihat rincian"
-    // controls tells her nothing (as purposeCorrection.controlAria).
-    openAria: (purposeName: string, amount: string, date: string) => `Lihat rincian: ${purposeName}, ${amount}, ${date}`,
-    // Appended to openAria after a comma on a row with notas: the row's
-    // camera + count glyph is hidden from screen readers, so this carries it.
-    receiptCountAria: (count: number) => `${count} foto nota`,
+    // The card's verb, visually hidden and first inside the card button, so
+    // its accessible name is the verb plus every word the card shows (#808):
+    // two rows on the same pos, day and amount still read apart.
+    openVerb: 'Lihat rincian',
+    // Read after a row's visible nota count ("2 foto nota"); the camera
+    // glyph beside the count is hidden from screen readers.
+    receiptCountWord: 'foto nota',
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
     // memberLabel, periodLabel and amountLabel label TransactionSummary, the
@@ -1541,9 +1541,8 @@ export const copy = {
     // lives here, as in transactionDetail.
     detail: {
       heading: 'Rincian talangan',
-      // Names the card's full-width tap target, with the claim's facts.
-      openAria: (memberName: string, purposeName: string, amount: string, date: string) =>
-        `Lihat rincian talangan: ${memberName}, ${purposeName}, ${amount}, ${date}`,
+      // The card's visually hidden verb, as transactionDetail.openVerb.
+      openVerb: 'Lihat rincian talangan',
     },
     waive: {
       success: 'Talangan sudah diputihkan.',

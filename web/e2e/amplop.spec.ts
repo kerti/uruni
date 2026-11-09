@@ -161,7 +161,7 @@ test.describe('amplop in depth', () => {
       .filter({ has: page.getByText('Sumbangan Warga Dua', { exact: true }) })
     // One door (ADR-042): the card opens the entry, whose Batalkan transaksi
     // hands off to the reversal dialog (ADR-046).
-    await row.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    await row.getByRole('button', { name: /^Lihat rincian / }).click()
     await page
       .getByRole('dialog', { name: copy.transactionDetail.heading })
       .getByRole('button', { name: copy.history.transactions.reverse })

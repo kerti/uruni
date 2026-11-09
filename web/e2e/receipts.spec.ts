@@ -23,7 +23,7 @@ const TINY_JPEG = Buffer.from(
  * every action lives in the detail (#739). */
 async function openReceiptViewer(page: Page) {
   await page
-    .getByRole('button', { name: /^Lihat rincian:/ })
+    .getByRole('button', { name: /^Lihat rincian / })
     .first()
     .click()
   await page.getByRole('dialog', { name: copy.transactionDetail.heading }).getByRole('button', { name: copy.receipts.viewReceipt }).click()
@@ -73,7 +73,7 @@ test.describe('receipt photos', () => {
     // after-the-fact viewer lives, and this is the row just posted (Rp12.000,
     // the newest in the list).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
-    await expect(page.getByRole('button', { name: new RegExp(copy.transactionDetail.receiptCountAria(1)) }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: new RegExp(`1 ${copy.transactionDetail.receiptCountWord}`) }).first()).toBeVisible()
 
     // Opens the row's detail, then the viewer from its Lihat nota (#739) and shows a real photo read back from GET
     // /api/receipts/{id} - proving the round trip, not only the upload. Ganti
@@ -128,7 +128,7 @@ test.describe('receipt photos', () => {
     // Closed, the row's detail offers to add a photo again.
     await page.keyboard.press('Escape')
     await page
-      .getByRole('button', { name: /^Lihat rincian:/ })
+      .getByRole('button', { name: /^Lihat rincian / })
       .first()
       .click()
     const detail = page.getByRole('dialog', { name: copy.transactionDetail.heading })

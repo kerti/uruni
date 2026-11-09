@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import TransactionList from '@/components/TransactionList'
+import { cardName, containing } from '@/test/card'
 import { copy } from '@/copy/id'
 import { formatPeriod, formatPeriods, PERIOD_HYPHEN } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -17,6 +18,14 @@ import type { ReceiptUploadResult } from '@/lib/receipts'
 // every render needs a router.
 function render(ui: ReactElement) {
   return rtlRender(ui, { wrapper: MemoryRouter })
+}
+
+// Every card leads with the sr-only verb (#808); a row's own screen-reader
+// words are whatever hidden text it carries beyond that.
+function srWordsBeyondVerb(): string[] {
+  return Array.from(document.querySelectorAll('.sr-only'))
+    .map((el) => el.textContent ?? '')
+    .filter((word) => word !== copy.transactionDetail.openVerb)
 }
 
 const purposeNames = new Map([
@@ -79,7 +88,7 @@ function writesOf(mock: { mock: { calls: unknown[][] } }) {
 /** Taps a row's card and returns its detail dialog (#739: the card is the
  * row's only control, and every action lives in the detail). */
 async function openDetail(index = 0) {
-  await userEvent.click(screen.getAllByRole('button', { name: /^Lihat rincian:/ })[index])
+  await userEvent.click(screen.getAllByRole('button', { name: /^Lihat rincian / })[index])
   return screen.findByRole('dialog', { name: copy.transactionDetail.heading })
 }
 
@@ -107,7 +116,7 @@ describe('TransactionList row labels (#257)', () => {
     expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.duesReversal.text(formatPeriod('2026-08'), 'Budi'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
-    expect(document.querySelector('.sr-only')).toBeNull()
+    expect(srWordsBeyondVerb()).toEqual([])
   })
 
   it("labels a named contribution with HandCoins and the member's name, and Sumbangan for screen readers", () => {
@@ -143,7 +152,7 @@ describe('TransactionList row labels (#257)', () => {
 
     expect(container.querySelector('[data-icon="ArrowUUpLeft"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.contributionReversal.text('Budi'))).toBeInTheDocument()
-    expect(document.querySelector('.sr-only')).toBeNull()
+    expect(srWordsBeyondVerb()).toEqual([])
   })
 
   it('labels an opening balance: Flag, "Saldo awal - {lokasi}", with no duplicate screen-reader word', () => {
@@ -152,7 +161,7 @@ describe('TransactionList row labels (#257)', () => {
     expect(container.querySelector('[data-icon="Flag"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.opening.text('Bank Jago'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
-    expect(document.querySelector('.sr-only')).toBeNull()
+    expect(srWordsBeyondVerb()).toEqual([])
   })
 
   it("labels a Talangan settlement with HandHelping and the member's own name, and renders the claim's note on the note line", () => {
@@ -214,7 +223,7 @@ describe('TransactionList row labels (#257)', () => {
     expect(container.querySelector('[data-icon="SlidersHorizontal"]')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
-    expect(document.querySelector('.sr-only')).toBeNull()
+    expect(srWordsBeyondVerb()).toEqual([])
   })
 
   it('renders her typed note alongside the label, on its own line', () => {
@@ -353,8 +362,8 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     renderRows([transaction({ id: 15 })])
 
     // The only button left is the card's read-only detail tap.
-    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026'),
+    expect(screen.getAllByRole('button')).toEqual([
+      screen.getByRole('button', { name: cardName(copy.transactionDetail.openVerb, 'Kas Utama') }),
     ])
     expect(screen.getByText('Kas Utama')).toBeInTheDocument()
   })
@@ -407,7 +416,7 @@ describe('TransactionList reversal (ADR-042)', () => {
 
   /** Taps the card, then the door in the entry detail; resolves to the reversal dialog. */
   async function openForm() {
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
     const dialog = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
     await userEvent.click(within(dialog).getByRole('button', { name: text.reverse }))
     // The detail hands off: it closes, and only then does the reversal dialog open.
@@ -431,7 +440,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   it('offers it on a dues row too: the door follows the server, not the kind', async () => {
     renderReversible([transaction({ id: 31, kind: 'dues', member_id: 3, member_name: 'Ani', dues_period: '2026-08', reversible: true })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('button', { name: text.reverse })).toBeInTheDocument()
@@ -444,7 +453,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   ])('shows no door on %s', async (_name, flags) => {
     renderReversible([transaction({ id: 32, ...flags })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
@@ -453,7 +462,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   it('shows no door where no handler is passed (Beranda)', async () => {
     renderRows([transaction({ id: 35, reversible: true })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
@@ -579,7 +588,7 @@ describe('TransactionList the pair read as linked (ADR-042)', () => {
 
     expect(screen.getByText('Sudah dibatalkan')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Sudah dibatalkan')).toBeInTheDocument()
   })
@@ -724,11 +733,9 @@ describe('TransactionList receipt photos (#154)', () => {
     const { container } = renderWithReceipts([transaction({ id: 28, receipt_ids: [41, 42] }), transaction({ id: 29, receipt_ids: [] })])
 
     expect(screen.getAllByRole('button')).toHaveLength(2)
-    expect(
-      screen.getByRole('button', {
-        name: `${copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026')}, ${copy.transactionDetail.receiptCountAria(2)}`,
-      }),
-    ).toBeInTheDocument()
+    const [withNota, without] = screen.getAllByRole('button')
+    expect(withNota).toHaveAccessibleName(containing(`2 ${copy.transactionDetail.receiptCountWord}`))
+    expect(without).not.toHaveAccessibleName(containing(copy.transactionDetail.receiptCountWord))
     expect(container.querySelectorAll('[data-icon="Camera"]')).toHaveLength(1)
   })
 
@@ -829,7 +836,7 @@ describe('TransactionList entry detail (#359)', () => {
     // until one is set, ADR-041), whatever zone the runner is in (CI is UTC).
     renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date('2026-10-01T13:42:00+07:00').getTime() / 1000 })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
     expect(within(dialog).getByText(longNote)).toBeInTheDocument()
@@ -842,7 +849,7 @@ describe('TransactionList entry detail (#359)', () => {
   it('shows the pos the money is under now on a corrected row', async () => {
     renderRows([transaction({ purpose_id: 1, effective_purpose_id: 2 })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Kas Utama')).toBeInTheDocument()
@@ -852,7 +859,7 @@ describe('TransactionList entry detail (#359)', () => {
   it('carries the app-built label in full, e.g. a reconciliation adjustment', async () => {
     renderRows([transaction({ kind: 'adjustment', direction: 'out' })])
 
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
@@ -975,10 +982,35 @@ describe('TransactionList one row per movement (#738)', () => {
   it("names the card for a screen reader by the movement, not the leg's pos", () => {
     renderRows([transaction({ ...pair, direction: 'in', purpose_id: 2 })])
 
-    const movement = `${copy.rowLabels.transferPurposeMove.kind}: ${copy.rowLabels.transferPurposeMove.text('Kas Utama', "Jane's wedding")}`
-    expect(
-      screen.getByRole('button', { name: copy.transactionDetail.openAria(movement, formatIDR(25_000), '12 Agustus 2026') }),
-    ).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: cardName(copy.transactionDetail.openVerb, copy.rowLabels.transferPurposeMove.kind) })
+    expect(button).toHaveAccessibleName(containing(copy.rowLabels.transferPurposeMove.text('Kas Utama', "Jane's wedding")))
+  })
+
+  // #808: the name is the verb plus everything the card shows, never an
+  // aria-label summary - so a dues payment and the Penyesuaian beside it on
+  // the same pos, day and amount read apart.
+  it('names every card by its visible text: months and member, the kind word, the note', () => {
+    renderRows([
+      transaction({ id: 1, kind: 'dues', dues_period: '2026-08', member_id: 5, member_name: 'Budi', note: 'Lewat transfer' }),
+      transaction({ id: 2, kind: 'adjustment', direction: 'out', account_name: 'Tunai' }),
+    ])
+
+    const buttons = screen.getAllByRole('button')
+    expect(buttons).toHaveLength(2)
+    for (const button of buttons) {
+      expect(button).not.toHaveAttribute('aria-label')
+      expect(button).toHaveAccessibleName(new RegExp(`^${copy.transactionDetail.openVerb} `))
+    }
+    const [dues, adjustment] = buttons
+    for (const part of [
+      copy.rowLabels.dues.text(formatPeriod('2026-08'), 'Budi'),
+      'Lewat transfer',
+      formatIDR(25_000),
+      '12 Agustus 2026',
+    ]) {
+      expect(dues).toHaveAccessibleName(containing(part))
+    }
+    expect(adjustment).toHaveAccessibleName(containing(copy.rowLabels.adjustment.text('Tunai')))
   })
 
   it('offers no pos correction on a transfer, even where a handler is passed', () => {
@@ -1026,7 +1058,7 @@ describe('TransactionList transfer detail (#738)', () => {
   }
 
   async function openDetail() {
-    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
     return screen.findByRole('dialog', { name: copy.transactionDetail.heading })
   }
 

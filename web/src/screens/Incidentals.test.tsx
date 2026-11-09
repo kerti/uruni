@@ -761,7 +761,7 @@ describe('Incidentals', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: /^Lihat rincian:/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Lihat rincian / }))
     const detail = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
     expect(within(detail).getByRole('button', { name: copy.history.transactions.reverse })).toBeInTheDocument()
     await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))

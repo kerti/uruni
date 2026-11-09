@@ -486,7 +486,7 @@ describe('Home', () => {
       />,
     )
 
-    await userEvent.click((await screen.findAllByRole('button', { name: /^Lihat rincian:/ }))[0])
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Lihat rincian / }))[0])
     const detail = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
     expect(within(detail).getByRole('button', { name: copy.history.transactions.reverse })).toBeInTheDocument()
     await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))

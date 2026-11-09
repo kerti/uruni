@@ -524,7 +524,7 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
     renderAt('/history/transactions')
 
     await screen.findByText('Setoran seragam')
-    await user.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    await user.click(screen.getByRole('button', { name: /^Lihat rincian / }))
     await user.click(
       within(await screen.findByRole('dialog', { name: copy.transactionDetail.heading })).getByRole('button', {
         name: copy.purposeCorrection.heading,
@@ -614,7 +614,7 @@ describe('Transactions tab: reversing a row (ADR-042)', () => {
     const user = userEvent.setup()
     renderAt('/history/transactions')
 
-    await user.click(await screen.findByRole('button', { name: /^Lihat rincian:/ }))
+    await user.click(await screen.findByRole('button', { name: /^Lihat rincian / }))
     await user.click(await screen.findByRole('button', { name: text.reverse }))
     await user.click(await screen.findByRole('button', { name: text.reverseConfirm }))
 
