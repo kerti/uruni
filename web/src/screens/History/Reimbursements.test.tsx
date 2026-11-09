@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import Reimbursements from '@/screens/History/Reimbursements'
 import { copy } from '@/copy/id'
+import { containing } from '@/test/card'
 import { formatIDR } from '@/lib/money'
 import type { Purpose } from '@/lib/purposes'
 import type { ReceiptUploadResult } from '@/lib/receipts'
@@ -191,7 +192,7 @@ describe('Reimbursements tab', () => {
     expect(buttons[0]).not.toHaveAttribute('aria-label')
     expect(buttons[0]).toHaveAccessibleName(new RegExp(`^${text.detail.openVerb} `))
     for (const part of ['Jane', 'Kas Utama', '1 September 2026', formatIDR(15_000), `2 ${copy.transactionDetail.receiptCountWord}`]) {
-      expect(buttons[0]).toHaveAccessibleName(new RegExp(part.replace(/\./g, '\\.')))
+      expect(buttons[0]).toHaveAccessibleName(containing(part))
     }
     // Transaksi's card shape, and the amount with the camera and count under it.
     expect(buttons[0]).toHaveClass('rounded-lg', 'px-4', 'py-3')

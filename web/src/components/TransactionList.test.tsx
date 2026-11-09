@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import TransactionList from '@/components/TransactionList'
-import { cardName } from '@/test/card'
+import { cardName, containing } from '@/test/card'
 import { copy } from '@/copy/id'
 import { formatPeriod, formatPeriods, PERIOD_HYPHEN } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -26,11 +26,6 @@ function srWordsBeyondVerb(): string[] {
   return Array.from(document.querySelectorAll('.sr-only'))
     .map((el) => el.textContent ?? '')
     .filter((word) => word !== copy.transactionDetail.openVerb)
-}
-
-// An accessible-name matcher for one visible piece of a card, literally.
-function containing(part: string): RegExp {
-  return new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 }
 
 const purposeNames = new Map([

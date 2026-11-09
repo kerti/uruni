@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import { copy } from '@/copy/id'
+import { containing } from '@/test/card'
 import { formatIDR } from '@/lib/money'
 import type { DuesPaymentHistoryRow } from '@/lib/dues'
 import type { Transaction } from '@/lib/transactions'
@@ -272,7 +273,7 @@ describe('PaymentHistory', () => {
       expect(buttons[0]).not.toHaveAttribute('aria-label')
       expect(buttons[0]).toHaveAccessibleName(new RegExp(`^${copy.transactionDetail.openVerb} `))
       for (const part of ['Warga Satu', 'Agustus 2026', '1 Agustus 2026', formatIDR(25_000)]) {
-        expect(buttons[0]).toHaveAccessibleName(new RegExp(part.replace(/\./g, '\\.')))
+        expect(buttons[0]).toHaveAccessibleName(containing(part))
       }
       expect(buttons[0]).toHaveClass('rounded-lg', 'px-4', 'py-3')
     })
