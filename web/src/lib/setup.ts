@@ -108,6 +108,12 @@ export interface Transaction {
   /** The named-error code behind a false `reversible` (#809), from the same
    * server call; null when reversible. The detail explains a few of them. */
   reversal_refusal?: string | null
+  /** Whether the ledger would accept a pos correction of this row to some
+   * other pos (#821) - the server's answer, like `reversible`. */
+  correctable?: boolean
+  /** The named-error code behind a false `correctable`, from the same server
+   * call; null when correctable. */
+  correction_refusal?: string | null
   /** Whether a cek kas has counted this row, which picks the date a reversal
    * would take: its own day (false) or today (true). */
   counted?: boolean

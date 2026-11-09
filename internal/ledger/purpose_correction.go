@@ -62,11 +62,13 @@ type PostPurposeCorrectionParams struct {
 // (ADR-033).
 //
 // Eligibility is ADR-033's table, each refusal its own named error
-// (ErrPurposeCorrection...). A correction's legs are kind='transfer', which is
-// what makes a correction of a correction impossible. Correct-then-reverse is
-// allowed (the reversal copies the effective purpose); reverse-then-correct is
-// refused, ADR-042. postTransferPairTx checks nothing by design, so a closed
-// target or source incidental is refused here, ahead of it (ADR-031).
+// (ErrPurposeCorrection...), decided by CorrectionRefusal so the list's
+// correctable flag cannot disagree. A correction's legs are kind='transfer',
+// which is what makes a correction of a correction impossible.
+// Correct-then-reverse is allowed (the reversal copies the effective purpose);
+// reverse-then-correct is refused, ADR-042. postTransferPairTx checks nothing
+// by design, so a closed source or target incidental is refused here, ahead of
+// it (ADR-031).
 //
 // With p.Idempotency set (ADR-043), a repeat returns the first pair and none of
 // the checks above runs, so the repeat of a correction that worked is never the
@@ -84,32 +86,6 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			return store.Transfer{}, fmt.Errorf("fetching transaction to correct: %w", err)
 		}
 
-		switch TransactionKind(original.Kind) {
-		case TransactionKindOpening:
-			return store.Transfer{}, ErrPurposeCorrectionOpening
-		case TransactionKindDues:
-			return store.Transfer{}, ErrPurposeCorrectionDues
-		case TransactionKindReimbursement:
-			return store.Transfer{}, ErrPurposeCorrectionReimbursement
-		case TransactionKindTransfer:
-			return store.Transfer{}, ErrPurposeCorrectionTransfer
-		case TransactionKindAdjustment:
-			if original.ReversesTransactionID != nil {
-				return store.Transfer{}, ErrPurposeCorrectionReversal
-			}
-		case TransactionKindNormal:
-			// A named contribution (ADR-034): moving it would leave participation
-			// counting the member against an envelope the money has left.
-			if original.MemberID != nil {
-				return store.Transfer{}, ErrPurposeCorrectionNamedContribution
-			}
-		}
-		// "normal" with no member_id, and "adjustment" with no
-		// reverses_transaction_id, are eligible: the cases the switch leaves
-		// unhandled on purpose.
-
-		// Reverse, then correct, is refused (ADR-042): the reversal already took the
-		// money out of the row's effective purpose.
 		reversed, err := q.ReversedFlagForTransaction(ctx, store.ReversedFlagForTransactionParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,
@@ -117,24 +93,34 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		if err != nil {
 			return store.Transfer{}, fmt.Errorf("checking whether the transaction was reversed: %w", err)
 		}
-		if reversed != 0 {
-			return store.Transfer{}, ErrPurposeCorrectionAlreadyReversed
-		}
-
 		effectivePurposeID, err := effectivePeruntukan(ctx, q, p.FundID, original)
 		if err != nil {
 			return store.Transfer{}, err
 		}
+		sourceClosed, err := closedIncidental(ctx, q, effectivePurposeID)
+		if err != nil {
+			return store.Transfer{}, err
+		}
+		if err := CorrectionRefusal(CorrectionFacts{
+			Kind:            TransactionKind(original.Kind),
+			IsReversal:      original.ReversesTransactionID != nil,
+			Named:           original.MemberID != nil,
+			Reversed:        reversed != 0,
+			EffectiveClosed: sourceClosed,
+		}); err != nil {
+			return store.Transfer{}, err
+		}
 
+		// What is left depends on the target, which only the write has.
 		if p.PurposeID == effectivePurposeID {
 			return store.Transfer{}, ErrPurposeCorrectionNoop
 		}
-
-		if err := refuseClosedIncidental(ctx, q, p.PurposeID, ErrPurposeCorrectionTargetClosed); err != nil {
+		targetClosed, err := closedIncidental(ctx, q, p.PurposeID)
+		if err != nil {
 			return store.Transfer{}, err
 		}
-		if err := refuseClosedIncidental(ctx, q, effectivePurposeID, ErrPurposeCorrectionSourceClosed); err != nil {
-			return store.Transfer{}, err
+		if targetClosed {
+			return store.Transfer{}, ErrPurposeCorrectionTargetClosed
 		}
 
 		// The direction flip worked out in the doc comment: 'out' needs the
@@ -181,21 +167,89 @@ func effectivePeruntukan(ctx context.Context, q store.Querier, fundID int64, ori
 	return id, nil
 }
 
-// refuseClosedIncidental returns refusal when purposeID names a closed
-// incidental, and nil otherwise, including when purposeID is not an
-// incidental (main, pass_through): "no row, no guard", as PostTransaction's
-// IncidentalClosedOnForPurpose check. postTransferPairTx checks nothing
-// (ADR-033), so this stands in front of it for the target and the effective
-// peruntukan.
-func refuseClosedIncidental(ctx context.Context, q store.Querier, purposeID int64, refusal error) error {
+// CorrectionFacts is what CorrectionRefusal decides on: one row's facts, none
+// of them about the target pos. The write reads them off the row; GET
+// /api/transactions reads the same facts off its page query.
+type CorrectionFacts struct {
+	Kind TransactionKind
+	// IsReversal: the row carries reverses_transaction_id (a kind='adjustment' one).
+	IsReversal bool
+	// Named: a kind='normal' row with member_id set, a named contribution.
+	Named bool
+	// Reversed: ledger_entry.reversed, something already reverses the row.
+	Reversed bool
+	// EffectiveClosed: the row's EFFECTIVE purpose is a closed envelope.
+	EffectiveClosed bool
+}
+
+// CorrectionRefusal answers whether a row of the given facts may have its pos
+// corrected at all (ADR-033's eligibility table): nil when it may, otherwise
+// the named error PostPurposeCorrection returns. The write and the list's
+// correctable flag both ask it, so the door and the refusal share one rule
+// (#821). What depends on the target (a no-op, a closed target) is the
+// write's alone.
+//
+// A named contribution is refused (ADR-034): moving it would leave
+// participation counting the member against an envelope the money has left.
+// Reverse-then-correct is refused (ADR-042): the reversal already took the
+// money out of the row's effective purpose. A closed effective envelope is
+// refused because correcting out of it would leave its balance non-zero,
+// breaking the rollover invariant (ADR-031).
+func CorrectionRefusal(f CorrectionFacts) error {
+	switch f.Kind {
+	case TransactionKindOpening:
+		return ErrPurposeCorrectionOpening
+	case TransactionKindDues:
+		return ErrPurposeCorrectionDues
+	case TransactionKindReimbursement:
+		return ErrPurposeCorrectionReimbursement
+	case TransactionKindTransfer:
+		return ErrPurposeCorrectionTransfer
+	case TransactionKindAdjustment:
+		if f.IsReversal {
+			return ErrPurposeCorrectionReversal
+		}
+	case TransactionKindNormal:
+		if f.Named {
+			return ErrPurposeCorrectionNamedContribution
+		}
+	default:
+		return fmt.Errorf("transaction kind %q has no correction rule", f.Kind)
+	}
+	if f.Reversed {
+		return ErrPurposeCorrectionAlreadyReversed
+	}
+	if f.EffectiveClosed {
+		return ErrPurposeCorrectionSourceClosed
+	}
+	return nil
+}
+
+// closedIncidental reports whether purposeID names a closed incidental: false
+// when it is not an incidental at all (main, pass_through), "no row, no
+// guard", as PostTransaction's IncidentalClosedOnForPurpose check.
+// postTransferPairTx checks nothing (ADR-033), so PostPurposeCorrection asks
+// this for the effective peruntukan and the target ahead of it.
+func closedIncidental(ctx context.Context, q store.Querier, purposeID int64) (bool, error) {
 	closedOn, err := q.IncidentalClosedOnForPurpose(ctx, purposeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("checking incidental closed state: %w", err)
+		return false, fmt.Errorf("checking incidental closed state: %w", err)
 	}
-	if closedOn != nil {
+	return closedOn != nil, nil
+}
+
+// refuseClosedIncidental returns refusal when purposeID names a closed
+// incidental, and nil otherwise (closedIncidental), for the writes whose
+// postTransferPairTx or insert checks nothing itself.
+func refuseClosedIncidental(ctx context.Context, q store.Querier, purposeID int64, refusal error) error {
+	closed, err := closedIncidental(ctx, q, purposeID)
+	if err != nil {
+		return err
+	}
+	if closed {
 		return refusal
 	}
 	return nil

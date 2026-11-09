@@ -728,6 +728,7 @@ describe('Incidentals', () => {
       note: 'Iuran halal bihalal',
       created_at: 7,
       reversible: true,
+      correctable: true,
     } satisfies Transaction
     const posts: string[] = []
     const fetchMock = routedFetch([

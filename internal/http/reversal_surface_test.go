@@ -199,10 +199,11 @@ func TestANegativeTotalKeluarIsPrintedEverywhere(t *testing.T) {
 	}
 }
 
-// Every refusal the ledger gives a reversal reaches the wire under its own code and
-// status, and the purpose-correction route answers a reversed row with its own code
-// (ADR-042). The rows are built through the ledger, the calls go through the router.
-func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
+// Every refusal the ledger gives a reversal (ADR-042), and every row-only refusal
+// it gives a purpose correction (ADR-033), reaches the wire under its own code and
+// status, and the list names the same code first (#809, #821). The rows are built
+// through the ledger, the calls go through the router.
+func TestRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newReportFixture(t, "Kas RT 05")
@@ -371,15 +372,49 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 		}
 	}
 
-	// Reverse, then correct: the purpose-correction route's own code.
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/transactions/%d/purpose-correction", reversed),
-		strings.NewReader(fmt.Sprintf(`{"purpose_id":%d}`, envelope.PurposeID))))
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("POST purpose-correction of a reversed row = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	// Perbaiki pos the same way (#821): every refused row reads correctable
+	// false with the very code the correction POST refuses it with, since both
+	// come from one CorrectionRefusal call. The target is the main pos, which
+	// none of these refusals reaches.
+	var reversal int64
+	for _, row := range listed {
+		if row.ReversesTransactionID != nil && *row.ReversesTransactionID == reversed {
+			reversal = row.ID
+		}
 	}
-	if got := decodeError(t, rec); got.Code != "purpose_correction_already_reversed" {
-		t.Errorf("error code = %q, want purpose_correction_already_reversed", got.Code)
+	for _, tc := range []struct {
+		name string
+		id   int64
+		code string
+	}{
+		{"an opening balance", opening, "purpose_correction_opening"},
+		{"a reimbursement payout", payout.ID, "purpose_correction_reimbursement"},
+		{"a transfer leg", leg, "purpose_correction_transfer"},
+		{"a reversal", reversal, "purpose_correction_reversal"},
+		{"a reversed row", reversed, "purpose_correction_already_reversed"},
+		{"a row in a closed envelope", inEnvelope, "purpose_correction_source_closed"},
+	} {
+		if row, ok := listed[tc.id]; ok {
+			if row.Correctable || row.CorrectionRefusal == nil || *row.CorrectionRefusal != tc.code {
+				t.Errorf("%s: listed correctable %v, correction_refusal %v, want false and %q", tc.name, row.Correctable, row.CorrectionRefusal, tc.code)
+			}
+		} else if tc.id != leg {
+			t.Errorf("%s: row %d is missing from GET /api/transactions", tc.name, tc.id)
+		}
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/transactions/%d/purpose-correction", tc.id),
+			strings.NewReader(fmt.Sprintf(`{"purpose_id":%d}`, f.mainID))))
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s: POST purpose-correction = %d, want %d (body: %s)", tc.name, rec.Code, http.StatusConflict, rec.Body.String())
+			continue
+		}
+		if got := decodeError(t, rec); got.Code != tc.code {
+			t.Errorf("%s: error code = %q, want %q", tc.name, got.Code, tc.code)
+		}
+	}
+	// An ordinary row stays correctable, with no reason.
+	if row := listed[aheadRow]; !row.Correctable || row.CorrectionRefusal != nil {
+		t.Errorf("an ordinary row: listed correctable %v, correction_refusal %v, want true and null", row.Correctable, row.CorrectionRefusal)
 	}
 }
 

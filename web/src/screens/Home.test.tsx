@@ -444,7 +444,10 @@ describe('Home', () => {
   // The same row offers the same actions wherever it is opened (#739): Beranda's
   // recent activity is not a read-only copy of Riwayat's.
   it("offers Perbaiki pos and Batalkan transaksi in a recent row's detail, and a correction re-reads Beranda", async () => {
-    const reversibleRows = { ...transactionsPage, transactions: transactionsPage.transactions.map((t) => ({ ...t, reversible: true })) }
+    const reversibleRows = {
+      ...transactionsPage,
+      transactions: transactionsPage.transactions.map((t) => ({ ...t, reversible: true, correctable: true })),
+    }
     const posts: string[] = []
     const fetchMock = stubHome({
       extra: [

@@ -118,7 +118,12 @@ function Detail({
   const periods = transaction.periods ?? []
   const canCorrect = onCorrectPurpose !== undefined && !transfer && canCorrectPurpose(transaction)
   const canReverse = onReverse !== undefined && transaction.reversible && !transfer
-  const refusalLine = onReverse !== undefined && !transfer ? reversalRefusalLine(transaction.reversal_refusal) : null
+  const refusalLine = transfer
+    ? null
+    : refusalLineFor(
+        onReverse !== undefined ? transaction.reversal_refusal : null,
+        onCorrectPurpose !== undefined ? transaction.correction_refusal : null,
+      )
   const uploading = upload.status === 'loading'
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
@@ -217,9 +222,9 @@ function Detail({
 
       {/* Every action of the row, destructive last (#739), laid out by
           DetailActions (#768). Perbaiki
-          pos on the row's eligibility (the one PurposeLine used to apply,
-          never a transfer); Nota only where receipts are wired; Batalkan on
-          the server's `reversible` (ADR-042). */}
+          pos on the server's `correctable` (ADR-033, #821; never a
+          transfer); Nota only where receipts are wired; Batalkan on the
+          server's `reversible` (ADR-042). */}
       <DetailActions
         actions={[
           ...(canCorrect
@@ -255,8 +260,9 @@ function Detail({
             : []),
         ]}
       />
-      {/* Where Batalkan would be, one muted line saying why it is not (#809) -
-          only for refusals she can act on or would wonder about. */}
+      {/* Where Batalkan or Perbaiki pos would be, one muted line saying why
+          it is not (#809, #821) - only for refusals she can act on or would
+          wonder about. */}
       {refusalLine && <p className="text-sm text-muted-foreground">{refusalLine}</p>}
       {/* Hidden from the accessibility tree: the nota button above is the one
           control, and an exposed file input reads as a second "Tambah foto
@@ -280,16 +286,19 @@ function Detail({
 }
 
 /**
- * The line explaining why a row is not reversible (#809), keyed on the
- * server's reversal_refusal code, so the reason and the flag come from one
- * rule. Only three refusals are explained: a closed envelope, a cek kas fix,
- * a counted row dated after today. A kind that never reverses, or a row
- * already reversed, reads as what it is - null, no line.
+ * The line explaining a missing Batalkan or Perbaiki pos (#809, #821), keyed
+ * on the server's refusal codes, so the reason and the flag come from one
+ * rule. Each code is null where the caller offers no such action. A closed
+ * envelope refuses both actions, so it has one line for either; past that
+ * only two reversal refusals are explained: a cek kas fix and a counted row
+ * dated after today. A kind that never reverses or moves, or a row already
+ * reversed, reads as what it is - null, no line.
  */
-function reversalRefusalLine(code: string | null | undefined): string | null {
-  switch (code) {
-    case 'incidental_closed':
-      return copy.transactionDetail.reversalRefusedClosedEnvelope
+function refusalLineFor(reversal: string | null | undefined, correction: string | null | undefined): string | null {
+  if (reversal === 'incidental_closed' || correction === 'purpose_correction_source_closed') {
+    return copy.transactionDetail.closedEnvelope
+  }
+  switch (reversal) {
     case 'reversal_reconciliation_fix':
       return copy.common.errors.reversal_reconciliation_fix
     case 'reversal_before_original':
