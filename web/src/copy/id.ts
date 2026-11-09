@@ -1453,6 +1453,10 @@ export const copy = {
     // Read after a row's visible nota count ("2 foto nota"); the camera
     // glyph beside the count is hidden from screen readers.
     receiptCountWord: 'foto nota',
+    // Where Batalkan transaksi would be, on a row whose effective pos is a
+    // closed envelope (#809). The other explained refusals reuse their
+    // common.errors line; incidental_closed's there is about recording.
+    reversalRefusedClosedEnvelope: 'Amplop ini sudah ditutup. Buka lagi dulu sebelum membatalkan transaksi ini.',
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
     // memberLabel, periodLabel and amountLabel label TransactionSummary, the

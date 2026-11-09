@@ -118,6 +118,7 @@ function Detail({
   const periods = transaction.periods ?? []
   const canCorrect = onCorrectPurpose !== undefined && !transfer && canCorrectPurpose(transaction)
   const canReverse = onReverse !== undefined && transaction.reversible && !transfer
+  const refusalLine = onReverse !== undefined && !transfer ? reversalRefusalLine(transaction.reversal_refusal) : null
   const uploading = upload.status === 'loading'
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
@@ -254,6 +255,9 @@ function Detail({
             : []),
         ]}
       />
+      {/* Where Batalkan would be, one muted line saying why it is not (#809) -
+          only for refusals she can act on or would wonder about. */}
+      {refusalLine && <p className="text-sm text-muted-foreground">{refusalLine}</p>}
       {/* Hidden from the accessibility tree: the nota button above is the one
           control, and an exposed file input reads as a second "Tambah foto
           nota" button. */}
@@ -273,4 +277,24 @@ function Detail({
       {upload.status === 'error' && upload.error && <ErrorState error={upload.error} />}
     </div>
   )
+}
+
+/**
+ * The line explaining why a row is not reversible (#809), keyed on the
+ * server's reversal_refusal code, so the reason and the flag come from one
+ * rule. Only three refusals are explained: a closed envelope, a cek kas fix,
+ * a counted row dated after today. A kind that never reverses, or a row
+ * already reversed, reads as what it is - null, no line.
+ */
+function reversalRefusalLine(code: string | null | undefined): string | null {
+  switch (code) {
+    case 'incidental_closed':
+      return copy.transactionDetail.reversalRefusedClosedEnvelope
+    case 'reversal_reconciliation_fix':
+      return copy.common.errors.reversal_reconciliation_fix
+    case 'reversal_before_original':
+      return copy.common.errors.reversal_before_original
+    default:
+      return null
+  }
 }

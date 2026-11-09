@@ -105,6 +105,9 @@ export interface Transaction {
   /** Whether the ledger would accept a reversal of this row now - the server's
    * answer, so the client keeps no copy of the eligibility rule. */
   reversible?: boolean
+  /** The named-error code behind a false `reversible` (#809), from the same
+   * server call; null when reversible. The detail explains a few of them. */
+  reversal_refusal?: string | null
   /** Whether a cek kas has counted this row, which picks the date a reversal
    * would take: its own day (false) or today (true). */
   counted?: boolean

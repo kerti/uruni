@@ -141,6 +141,7 @@ const transactionKeys: Keys<Transaction> = {
   effective_purpose_id: true,
   reversed: true,
   reversible: true,
+  reversal_refusal: true,
   counted: true,
   reverses_occurred_on: true,
   receipt_ids: true,
