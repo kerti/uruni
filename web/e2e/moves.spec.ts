@@ -106,7 +106,7 @@ test.describe('moves and corrections', () => {
     // detail carries the Perbaiki pos button (#739).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     const row = page.getByRole('listitem').filter({ hasText: formatIDR(spent) })
-    await row.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    await row.getByRole('button', { name: /^Lihat rincian / }).click()
     await page
       .getByRole('dialog', { name: copy.transactionDetail.heading })
       .getByRole('button', { name: copy.purposeCorrection.heading })
@@ -159,7 +159,7 @@ test.describe('moves and corrections', () => {
     }
 
     // The detail reads the movement, not a direction, and cannot be reversed.
-    await location.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    await location.getByRole('button', { name: /^Lihat rincian / }).click()
     const dialog = page.getByRole('dialog', { name: copy.transactionDetail.heading })
     await expect(dialog.getByText(copy.rowLabels.transferLocation.text('Tunai', 'Bank Uji Coba'))).toBeVisible()
     await expect(dialog.getByText(copy.transactionDetail.directionIn)).toHaveCount(0)

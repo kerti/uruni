@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Camera, MagnifyingGlass } from '@phosphor-icons/react'
+import { ArrowDownLeft, ArrowUpRight, MagnifyingGlass } from '@phosphor-icons/react'
 import SectionLabel from '@/components/SectionLabel'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -18,7 +18,8 @@ import { formatIDR } from '@/lib/money'
 import { listDuesPayments } from '@/lib/dues'
 import { useApi } from '@/lib/useApi'
 import type { DuesPaymentHistoryRow, DuesPaymentsPage } from '@/lib/dues'
-import { card } from '@/components/cardClasses'
+import { tappableCard } from '@/components/cardClasses'
+import ReceiptCount from '@/components/ReceiptCount'
 
 const text = copy.history.dues
 // reversalRow/reversedBadge name these two facts on the period-scoped panel
@@ -207,24 +208,12 @@ function PaymentHistoryRow({ row, onOpen }: { row: DuesPaymentHistoryRow; onOpen
   const receiptCount = row.receipt_ids.length
 
   return (
-    <li className={`relative flex flex-col gap-2 ${card}`}>
+    <li>
       {/* The whole card is one tap target that opens the entry in full (#768),
-          as on Transaksi: a full-card button underneath the content, which
-          ignores pointer events so a tap anywhere falls through to it. Every
-          action (Batalkan, the nota) lives in the detail. */}
-      <button
-        type="button"
-        aria-label={
-          copy.transactionDetail.openAria(
-            `${row.member_name}, ${formatPeriod(row.dues_period)}`,
-            formatIDR(row.amount),
-            formatIsoDate(row.occurred_on),
-          ) + (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
-        }
-        onClick={onOpen}
-        className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
-      />
-      <div className="pointer-events-none relative flex items-start justify-between gap-3">
+          as on Transaksi, named by a visually hidden verb plus everything it
+          shows (#808). Every action (Batalkan, the nota) lives in the detail. */}
+      <button type="button" onClick={onOpen} className={`flex items-start justify-between gap-3 ${tappableCard}`}>
+        <span className="sr-only">{copy.transactionDetail.openVerb}</span>{' '}
         <span className="flex min-w-0 items-start gap-2">
           {row.is_reversal ? (
             <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
@@ -245,19 +234,13 @@ function PaymentHistoryRow({ row, onOpen }: { row: DuesPaymentHistoryRow; onOpen
             {!row.is_reversal && reversed && <span className="text-sm text-muted-foreground">{rowText.reversedBadge}</span>}
           </span>
         </span>
-        {/* As a Transaksi card: the amount alone on its line, the camera and
-            count under it once a nota exists (read-only; the count rides in
-            the button's name). */}
+        {/* As a Transaksi card: the amount alone on its line, the nota
+            count under it once a nota exists. */}
         <span className="flex shrink-0 flex-col items-end gap-1.5">
           <span className="tabular font-medium">{formatIDR(row.amount)}</span>
-          {receiptCount > 0 && (
-            <span aria-hidden="true" className="flex items-center gap-1 text-primary">
-              <Camera className="size-4" />
-              <span className="tabular text-sm font-medium">{receiptCount}</span>
-            </span>
-          )}
+          <ReceiptCount count={receiptCount} />
         </span>
-      </div>
+      </button>
     </li>
   )
 }

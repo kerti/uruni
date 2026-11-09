@@ -1,10 +1,10 @@
-import { Camera, PencilLine } from '@phosphor-icons/react'
+import { PencilLine } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReversalDialog from '@/components/ReversalDialog'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
-import { reversalBadge, transferHeadline, transferKind } from '@/components/rowLabel'
+import { reversalBadge, transferKind } from '@/components/rowLabel'
 import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { useToast } from '@/components/toast/useToast'
@@ -18,7 +18,8 @@ import { useDialogParam } from '@/lib/useDialogParam'
 import CorrectPurposeDialog from '@/components/CorrectPurposeDialog'
 import type { Purpose } from '@/lib/purposes'
 import type { Transaction } from '@/lib/transactions'
-import { card } from '@/components/cardClasses'
+import { tappableCard } from '@/components/cardClasses'
+import ReceiptCount from '@/components/ReceiptCount'
 
 const reverseText = copy.history.transactions
 
@@ -153,28 +154,20 @@ export default function TransactionList({
               const kind = transferKind(transaction)
               const receiptCount = transaction.receipt_ids?.length ?? 0
               return (
-                <li key={transaction.id} className={`relative flex flex-col gap-2 ${card}`}>
+                <li key={transaction.id}>
                   {/* The whole card opens the entry in full (#359, #739), and it is
                     the row's only control: every action (Perbaiki pos, Nota,
                     Batalkan) lives in that detail, because controls nested in a
-                    dense card were easy to mis-tap. A full-card button
-                    *underneath* the content; the content above ignores pointer
-                    events, so a tap anywhere on the card falls through to it. The
-                    receipt count rides in the accessible name, since the glyph
-                    beside the amount is hidden from screen readers. */}
+                    dense card were easy to mis-tap. No aria-label (#808): the
+                    verb is visually hidden text first, so the name is the verb
+                    plus every word the card shows - months, member, kind word,
+                    note - and two rows on one pos, day and amount read apart. */}
                   <button
                     type="button"
-                    aria-label={
-                      copy.transactionDetail.openAria(
-                        transferHeadline(transaction) ?? purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
-                        formatIDR(transaction.amount),
-                        formatIsoDate(transaction.occurred_on),
-                      ) + (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
-                    }
                     onClick={() => entry.open(String(transaction.id))}
-                    className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
-                  />
-                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                    className={`flex items-start justify-between gap-3 ${tappableCard}`}
+                  >
+                    <span className="sr-only">{copy.transactionDetail.openVerb}</span>{' '}
                     <span className="flex min-w-0 items-start gap-2">
                       <TransactionGlyph transaction={transaction} />
                       <span className="flex min-w-0 flex-col">
@@ -207,14 +200,9 @@ export default function TransactionList({
                       the detail's Nota button. */}
                     <span className="flex shrink-0 flex-col items-end gap-1.5">
                       <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
-                      {receiptCount > 0 && (
-                        <span aria-hidden="true" className="flex items-center gap-1 text-primary">
-                          <Camera className="size-4" />
-                          <span className="tabular text-sm font-medium">{receiptCount}</span>
-                        </span>
-                      )}
+                      <ReceiptCount count={receiptCount} />
                     </span>
-                  </div>
+                  </button>
                 </li>
               )
             })}

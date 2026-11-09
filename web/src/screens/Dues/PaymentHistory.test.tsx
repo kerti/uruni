@@ -85,9 +85,9 @@ describe('PaymentHistory', () => {
     render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     const withNota = (await screen.findByText('Warga Satu')).closest('li')!
-    expect(within(withNota).getByRole('button')).toHaveAccessibleName(
-      copy.transactionDetail.openAria('Warga Satu, Agustus 2026', formatIDR(25_000), '1 Agustus 2026') +
-        `, ${copy.transactionDetail.receiptCountAria(2)}`,
+    expect(within(withNota).getByRole('button')).toHaveAccessibleName(new RegExp(`2 ${copy.transactionDetail.receiptCountWord}$`))
+    expect(within(screen.getByText('Warga Dua').closest('li')!).getByRole('button')).not.toHaveAccessibleName(
+      new RegExp(copy.transactionDetail.receiptCountWord),
     )
     const amount = within(withNota).getByText(formatIDR(25_000))
     expect(amount.parentElement).toHaveTextContent('2')
@@ -262,17 +262,19 @@ describe('PaymentHistory', () => {
       return calls
     }
 
-    it('has one button, the whole card, named by its facts, and no button of its own', async () => {
+    it('has one button, the whole card, named by the verb and everything it shows (#808)', async () => {
       stubDetailApi()
       render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
       const card = (await screen.findByText('Warga Satu')).closest('li')!
       const buttons = within(card).getAllByRole('button')
       expect(buttons).toHaveLength(1)
-      expect(buttons[0]).toHaveAccessibleName(
-        copy.transactionDetail.openAria('Warga Satu, Agustus 2026', formatIDR(25_000), '1 Agustus 2026'),
-      )
-      expect(card).toHaveClass('rounded-lg', 'px-4', 'py-3')
+      expect(buttons[0]).not.toHaveAttribute('aria-label')
+      expect(buttons[0]).toHaveAccessibleName(new RegExp(`^${copy.transactionDetail.openVerb} `))
+      for (const part of ['Warga Satu', 'Agustus 2026', '1 Agustus 2026', formatIDR(25_000)]) {
+        expect(buttons[0]).toHaveAccessibleName(new RegExp(part.replace(/\./g, '\\.')))
+      }
+      expect(buttons[0]).toHaveClass('rounded-lg', 'px-4', 'py-3')
     })
 
     it('opens the entry detail at ?entry=<id>, and Batalkan hands off to the reversal dialog, worded as on Transaksi, and posts', async () => {

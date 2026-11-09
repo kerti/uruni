@@ -218,7 +218,7 @@ test.describe('talangan and titipan', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
     // The card now carries the photo, in its accessible name.
-    const countName = new RegExp(copy.transactionDetail.receiptCountAria(1))
+    const countName = new RegExp(`1 ${copy.transactionDetail.receiptCountWord}`)
     await expect(card.getByRole('button', { name: countName })).toBeVisible()
 
     // Hapus while the photo is still on it: refused, with the fix named, and

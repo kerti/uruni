@@ -1,4 +1,4 @@
-import { Camera, MagnifyingGlass } from '@phosphor-icons/react'
+import { MagnifyingGlass } from '@phosphor-icons/react'
 import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -29,7 +29,8 @@ import SettleDialog from '@/screens/Reimbursements/SettleDialog'
 import ClaimSummary from '@/screens/Reimbursements/ClaimSummary'
 import ClaimDetailDialog from '@/screens/Reimbursements/ClaimDetailDialog'
 import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
-import { card } from '@/components/cardClasses'
+import { tappableCard } from '@/components/cardClasses'
+import ReceiptCount from '@/components/ReceiptCount'
 import { Badge } from '@/components/Badge'
 
 const text = copy.reimbursements
@@ -345,23 +346,16 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
               const purposeName = purposeNames.get(claim.purpose_id) ?? '-'
               const receiptCount = claim.receipt_ids?.length ?? 0
               return (
-                <li key={claim.id} className={`relative flex flex-col gap-2 ${card}`}>
-                  {/* One tap target (#768), the card shape Transaksi uses: a
-                    full-card button underneath the content, which ignores
-                    pointer events so a tap anywhere falls through to it.
-                    Every action lives in the claim's detail. The receipt
-                    count rides in the accessible name, since the glyph beside
-                    the amount is hidden from screen readers. */}
+                <li key={claim.id}>
+                  {/* One tap target (#768), the card shape Transaksi uses,
+                    named by a visually hidden verb plus everything it shows
+                    (#808). Every action lives in the claim's detail. */}
                   <button
                     type="button"
-                    aria-label={
-                      text.detail.openAria(memberName, purposeName, formatIDR(claim.amount), formatIsoDate(claim.incurred_on)) +
-                      (receiptCount > 0 ? `, ${copy.transactionDetail.receiptCountAria(receiptCount)}` : '')
-                    }
                     onClick={() => entry.open(String(claim.id))}
-                    className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
-                  />
-                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                    className={`flex items-start justify-between gap-3 ${tappableCard}`}
+                  >
+                    <span className="sr-only">{text.detail.openVerb}</span>{' '}
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate">{memberName}</span>
                       <span className="truncate text-sm text-muted-foreground">{purposeName}</span>
@@ -371,14 +365,9 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                     </span>
                     <span className="flex shrink-0 flex-col items-end gap-1.5">
                       <span className="tabular font-medium">{formatIDR(claim.amount)}</span>
-                      {receiptCount > 0 && (
-                        <span aria-hidden="true" className="flex items-center gap-1 text-primary">
-                          <Camera className="size-4" />
-                          <span className="tabular text-sm font-medium">{receiptCount}</span>
-                        </span>
-                      )}
+                      <ReceiptCount count={receiptCount} />
                     </span>
-                  </div>
+                  </button>
                 </li>
               )
             })}

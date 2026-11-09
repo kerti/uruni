@@ -46,7 +46,7 @@ function row(page: Page, note: string): Locator {
 
 async function openForm(page: Page, note: string) {
   await row(page, note)
-    .getByRole('button', { name: /^Lihat rincian:/ })
+    .getByRole('button', { name: /^Lihat rincian / })
     .click()
   await page.getByRole('dialog', { name: copy.transactionDetail.heading }).getByRole('button', { name: t.reverse }).click()
   // The detail hands off: it closes, and the reversal dialog opens in its place.
@@ -109,7 +109,7 @@ test.describe('reversing an ordinary transaction', () => {
     await expect(page.getByText(copy.rowLabels.unnamedReversal.text(formatIsoDate(firstOfMonth))).first()).toBeVisible()
 
     await row(page, uncounted)
-      .getByRole('button', { name: /^Lihat rincian:/ })
+      .getByRole('button', { name: /^Lihat rincian / })
       .click()
     const dialog = page.getByRole('dialog', { name: copy.transactionDetail.heading })
     await expect(dialog.getByText(copy.dues.history.reversedBadge)).toBeVisible()

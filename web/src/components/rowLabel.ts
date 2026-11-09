@@ -188,15 +188,3 @@ export function transferKind(transaction: Transaction): string | null {
   if (!isTransfer(transaction)) return null
   return rowLabelFor(transaction)?.srWord ?? null
 }
-
-/**
- * A transfer's label as one plain string, for what has no room for the icon
- * and the sr-only word: a card's accessible name, or a bare row's headline.
- * null for any row that is not a labelled transfer.
- */
-export function transferHeadline(transaction: Transaction): string | null {
-  if (!isTransfer(transaction)) return null
-  const label = rowLabelFor(transaction)
-  if (!label) return null
-  return label.srWord ? `${label.srWord}: ${label.text}` : label.text
-}
