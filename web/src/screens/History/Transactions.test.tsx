@@ -519,7 +519,7 @@ describe('Transactions tab: the month summary and month headers (#751)', () => {
 
 describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
   it("opens the dialog from the detail's Perbaiki pos and writes it to the URL", async () => {
-    stubApi(() => ({ transactions: [row(5, 'Setoran seragam')], next_cursor: null }))
+    stubApi(() => ({ transactions: [{ ...row(5, 'Setoran seragam'), correctable: true }], next_cursor: null }))
     const user = userEvent.setup()
     renderAt('/history/transactions')
 

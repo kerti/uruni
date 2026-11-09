@@ -130,6 +130,13 @@ type transactionResponse struct {
 	// reversible, or on a row the page did not compute it for. The client
 	// explains only the refusals she can act on or would wonder about.
 	ReversalRefusal *string `json:"reversal_refusal"`
+	// Correctable is true exactly when PostPurposeCorrection would accept the
+	// row with some target (ledger.CorrectionRefusal, the same function, #821);
+	// a no-op or closed target is the write's to refuse. CorrectionRefusal is
+	// the named-error code behind a false Correctable, null when correctable.
+	// Both false/null on a row the page did not compute them for (POST's reply).
+	Correctable       bool    `json:"correctable"`
+	CorrectionRefusal *string `json:"correction_refusal"`
 	// Counted is true when a cek kas has counted this row, which picks the date a
 	// reversal would take (the original's own day, or today).
 	Counted bool `json:"counted"`
@@ -266,6 +273,13 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.L
 		EffectiveClosed:     t.EffectiveClosedOn != nil,
 		Counted:             resp.Counted,
 	}, today))
+	resp.setCorrection(ledger.CorrectionRefusal(ledger.CorrectionFacts{
+		Kind:            ledger.TransactionKind(t.Kind),
+		IsReversal:      t.ReversesTransactionID != nil,
+		Named:           t.MemberID != nil,
+		Reversed:        resp.Reversed,
+		EffectiveClosed: t.EffectiveClosedOn != nil,
+	}))
 	if resp.Reversed {
 		resp.ReversalState = reversalStateAll
 	}
@@ -355,12 +369,23 @@ func applyDuesGroup(resp *transactionResponse, t store.ListTransactionsPageRow, 
 // code (a kind with no reversal rule) is still not reversible, with no reason.
 func (resp *transactionResponse) setReversal(refusal error) {
 	resp.Reversible = refusal == nil
-	resp.ReversalRefusal = nil
+	resp.ReversalRefusal = refusalCode(refusal)
+}
+
+// setCorrection is setReversal's twin for Correctable and CorrectionRefusal.
+func (resp *transactionResponse) setCorrection(refusal error) {
+	resp.Correctable = refusal == nil
+	resp.CorrectionRefusal = refusalCode(refusal)
+}
+
+// refusalCode is a named ledger error's code, nil for nil or an error with none.
+func refusalCode(refusal error) *string {
 	var named *ledger.Error
 	if errors.As(refusal, &named) {
 		code := named.Code()
-		resp.ReversalRefusal = &code
+		return &code
 	}
+	return nil
 }
 
 // duesGroupOf is the rows of the dues payment or dues-reversal group a listed row

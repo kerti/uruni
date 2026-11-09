@@ -185,21 +185,10 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
 
 /**
  * Whether this row's pos may be corrected at all (ADR-033's eligibility
- * list). The server refuses the rest with a named 409; this decides whether
- * the row offers the control, so an ineligible row renders its pos as plain
- * text rather than a dead tap.
- *
- * kind='adjustment' is eligible EXCEPT a reversal, which copies its original's
- * effective pos (ADR-029, ADR-042).
- *
- * A named contribution (kind='normal' with member_id set) is excluded too
- * (ADR-034): moving it would leave participation counting the member against
- * an envelope the money has left. So is a row something already reverses
- * (ADR-042), on the server's `reversed` flag, even on an unfetched page: the
- * ledger refuses reverse-then-correct.
+ * list): the server's `correctable`, computed by the same rule the
+ * correction write applies (#821), so the door is never offered on a row the
+ * write would refuse. A row the server did not compute it for is not.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
-  if (transaction.reversed) return false
-  if (transaction.kind === 'normal') return transaction.member_id === null
-  return transaction.kind === 'adjustment' && transaction.reverses_transaction_id === null
+  return transaction.correctable === true
 }

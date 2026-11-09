@@ -297,7 +297,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   })
 
   it('offers Perbaiki pos in the detail of an eligible row, and hands the row to the correction dialog once the detail is gone', async () => {
-    renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
+    renderCorrectableRows([transaction({ id: 12, purpose_id: 1, correctable: true })])
 
     const detail = await openDetail()
     await userEvent.click(within(detail).getByRole('button', { name: copy.purposeCorrection.heading }))
@@ -316,7 +316,17 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it("offers no Perbaiki pos in an ineligible row's detail - a dead tap is worse than none", async () => {
     // Eligibility varies row by row (ADR-033): a dues row and the expense
     // beneath it look identical, so the detail decides.
-    renderCorrectableRows([transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' })])
+    renderCorrectableRows([
+      transaction({
+        id: 13,
+        kind: 'dues',
+        member_id: 1,
+        dues_period: '2026-08',
+        member_name: 'Budi',
+        correctable: false,
+        correction_refusal: 'purpose_correction_dues',
+      }),
+    ])
 
     const detail = await openDetail()
 
@@ -333,7 +343,19 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
         member_id: 1,
         dues_period: '2026-08',
         member_name: 'Budi',
+        correctable: false,
+        correction_refusal: 'purpose_correction_reversal',
       }),
+    ])
+
+    const detail = await openDetail()
+
+    expect(within(detail).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+  })
+
+  it('offers no Perbaiki pos on a row in a closed envelope, though it is an ordinary row (#821)', async () => {
+    renderCorrectableRows([
+      transaction({ id: 18, purpose_id: 2, correctable: false, correction_refusal: 'purpose_correction_source_closed' }),
     ])
 
     const detail = await openDetail()
@@ -462,7 +484,7 @@ describe('TransactionList reversal (ADR-042)', () => {
   // #809: where the door is absent, the detail says why - for the refusals
   // she can act on or would wonder about, keyed on the server's code.
   it.each([
-    ['a row in a closed envelope', 'incidental_closed', copy.transactionDetail.reversalRefusedClosedEnvelope],
+    ['a row in a closed envelope', 'incidental_closed', copy.transactionDetail.closedEnvelope],
     ['the fix a cek kas line names', 'reversal_reconciliation_fix', copy.common.errors.reversal_reconciliation_fix],
     ['a counted row dated after today', 'reversal_before_original', copy.common.errors.reversal_before_original],
   ])('says why on %s, in place of the door', async (_name, code, line) => {
@@ -490,12 +512,27 @@ describe('TransactionList reversal (ADR-042)', () => {
 
     const dialog = await screen.findByRole('dialog')
     for (const line of [
-      copy.transactionDetail.reversalRefusedClosedEnvelope,
+      copy.transactionDetail.closedEnvelope,
       copy.common.errors.reversal_reconciliation_fix,
       copy.common.errors.reversal_before_original,
     ]) {
       expect(within(dialog).queryByText(line)).not.toBeInTheDocument()
     }
+  })
+
+  // #821: a closed envelope refuses Perbaiki pos too, and one line covers
+  // both doors, including a row only the correction is refused on.
+  it.each([
+    ['refused both doors', { reversible: false, reversal_refusal: 'incidental_closed' }],
+    ['refused only Perbaiki pos', { kind: 'adjustment' as const, reversible: false, reversal_refusal: 'reversal_adjustment' }],
+  ])('says once why on a closed-envelope row %s', async (_name, fields) => {
+    renderReversible([transaction({ id: 32, ...fields, correctable: false, correction_refusal: 'purpose_correction_source_closed' })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: copy.purposeCorrection.heading })).not.toBeInTheDocument()
+    expect(within(dialog).getAllByText(copy.transactionDetail.closedEnvelope)).toHaveLength(1)
   })
 
   it('gives no reason where no handler is passed: Beranda offers no reversal to explain', async () => {
@@ -504,7 +541,7 @@ describe('TransactionList reversal (ADR-042)', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian / }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).queryByText(copy.transactionDetail.reversalRefusedClosedEnvelope)).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(copy.transactionDetail.closedEnvelope)).not.toBeInTheDocument()
   })
 
   it('shows no door where no handler is passed (Beranda)', async () => {
