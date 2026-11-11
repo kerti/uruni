@@ -141,6 +141,7 @@ Asset files live in [`/brand`](./brand):
 - `uruni-logomark-reversed.svg` — for dark/Forest backgrounds (near-grey vessel, Sage dot).
 - `uruni-appicon.svg` — Forest rounded-square icon with the knockout vessel.
 - `uruni-lockup-horizontal.svg` / `uruni-lockup-stacked.svg` — mark + wordmark.
+- `uruni-lockup-horizontal-reversed.svg` — the horizontal lockup in the reversed colorway, for dark backgrounds (the README's dark-mode logo).
 
 ```svg
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
