@@ -10,7 +10,7 @@ import { sourceRef, type Build } from '@/lib/build'
 export const repoURL = (import.meta.env.VITE_SOURCE_URL || 'https://github.com/kerti/uruni').replace(/\/+$/, '')
 
 /** The maintainer's own site, credited on the login screen (#356). */
-export const maintainerURL = 'https://radityakertiyasa.com'
+export const maintainerURL = 'https://kerti.dev'
 
 /** The source tree of the build that is running (see sourceRef). */
 export function sourceURL(build: Build | null): string {

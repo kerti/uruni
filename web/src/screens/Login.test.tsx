@@ -157,6 +157,6 @@ describe('Login footer', () => {
     const notices = screen.getByRole('link', { name: copy.auth.chrome.thirdParty })
     expect(notices).toHaveAttribute('href', '/third-party-notices')
     expect(notices).toHaveAttribute('target', '_blank')
-    expect(screen.getByRole('link', { name: copy.auth.chrome.maintainer })).toHaveAttribute('href', 'https://radityakertiyasa.com')
+    expect(screen.getByRole('link', { name: copy.auth.chrome.maintainer })).toHaveAttribute('href', 'https://kerti.dev')
   })
 })
