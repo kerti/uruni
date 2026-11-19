@@ -70,7 +70,7 @@ test.describe('reimbursements', () => {
     firstMemberName = await recordClaim(page, '10000')
 
     // Recording lands on Beranda, which shows what the fund owes.
-    await expect(page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })).toBeVisible()
+    await expect(page.getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })).toBeVisible()
 
     // Then Riwayat's Talangan tab, where the claim lives.
     await openTalangan(page)

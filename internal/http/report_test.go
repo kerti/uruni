@@ -268,7 +268,7 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 
 	for _, month := range []string{"2026-09", "2026-10"} {
 		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month="+month).Body.String()
-		// #836: the owed total is the subtraction under the "Bisa dipakai" headline.
+		// #836: the owed total is the subtraction under the "Dana tersedia" headline.
 		for _, want := range []string{
 			"<p class=\"label\">" + report.Text.UsableLabel + "</p>",
 			"<dt>" + report.Text.OwedLabel + "</dt><dd class=\"tabular\">" + money.FormatIDR(-45_000) + "</dd>",

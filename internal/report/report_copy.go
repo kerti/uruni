@@ -210,8 +210,8 @@ var Text = Copy{
 	Matched:         "Kas dan catatan cocok saat dicek.",
 	Discrepancy:     func(amount string) string { return "Ada selisih " + amount + "." },
 	NeverChecked:    "Belum pernah dicek.",
-	OwedLabel:       "Talangan belum dibayar",
-	UsableLabel:     "Bisa dipakai",
+	OwedLabel:       "Talangan",
+	UsableLabel:     "Dana tersedia",
 	PurposesLabel:   "Saldo per pos",
 
 	MonthLabel:  "Bulan",

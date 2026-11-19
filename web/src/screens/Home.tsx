@@ -239,15 +239,22 @@ export default function Home({
               own lines, amounts right-aligned. The owed line is the way into
               the talangan list; absent at zero, when the hero is one number. */}
           {owing && (
-            <div className="mt-2 flex w-full flex-col gap-1 border-t border-primary-foreground/25 pt-3 text-left text-base">
+            <div className="mt-2 flex w-full flex-col gap-1 border-t border-primary-foreground/25 pt-3 text-left text-sm">
               <div className="flex items-center justify-between gap-3 py-1">
                 <span>{copy.home.balanceHeading}</span>
-                <span className="tabular whitespace-nowrap">{formatIDR(balances.fund_total)}</span>
+                {/* An invisible chevron holds the same space as the owed
+                    line's real one, so the two amounts share a right edge. */}
+                <span className="flex items-center gap-2">
+                  <span className="tabular whitespace-nowrap">{formatIDR(balances.fund_total)}</span>
+                  <span aria-hidden="true" className="invisible">
+                    <RowChevron />
+                  </span>
+                </span>
               </div>
               <button
                 type="button"
                 onClick={onViewOwed}
-                className="touch-target -mx-2 flex min-h-11 items-center justify-between gap-3 rounded-lg px-2 text-left outline-none transition-colors hover:bg-primary-foreground/10 active:bg-primary-foreground/10 focus-visible:ring-3 focus-visible:ring-primary-foreground/50"
+                className="touch-target -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-left outline-none transition-colors hover:bg-primary-foreground/10 active:bg-primary-foreground/10 focus-visible:ring-3 focus-visible:ring-primary-foreground/50"
               >
                 <span>{copy.home.owedToMembers}</span>
                 <span className="flex items-center gap-2">

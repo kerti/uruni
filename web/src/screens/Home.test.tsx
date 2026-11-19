@@ -825,7 +825,7 @@ describe('Home', () => {
         />,
       )
 
-      const row = await screen.findByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+      const row = await screen.findByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
       expect(row).toHaveTextContent(formatIDR(75_000))
       await userEvent.click(row)
       expect(onViewOwed).toHaveBeenCalledTimes(1)
@@ -931,14 +931,14 @@ describe('Home hero while talangan is outstanding (#836)', () => {
     expect(screen.queryByText(copy.home.owedToMembers)).not.toBeInTheDocument()
   })
 
-  it('owed below cash: leads with Bisa dipakai and shows cash and the owed subtraction', async () => {
+  it('owed below cash: leads with Dana tersedia and shows cash and the owed subtraction', async () => {
     const onViewOwed = vi.fn()
     renderHome(600_000, 450_000, onViewOwed)
     const hero = await screen.findByRole('region', { name: copy.home.usableHeading })
     expect(within(hero).getByText(formatIDR(150_000))).toHaveClass('tabular')
     expect(within(hero).getByText(copy.home.balanceHeading)).toBeInTheDocument()
     expect(within(hero).getByText(formatIDR(600_000))).toBeInTheDocument()
-    const line = within(hero).getByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+    const line = within(hero).getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
     // The subtraction uses formatIDR's own minus, the one the negative headline uses.
     expect(within(line).getByText(formatIDR(-450_000))).toHaveClass('tabular')
     await userEvent.click(line)
