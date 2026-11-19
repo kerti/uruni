@@ -165,10 +165,12 @@ test.describe('the ceiling figure fits', () => {
     await logIn(page)
     const fundTotal = await seedCeilingFigures(page.context().request)
     await openScreen(page, '/')
-    // The hero is the fund total, which the seed runs past the ceiling: a
-    // thirteen-digit figure, wider than any single amount.
+    // The hero carries the fund total, which the seed runs past the ceiling: a
+    // thirteen-digit figure, wider than any single amount. The seed owes a
+    // talangan, so the hero leads with Dana tersedia and the total is its
+    // Saldo kas line (#836).
     expect(fundTotal).toBeGreaterThan(ceiling)
-    await expect(page.getByRole('region', { name: copy.home.balanceHeading })).toContainText(formatIDR(fundTotal))
+    await expect(page.getByRole('region', { name: copy.home.usableHeading })).toContainText(formatIDR(fundTotal))
     await expect(page.getByRole('button', { name: /^Titipan Uji Lebar/ })).toContainText(formatIDR(-ceiling))
     await expectFiguresFit(page, '/ at 390px')
   })
@@ -236,7 +238,8 @@ test.describe('the ceiling figure fits', () => {
     await logIn(page)
     const fund = await api<{ report_slug: string }>(page.context().request, 'GET', '/api/fund')
     await page.goto(`/report/${fund.report_slug}`)
-    await expect(page.getByRole('region', { name: copy.home.balanceHeading })).toContainText('Rp')
+    // The seed owes a talangan, so the report's hero leads with Dana tersedia too (#836).
+    await expect(page.getByRole('region', { name: copy.home.usableHeading })).toContainText('Rp')
     await page.waitForLoadState('networkidle')
     await expectFiguresFit(page, 'report at 390px')
   })
