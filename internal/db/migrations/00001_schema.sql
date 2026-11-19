@@ -505,6 +505,15 @@ CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
 CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHERE kind = 'dues';
 CREATE INDEX transaction_by_dues_payment ON "transaction"(dues_payment_id) WHERE dues_payment_id IS NOT NULL;
 
+-- The two searches ledger_entry's effective_purpose_id makes for EVERY row:
+-- the transfer correcting it, then that transfer's legs. Unindexed, SQLite
+-- scanned the whole ledger per row, so any read through the view grew with
+-- the square of the ledger (5,233 rows: GET /api/transactions 2.7 s; 14 ms
+-- with these, #838). Partial: most rows are neither a correction nor a transfer
+-- leg. TestLedgerEntrySearchesNotScans holds the plan to them.
+CREATE INDEX transfer_by_corrects    ON transfer(corrects_transaction_id) WHERE corrects_transaction_id IS NOT NULL;
+CREATE INDEX transaction_by_transfer ON "transaction"(transfer_id) WHERE transfer_id IS NOT NULL;
+
 -- Same shape: orders the (incurred_on DESC, id DESC) keyset scan (#226).
 CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 
