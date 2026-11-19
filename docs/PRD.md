@@ -115,7 +115,7 @@ Key entities:
 ### 7.7 Balance & home screen
 - Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih RpX — cek?".
 - Optional breakdown by purpose tag.
-- **What the fund owes members** who fronted an expense (talangan not yet settled or waived), as one total, only when above zero. That money is still inside the balance; showing it beside the balance keeps the balance from reading as more spendable than it is. It opens the outstanding talangan list.
+- **What the fund owes members** who fronted an expense (talangan not yet settled or waived), as one total, only when above zero. That money is still inside the balance, so while it is owed the balance hero leads with **what the fund can use** (*Dana tersedia*: the balance less what is owed, negative if the debt is larger) and shows how it is made beneath: the cash (*Saldo kas*, what a cek kas counts) and the owed total (*Talangan*), which opens the outstanding talangan list. With nothing owed the hero is the balance alone. The public report and its PDF show the same split. This is not the "second available figure" §7.6 declines for a levy: a levy is not yet owed to anyone, a talangan is a debt a named member holds. (Revised 2026-11-19, #836: as a row below the purposes it sat too far from the balance to stop the balance reading as spendable.)
 - **Cash flow (Arus kas):** the running month's money in and money out, two figures in their own section above recent activity - no chart, no comparison ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).
 
 ### 7.8 Reconciliation (the heart of the product)

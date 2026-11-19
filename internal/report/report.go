@@ -59,8 +59,17 @@ type Page struct {
 	Purposes    []Purpose
 
 	// Owed is the total owed to members who fronted an expense, as of the same
-	// day as Balance (ADR-037); "" hides the line (#406).
+	// day as Balance (ADR-037); "" when nothing is owed (#406).
 	Owed string
+	// While Owed is set (#836) the hero leads with what the fund can use:
+	// Usable is Balance minus what is owed (negative when owed exceeds cash,
+	// "-Rp50.000", same calm style), UsableSize steps it like BalanceSize, and
+	// OwedLess is the owed figure as the subtraction ("-Rp450.000") that
+	// Balance, still the cash, has taken off. All "" when nothing is owed, and
+	// the hero is then the single Balance figure as before.
+	Usable     string
+	UsableSize string
+	OwedLess   string
 
 	PDFHref string
 
@@ -702,6 +711,10 @@ func NewPage(r ledger.Report, empty bool) Page {
 
 	if r.OwedToMembers > 0 {
 		page.Owed = money.FormatIDR(r.OwedToMembers)
+		page.OwedLess = money.FormatIDR(-r.OwedToMembers)
+		// Integer subtraction: both are int64 rupiah, never a float.
+		page.Usable = money.FormatIDR(r.Balance - r.OwedToMembers)
+		page.UsableSize = heroSizeClass(page.Usable)
 	}
 
 	for _, p := range r.PurposeBalances {

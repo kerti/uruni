@@ -35,6 +35,7 @@ type Copy struct {
 	NeverChecked    string
 	PurposesLabel   string
 	OwedLabel       string
+	UsableLabel     string
 
 	MonthLabel  string
 	MonthSubmit string
@@ -209,7 +210,8 @@ var Text = Copy{
 	Matched:         "Kas dan catatan cocok saat dicek.",
 	Discrepancy:     func(amount string) string { return "Ada selisih " + amount + "." },
 	NeverChecked:    "Belum pernah dicek.",
-	OwedLabel:       "Talangan belum dibayar",
+	OwedLabel:       "Talangan",
+	UsableLabel:     "Dana tersedia",
 	PurposesLabel:   "Saldo per pos",
 
 	MonthLabel:  "Bulan",

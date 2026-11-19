@@ -825,7 +825,7 @@ describe('Home', () => {
         />,
       )
 
-      const row = await screen.findByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+      const row = await screen.findByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
       expect(row).toHaveTextContent(formatIDR(75_000))
       await userEvent.click(row)
       expect(onViewOwed).toHaveBeenCalledTimes(1)
@@ -902,5 +902,59 @@ describe('Home', () => {
       expect(cashflow.closest('section')).not.toContainElement(recent)
       expect(cashflow.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
+  })
+})
+
+describe('Home hero while talangan is outstanding (#836)', () => {
+  function renderHome(fundTotal: number, owed: number, onViewOwed = vi.fn()) {
+    vi.stubGlobal('fetch', stubHome({ balancesOverride: { ...balances, fund_total: fundTotal, owed_to_members: owed } }))
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewTransactionsForAccount={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={onViewOwed}
+        onIncidentalOpened={vi.fn()}
+        onViewClosedIncidentals={vi.fn()}
+      />,
+    )
+  }
+
+  it('nothing owed: the hero is the single Saldo kas figure, with no owed line', async () => {
+    renderHome(600_000, 0)
+    const hero = await screen.findByRole('region', { name: copy.home.balanceHeading })
+    expect(within(hero).getByText(formatIDR(600_000))).toBeInTheDocument()
+    expect(within(hero).queryByText(copy.home.usableHeading)).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.home.owedToMembers)).not.toBeInTheDocument()
+  })
+
+  it('owed below cash: leads with Dana tersedia and shows cash and the owed subtraction', async () => {
+    const onViewOwed = vi.fn()
+    renderHome(600_000, 450_000, onViewOwed)
+    const hero = await screen.findByRole('region', { name: copy.home.usableHeading })
+    expect(within(hero).getByText(formatIDR(150_000))).toHaveClass('tabular')
+    expect(within(hero).getByText(copy.home.balanceHeading)).toBeInTheDocument()
+    expect(within(hero).getByText(formatIDR(600_000))).toBeInTheDocument()
+    const line = within(hero).getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
+    // The subtraction uses formatIDR's own minus, the one the negative headline uses.
+    expect(within(line).getByText(formatIDR(-450_000))).toHaveClass('tabular')
+    await userEvent.click(line)
+    expect(onViewOwed).toHaveBeenCalledTimes(1)
+  })
+
+  it('owed equal to cash: the headline is Rp0', async () => {
+    renderHome(450_000, 450_000)
+    const hero = await screen.findByRole('region', { name: copy.home.usableHeading })
+    expect(within(hero).getByText(formatIDR(0))).toBeInTheDocument()
+  })
+
+  it('owed above cash: the headline carries a minus, in the same hero', async () => {
+    renderHome(400_000, 450_000)
+    const hero = await screen.findByRole('region', { name: copy.home.usableHeading })
+    expect(within(hero).getByText(formatIDR(-50_000))).toHaveClass('tabular')
+    expect(within(hero).getByText(formatIDR(-50_000)).textContent).toBe('-\u2060Rp50.000')
   })
 })

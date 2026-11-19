@@ -192,6 +192,10 @@ export default function Home({
     ),
   ]
 
+  // Integer rupiah, subtracted as integers; negative when owed exceeds cash.
+  const owing = balances.owed_to_members > 0
+  const headline = formatIDR(owing ? balances.fund_total - balances.owed_to_members : balances.fund_total)
+
   return (
     <div className="flex flex-col gap-6">
       {/* "Balance is the hero" (Design-System.md:91). The prominence comes
@@ -223,11 +227,43 @@ export default function Home({
           the page) as the page scrolls beneath it. */}
       <div className="isolate flex flex-col">
         <section
-          aria-label={copy.home.balanceHeading}
+          aria-label={owing ? copy.home.usableHeading : copy.home.balanceHeading}
           className="relative z-10 flex flex-col items-center gap-2 rounded-3xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
         >
-          <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
-          <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
+          <p className="text-base font-medium text-primary-foreground/85">{owing ? copy.home.usableHeading : copy.home.balanceHeading}</p>
+          <p className={`tabular font-bold leading-tight ${heroSize(headline)}`}>{headline}</p>
+          {/* While talangan is outstanding (#836, reversing #406's "never a
+              subtraction"): the headline is what the fund can use, and the
+              two lines under it are how it is made - cash, which is what Cek
+              kas counts, less what is owed back. Compared figures on their
+              own lines, amounts right-aligned. The owed line is the way into
+              the talangan list; absent at zero, when the hero is one number. */}
+          {owing && (
+            <div className="mt-2 flex w-full flex-col gap-1 border-t border-primary-foreground/25 pt-3 text-left text-sm">
+              <div className="flex items-center justify-between gap-3 py-1">
+                <span>{copy.home.balanceHeading}</span>
+                {/* An invisible chevron holds the same space as the owed
+                    line's real one, so the two amounts share a right edge. */}
+                <span className="flex items-center gap-2">
+                  <span className="tabular whitespace-nowrap">{formatIDR(balances.fund_total)}</span>
+                  <span aria-hidden="true" className="invisible">
+                    <RowChevron />
+                  </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onViewOwed}
+                className="touch-target -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1 text-left outline-none transition-colors hover:bg-primary-foreground/10 active:bg-primary-foreground/10 focus-visible:ring-3 focus-visible:ring-primary-foreground/50"
+              >
+                <span>{copy.home.owedToMembers}</span>
+                <span className="flex items-center gap-2">
+                  <span className="tabular whitespace-nowrap">{formatIDR(-balances.owed_to_members)}</span>
+                  <RowChevron />
+                </span>
+              </button>
+            </div>
+          )}
         </section>
         {/* A 404 from /api/reconciliations/latest is the only signal that no
             count has ever been taken - open-lines answers [] either way, so
@@ -342,19 +378,6 @@ export default function Home({
         onClose={closeDialog}
         onOpened={(opened) => onIncidentalOpened(opened.purpose_id)}
       />
-
-      {/* What the fund owes members who fronted an expense (#406). The money
-          is still inside the balance above, so this is a plain row beside
-          it, never a subtraction and never an alarm - and absent at zero. */}
-      {balances.owed_to_members > 0 && (
-        <button type="button" onClick={onViewOwed} className={`flex items-center justify-between gap-3 ${tappableCard}`}>
-          <span>{copy.home.owedToMembers}</span>
-          <span className="flex items-center gap-2">
-            <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
-            <RowChevron />
-          </span>
-        </button>
-      )}
 
       {/* Everything above is the fund as it stands - balance, where it is,
           whether it matches, what is earmarked; below is what happened. One

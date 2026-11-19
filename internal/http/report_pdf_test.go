@@ -601,7 +601,7 @@ func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 	}
 
 	runs = pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
-	for _, want := range []string{report.Text.OwedLabel, money.FormatIDR(45_000)} {
+	for _, want := range []string{report.Text.UsableLabel, report.Text.OwedLabel, money.FormatIDR(-45_000)} {
 		if !pdfHas(runs, want) {
 			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
 		}

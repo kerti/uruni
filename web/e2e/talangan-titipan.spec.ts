@@ -154,7 +154,7 @@ test.describe('talangan and titipan', () => {
     await api(request, 'POST', `/api/reimbursements/${settled.id}/settle`, { account_id: tunai, occurred_on: today })
 
     await page.goto('/')
-    const owed = page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+    const owed = page.getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
     await expect(owed).toBeVisible()
     await expect(owed).toContainText(formatIDR(55_000))
 
@@ -260,7 +260,7 @@ test.describe('talangan and titipan', () => {
     await expect(claim(page, terpal)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
-    const owed = page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+    const owed = page.getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })
     await expect(owed).toContainText(formatIDR(40_000))
   })
 

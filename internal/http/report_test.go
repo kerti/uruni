@@ -268,9 +268,14 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 
 	for _, month := range []string{"2026-09", "2026-10"} {
 		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month="+month).Body.String()
-		want := "<li><span>" + report.Text.OwedLabel + "</span><span class=\"tabular\">" + money.FormatIDR(45_000) + "</span></li>"
-		if !strings.Contains(body, want) {
-			t.Errorf("month %s: body has no owed line %q", month, want)
+		// #836: the owed total is the subtraction under the "Dana tersedia" headline.
+		for _, want := range []string{
+			"<p class=\"label\">" + report.Text.UsableLabel + "</p>",
+			"<dt>" + report.Text.OwedLabel + "</dt><dd class=\"tabular\">" + money.FormatIDR(-45_000) + "</dd>",
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("month %s: body has no %q", month, want)
+			}
 		}
 	}
 }

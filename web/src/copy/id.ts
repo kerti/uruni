@@ -626,6 +626,8 @@ export const copy = {
   // "/" once a fund exists (App.tsx's AuthedGate).
   home: {
     balanceHeading: 'Saldo kas',
+    // The hero's headline while talangan is outstanding (#836): cash minus what is owed back.
+    usableHeading: 'Dana tersedia',
     locationsHeading: 'Saldo per lokasi',
     // The purpose breakdown (PRD section 7.7, ADR-032): each open incidental
     // and each Titipan purpose gets its own row, so an envelope's balance -
@@ -634,10 +636,12 @@ export const copy = {
     // A fund with neither an open incidental nor a Titipan shows no section,
     // so this heading has no empty-state string.
     purposeBreakdownHeading: 'Saldo per pos',
-    // The total owed to members who fronted an expense, after the purpose
-    // breakdown and only when above zero. Same words as the Talangan tab it
-    // opens, so the row and the list read as one thing.
-    owedToMembers: 'Talangan belum dibayar',
+    // The total owed to members who fronted an expense: the subtraction line
+    // inside the hero, only when above zero (#836). The Talangan tab's own
+    // word: beside a minus amount under Dana tersedia, "not yet paid" goes
+    // without saying (settled talangan never count), and the short word keeps
+    // the line on one row at phone width.
+    owedToMembers: 'Talangan',
     recentActivityHeading: 'Aktivitas terbaru',
     // Arus kas, Beranda's first section below the divider (ADR-038): the
     // running month's two figures, the report's In and Out, so the two screens

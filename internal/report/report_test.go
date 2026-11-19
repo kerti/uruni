@@ -312,3 +312,50 @@ func TestGroupRowsSplitsAtEachMonthAndByLine(t *testing.T) {
 		t.Errorf("subtotals = %q, %q, want the walk's Rp5.000 and Rp2.000", p.Groups[0].Subtotal, p.Groups[1].Subtotal)
 	}
 }
+
+// While talangan is outstanding the hero leads with what the fund can use and
+// shows how it is made; with nothing owed it is the one Balance figure (#836).
+func TestReportPageUsableSplit(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name             string
+		balance, owed    int64
+		usable, owedLess string
+		wantSplit        bool
+	}{
+		{"nothing owed", 600_000, 0, "", "", false},
+		{"owed below cash", 600_000, 450_000, "Rp150.000", "-Rp450.000", true},
+		{"owed equal to cash", 450_000, 450_000, "Rp0", "-Rp450.000", true},
+		{"owed above cash", 400_000, 450_000, "-Rp50.000", "-Rp450.000", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"},
+				Balance: money.Amount(tc.balance), OwedToMembers: money.Amount(tc.owed)}
+			page := NewPage(r, false)
+			if page.Usable != tc.usable || page.OwedLess != tc.owedLess {
+				t.Fatalf("usable %q, owedLess %q; want %q, %q", page.Usable, page.OwedLess, tc.usable, tc.owedLess)
+			}
+			if page.Balance != money.FormatIDR(money.Amount(tc.balance)) {
+				t.Errorf("Balance = %q, want the cash figure untouched", page.Balance)
+			}
+			var buf bytes.Buffer
+			if err := RenderHTML(&buf, page, "n"); err != nil {
+				t.Fatal(err)
+			}
+			html := buf.String()
+			if got := strings.Contains(html, Text.UsableLabel); got != tc.wantSplit {
+				t.Errorf("html has %q = %v, want %v", Text.UsableLabel, got, tc.wantSplit)
+			}
+			if tc.wantSplit && !strings.Contains(html, tc.owedLess) {
+				t.Errorf("html lacks the owed subtraction %q", tc.owedLess)
+			}
+			if !tc.wantSplit && strings.Contains(html, Text.OwedLabel) {
+				t.Error("owed line shown with nothing owed")
+			}
+			if pdf, err := RenderPDF(page); err != nil || len(pdf) == 0 {
+				t.Errorf("RenderPDF: %d bytes, err %v", len(pdf), err)
+			}
+		})
+	}
+}
