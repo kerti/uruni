@@ -69,8 +69,11 @@ test.describe('reimbursements', () => {
 
     firstMemberName = await recordClaim(page, '10000')
 
-    // Recording lands on Beranda, which shows what the fund owes.
-    await expect(page.getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) })).toBeVisible()
+    // Recording lands on Beranda, whose hero shows what the fund owes. Scoped
+    // to the hero: the save toast ("Talangan dicatat. ...") is a button too.
+    await expect(
+      page.getByRole('region', { name: copy.home.usableHeading }).getByRole('button', { name: new RegExp('^' + copy.home.owedToMembers) }),
+    ).toBeVisible()
 
     // Then Riwayat's Talangan tab, where the claim lives.
     await openTalangan(page)
