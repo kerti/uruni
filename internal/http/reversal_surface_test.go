@@ -157,8 +157,8 @@ func TestANegativeTotalKeluarIsPrintedEverywhere(t *testing.T) {
 	// The report page: Saldo 31 Juli 88.000, nothing in, -12.000 out, Saldo 31 Agustus 100.000.
 	want := []totalLine{
 		{report.Text.WalkStart("31 Juli 2026"), money.FormatIDR(88_000)},
-		{report.Text.TotalIn, money.FormatIDR(0)},
-		{report.Text.TotalOut, money.FormatIDR(-12_000)},
+		{report.Text.TotalIn, walkSigned(0)},
+		{report.Text.TotalOut, walkSigned(-(-12_000))},
 		{report.Text.WalkEnd("31 Agustus 2026"), money.FormatIDR(100_000)},
 	}
 	page := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08")

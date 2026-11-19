@@ -124,6 +124,10 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 		if claim.WaivedOn != nil {
 			return ErrReimbursementWaived
 		}
+		// Both are "YYYY-MM-DD", so text order is date order.
+		if p.OccurredOn < claim.IncurredOn {
+			return ErrSettledBeforeFronted
+		}
 
 		// The payout copies the claim's amount, so a claim filed before the
 		// ceiling existed (or restored from a backup) is refused here too.

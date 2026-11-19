@@ -41,21 +41,25 @@ func TestRangeIncludesBothEndDaysAndExcludesTheDaysBeyond(t *testing.T) {
 	s := newMonthEndScenario(t, l)
 
 	// The scenario's rows: 31 Aug in 100000; 1 Sep in 50000; 2 Sep a gift of
-	// 5000 and a settlement of 7000; 15 Aug a gift of 20000 (before every range
-	// here); the roll on 5 Sep is a move, outside the totals.
+	// 5000; 15 Aug a gift of 20000 (before every range here); a settlement of
+	// 7000 paid on 2 Sep for a claim fronted on 20 Aug, which flows count on 20
+	// Aug (ADR-051) and the Talangan line bridges to 2 Sep, where the cash moved;
+	// the roll on 5 Sep is a move, outside the totals.
 	tests := []struct {
 		name     string
 		from, to string
 		in, out  money.Amount
 		entries  int
+		fronted  money.Amount
 	}{
-		{"crossing the month boundary, both ends exact", "2026-08-31", "2026-09-01", 150_000, 0, 2},
-		{"ends on the first of the month", "2026-09-01", "2026-09-01", 50_000, 0, 1},
-		{"starts a day early, ends on the last of the month", "2026-08-30", "2026-08-31", 100_000, 0, 1},
-		{"a single day", "2026-08-31", "2026-08-31", 100_000, 0, 1},
-		{"a day with an in and an out", "2026-09-02", "2026-09-02", 5_000, 7_000, 2},
-		{"two days, the day before and after both out", "2026-09-01", "2026-09-02", 55_000, 7_000, 3},
-		{"a quiet stretch", "2026-08-16", "2026-08-30", 0, 0, 0},
+		{"crossing the month boundary, both ends exact", "2026-08-31", "2026-09-01", 150_000, 0, 2, 0},
+		{"ends on the first of the month", "2026-09-01", "2026-09-01", 50_000, 0, 1, 0},
+		{"starts a day early, ends on the last of the month", "2026-08-30", "2026-08-31", 100_000, 0, 1, 0},
+		{"a single day", "2026-08-31", "2026-08-31", 100_000, 0, 1, 0},
+		{"a day the payout was paid, not fronted", "2026-09-02", "2026-09-02", 5_000, 0, 1, -7_000},
+		{"two days holding the payment day", "2026-09-01", "2026-09-02", 55_000, 0, 2, -7_000},
+		{"a stretch holding the fronting day", "2026-08-16", "2026-08-30", 0, 7_000, 1, 7_000},
+		{"a stretch holding both days", "2026-08-20", "2026-09-02", 155_000, 7_000, 4, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,6 +74,9 @@ func TestRangeIncludesBothEndDaysAndExcludesTheDaysBeyond(t *testing.T) {
 				t.Errorf("Month = %q, want the month that holds To, %q", r.Month, want)
 			}
 			assertInOut(t, r.Walk, tt.in, tt.out)
+			if bridge(r.Walk) != tt.fronted {
+				t.Errorf("bridge = %d, want %d", bridge(r.Walk), tt.fronted)
+			}
 			if got := len(entries(r.Rows)); got != tt.entries {
 				t.Errorf("entries listed = %d, want %d", got, tt.entries)
 			}

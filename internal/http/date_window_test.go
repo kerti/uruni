@@ -133,7 +133,9 @@ var windowRoutes = []windowRoute{
 		return callJSON(t, e.r, "PATCH", fmt.Sprintf("/api/reimbursements/%d", idOf(claim, "id")), map[string]any{"waived_on": d})
 	}},
 	{"POST /api/reimbursements/{id}/settle", wEntry, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {
-		claim := mustCall(t, e.r, "POST", "/api/reimbursements", map[string]any{"member_id": e.member, "purpose_id": e.main, "amount": 1000, "incurred_on": "2026-08-01"})
+		// Fronted on the floor, so only the window decides the settle date, not
+		// the rule that a payout cannot precede its claim (ADR-051).
+		claim := mustCall(t, e.r, "POST", "/api/reimbursements", map[string]any{"member_id": e.member, "purpose_id": e.main, "amount": 1000, "incurred_on": "2000-01-01"})
 		return callJSON(t, e.r, "POST", fmt.Sprintf("/api/reimbursements/%d/settle", idOf(claim, "id")), map[string]any{"account_id": e.cash, "occurred_on": d})
 	}},
 	{"POST /api/reconciliations fix", wEntry, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {

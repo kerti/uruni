@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { copy } from '@/copy/id'
-import { formatIDR } from '@/lib/money'
+import { formatIDR, formatSignedIDR } from '@/lib/money'
 import { ToastProvider } from '@/components/toast/ToastProvider'
 import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
@@ -98,6 +98,8 @@ const monthSummary = {
   out: 20_000,
   adjustments: 0,
   moved: 5_000,
+  paid_later: 0,
+  paid_earlier: 0,
   end: 165_000,
 } satisfies TransactionSummary
 
@@ -457,15 +459,43 @@ describe('Transactions tab: the month summary and month headers (#751)', () => {
 
     expect(everything).toContain('GET /api/transactions/summary?month=2026-09&purpose_id=11')
     expect(summaryLine(text.summaryBalance('31 Agustus 2026'))).toHaveTextContent(formatIDR(100_000))
-    expect(summaryLine(text.summaryIn)).toHaveTextContent(formatIDR(80_000))
-    expect(summaryLine(text.summaryOut)).toHaveTextContent(formatIDR(20_000))
-    expect(summaryLine(text.summaryMoved)).toHaveTextContent(formatIDR(5_000))
+    // A walk shows each line between the balances with the sign it is added
+    // with, so the reader can tally it: Total keluar is a minus.
+    expect(summaryLine(text.summaryIn)).toHaveTextContent(formatSignedIDR(80_000))
+    expect(summaryLine(text.summaryOut)).toHaveTextContent(formatSignedIDR(-20_000))
+    expect(summaryLine(text.summaryMoved)).toHaveTextContent(formatSignedIDR(5_000))
     expect(summaryLine(text.summaryBalance('30 September 2026'))).toHaveTextContent(formatIDR(165_000))
     // Zero lines stay out, as on the report.
     expect(screen.queryByText(text.summaryOpenings)).not.toBeInTheDocument()
     expect(screen.queryByText(text.summaryAdjustments)).not.toBeInTheDocument()
+    expect(screen.queryByText(text.summaryPaidLater)).not.toBeInTheDocument()
+    expect(screen.queryByText(text.summaryPaidEarlier)).not.toBeInTheDocument()
     // One month: no month heading over its rows.
     expect(screen.queryByRole('heading', { name: 'September 2026' })).not.toBeInTheDocument()
+  })
+
+  it('shows each talangan line with its own words and one fixed sign, before the closing balance (ADR-051)', async () => {
+    // Fronted in September and paid after it (+), and paid in September for an
+    // earlier month's spending (-): two lines, never one that flips sign.
+    stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }), [], {
+      ...monthSummary,
+      paid_later: 450_000,
+      paid_earlier: 100_000,
+    })
+    renderAt('/history/transactions?month=2026-09')
+    await screen.findByText('Setoran')
+
+    expect(summaryLine(text.summaryPaidLater)).toHaveTextContent(formatSignedIDR(450_000))
+    expect(summaryLine(text.summaryPaidEarlier)).toHaveTextContent(formatSignedIDR(-100_000))
+    const labels = [...summaryLine(text.summaryPaidLater).closest('dl')!.querySelectorAll('dt')].map((dt) => dt.textContent)
+    expect(labels.slice(-4)).toEqual([
+      text.summaryMoved,
+      text.summaryPaidLater,
+      text.summaryPaidEarlier,
+      text.summaryBalance('30 September 2026'),
+    ])
+    expect(text.summaryPaidLater).toBe('Talangan dibayar kemudian')
+    expect(text.summaryPaidEarlier).toBe('Pelunasan talangan sebelumnya')
   })
 
   it('shows only the two totals under a member filter, where a balance means nothing', async () => {
@@ -476,6 +506,8 @@ describe('Transactions tab: the month summary and month headers (#751)', () => {
       end_on: null,
       start: 0,
       moved: 0,
+      paid_later: 450_000,
+      paid_earlier: 100_000,
       end: 0,
     })
     renderAt('/history/transactions?month=2026-09&member=21')
@@ -483,7 +515,13 @@ describe('Transactions tab: the month summary and month headers (#751)', () => {
 
     expect(summaryLine(text.summaryIn)).toHaveTextContent(formatIDR(80_000))
     expect(summaryLine(text.summaryOut)).toHaveTextContent(formatIDR(20_000))
+    // Two totals, not a walk: nothing to tally, so no signs.
+    expect(summaryLine(text.summaryIn)).not.toHaveTextContent('+')
+    expect(summaryLine(text.summaryOut)).not.toHaveTextContent('-')
     expect(screen.queryByText(/^Saldo /)).not.toBeInTheDocument()
+    // Nothing to bridge to: no balance is walked.
+    expect(screen.queryByText(text.summaryPaidLater)).not.toBeInTheDocument()
+    expect(screen.queryByText(text.summaryPaidEarlier)).not.toBeInTheDocument()
   })
 
   it('asks for no summary without a month, or inside a search', async () => {

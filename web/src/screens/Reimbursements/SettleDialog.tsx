@@ -155,9 +155,17 @@ function SettleForm({
   // Blank until she picks, unless the fund has one location (accountDefault.ts).
   const [pickedAccountId, setAccountId] = useState<number | null>(null)
   const accountId = pickedAccountId ?? defaultAccountId(accounts)
-  const [occurredOn, setOccurredOn] = useState(todayISODate)
+  // A talangan is never repaid before the day it was fronted (ADR-051): the
+  // picker offers nothing earlier, and the server refuses it too. ISO dates
+  // compare as text.
+  const entry = dateBounds.entry()
+  const bounds = { ...entry, min: entry.min > claim.incurred_on ? entry.min : claim.incurred_on }
+  const [occurredOn, setOccurredOn] = useState(() => {
+    const today = todayISODate()
+    return today < claim.incurred_on ? claim.incurred_on : today
+  })
 
-  const canSubmit = accountId !== null && occurredOn !== '' && !submitting
+  const canSubmit = accountId !== null && occurredOn !== '' && occurredOn >= claim.incurred_on && !submitting
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -186,7 +194,7 @@ function SettleForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="settle-date">{text.settle.dateLabel}</Label>
-        <DateField id="settle-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
+        <DateField id="settle-date" value={occurredOn} onChange={setOccurredOn} bounds={bounds} disabled={submitting} />
         <OpeningDateHint date={occurredOn} accounts={accounts} accountIds={[accountId]} />
       </div>
 

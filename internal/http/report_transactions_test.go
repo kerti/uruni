@@ -203,8 +203,8 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 	// recorded), so neither line shows, and there is no Bersih.
 	want := []totalLine{
 		{report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
-		{report.Text.TotalIn, money.FormatIDR(240_000)},
-		{report.Text.TotalOut, money.FormatIDR(60_000)},
+		{report.Text.TotalIn, walkSigned(240_000)},
+		{report.Text.TotalOut, walkSigned(-(60_000))},
 		{report.Text.WalkEnd("30 September 2026"), money.FormatIDR(187_000)},
 	}
 	if got := totalsOf(t, body); !equalLines(got, want) {
@@ -255,7 +255,11 @@ func TestReportFilters(t *testing.T) {
 			if tt.walks {
 				got = got[1:3]
 			}
-			if want := inOut(tt.in, tt.out); !equalLines(got, want) {
+			want := inOut(tt.in, tt.out)
+			if tt.walks {
+				want = walkInOut(tt.in, tt.out)
+			}
+			if !equalLines(got, want) {
 				t.Errorf("totals = %v, want %v", got, want)
 			}
 		})

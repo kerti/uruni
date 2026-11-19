@@ -113,6 +113,12 @@ export interface TransactionSummary {
   out: number
   adjustments: number
   moved: number
+  /** The two talangan lines (ADR-051), each unsigned on the wire: payouts
+   * counted in this month's out but paid after it (added in the walk), and
+   * payouts paid in it that an earlier month counted (subtracted). Zero under a
+   * location filter and where `full` is false. */
+  paid_later: number
+  paid_earlier: number
   end: number
 }
 

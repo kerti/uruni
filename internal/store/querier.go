@@ -582,12 +582,23 @@ type Querier interface {
 	//
 	// page_limit is page size + 1: peek at one extra row.
 	ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error)
-	// Every ledger row of one fund dated in [from_date, to_date) (to_date NULL: no
+	// Every ledger row of one fund PLACED in [from_date, to_date) (to_date NULL: no
 	// upper bound), with the facts a display-time label needs (#257) and nothing
 	// the public page must not carry: no receipt path or id (has_receipt is 0/1),
 	// no account (a location is the treasurer's working detail, ADR-035), no row
 	// ids. Filters run in Go: a transfer pair must be folded into one row before a
 	// purpose filter can say whether either side matches.
+	//
+	// Placed (ADR-051): a row sits on its own date (occurred_on) except a settled
+	// talangan's payout (kind='reimbursement'), whose flows follow the spending: it
+	// sits on its claim's incurred_on, the day the member fronted it. cash_view
+	// (non-zero: a location filter, which walks one location's cash) puts the
+	// payout back on its own date. placed_on is the date the row sits on;
+	// occurred_on stays the cash date, which balances use. The two halves of the
+	// placed set are separate searches (transaction_by_date, then
+	// reimbursement_by_date), never one OR over two tables, which would scan the
+	// fund. claim_incurred_on gives the payout its second line; the paying location
+	// is never named, since the report hides locations (ADR-035).
 	//
 	// from_date/to_date are 'YYYY-MM-DD' strings compared as text, which is how
 	// occurred_on already sorts (a CHECK holds it to date()'s format). to_date is
@@ -813,6 +824,13 @@ type Querier interface {
 	// waived_on holds only the latest waive, so a claim waived and later un-waived
 	// reads as owed in the months it was waived (#408 accepts it).
 	ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembersParams) (int64, error)
+	// The walk's Pelunasan talangan sebelumnya line (ADR-051): the payouts whose
+	// own date falls in [from_date, to_date) (to_date NULL: no upper bound) but
+	// whose claim's incurred_on does not - cash that left in the period for
+	// spending another period counts - optionally one pos's (the stored tag, as
+	// the rows read it). Its twin, Talangan dibayar kemudian, is summed from the
+	// list's own placed rows, so Total keluar and the two lines cannot disagree.
+	ReportPayoutsPaidEarlier(ctx context.Context, arg ReportPayoutsPaidEarlierParams) (int64, error)
 	ReportPurposeBalance(ctx context.Context, arg ReportPurposeBalanceParams) (int64, error)
 	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
 	RestoreDuesPayment(ctx context.Context, arg RestoreDuesPaymentParams) error

@@ -34,8 +34,15 @@ type reportFixture struct {
 
 func newReportFixture(t *testing.T, fundName string) reportFixture {
 	t.Helper()
+	return newReportFixtureAt(t, fundName, reportNow)
+}
+
+// newReportFixtureAt is newReportFixture with the ledger clock standing on now,
+// for a report that reads past months a row may be settled in.
+func newReportFixtureAt(t *testing.T, fundName string, now time.Time) reportFixture {
+	t.Helper()
 	sqlDB := testStoreDB(t)
-	l := ledger.New(sqlDB, ledger.WithClock(fixedClock(reportNow)))
+	l := ledger.New(sqlDB, ledger.WithClock(fixedClock(now)))
 	res, err := l.SetUpFund(context.Background(), ledger.SetUpFundParams{
 		FundName: fundName,
 		Accounts: []ledger.AccountInput{{Kind: "cash", Name: "Tunai"}},

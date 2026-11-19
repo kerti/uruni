@@ -12,12 +12,23 @@ WHERE fund_id = ?
 ORDER BY occurred_on
 LIMIT 1;
 
--- Every ledger row of one fund dated in [from_date, to_date) (to_date NULL: no
+-- Every ledger row of one fund PLACED in [from_date, to_date) (to_date NULL: no
 -- upper bound), with the facts a display-time label needs (#257) and nothing
 -- the public page must not carry: no receipt path or id (has_receipt is 0/1),
 -- no account (a location is the treasurer's working detail, ADR-035), no row
 -- ids. Filters run in Go: a transfer pair must be folded into one row before a
 -- purpose filter can say whether either side matches.
+--
+-- Placed (ADR-051): a row sits on its own date (occurred_on) except a settled
+-- talangan's payout (kind='reimbursement'), whose flows follow the spending: it
+-- sits on its claim's incurred_on, the day the member fronted it. cash_view
+-- (non-zero: a location filter, which walks one location's cash) puts the
+-- payout back on its own date. placed_on is the date the row sits on;
+-- occurred_on stays the cash date, which balances use. The two halves of the
+-- placed set are separate searches (transaction_by_date, then
+-- reimbursement_by_date), never one OR over two tables, which would scan the
+-- fund. claim_incurred_on gives the payout its second line; the paying location
+-- is never named, since the report hides locations (ADR-035).
 --
 -- from_date/to_date are 'YYYY-MM-DD' strings compared as text, which is how
 -- occurred_on already sorts (a CHECK holds it to date()'s format). to_date is
@@ -47,11 +58,28 @@ LIMIT 1;
 -- payout, on the claim it settles: that nota is the proof of the payout
 -- (ADR-011).
 -- name: ListReportTransactions :many
-SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
+WITH placed AS (
+  SELECT x.id AS id, x.occurred_on AS placed_on
+  FROM "transaction" x
+  WHERE x.fund_id = sqlc.arg('fund_id')
+    AND x.occurred_on >= sqlc.arg('from_date')
+    AND (CAST(sqlc.narg('to_date') AS TEXT) IS NULL OR x.occurred_on < CAST(sqlc.narg('to_date') AS TEXT))
+    AND (CAST(sqlc.arg('cash_view') AS INTEGER) <> 0 OR x.kind <> 'reimbursement')
+  UNION ALL
+  SELECT x.id, c.incurred_on
+  FROM reimbursement c
+  JOIN "transaction" x ON x.reimbursement_id = c.id AND x.kind = 'reimbursement'
+  WHERE CAST(sqlc.arg('cash_view') AS INTEGER) = 0
+    AND c.fund_id = sqlc.arg('fund_id')
+    AND c.incurred_on >= sqlc.arg('from_date')
+    AND (CAST(sqlc.narg('to_date') AS TEXT) IS NULL OR c.incurred_on < CAST(sqlc.narg('to_date') AS TEXT))
+)
+SELECT placed.placed_on, t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        t.account_id, t.purpose_id, p.name AS purpose_name,
        t.member_id, m.name AS member_name,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
+       rb.incurred_on AS claim_incurred_on,
        t.dues_period, t.dues_payment_id, t.reverses_transaction_id, t.note,
        t.reversed,
        orig.occurred_on AS reverses_occurred_on,
@@ -69,7 +97,8 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
                    WHERE rc.fund_id = t.fund_id
                      AND (rc.transaction_id = t.id
                           OR (t.reimbursement_id IS NOT NULL AND rc.reimbursement_id = t.reimbursement_id))) AS INTEGER) AS has_receipt
-FROM ledger_entry t
+FROM placed
+JOIN ledger_entry t ON t.id = placed.id
 JOIN purpose p ON p.id = t.purpose_id
 LEFT JOIN member m ON m.id = t.member_id
 LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
@@ -81,10 +110,25 @@ LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
+ORDER BY placed.placed_on DESC, t.created_at DESC;
+
+-- The walk's Pelunasan talangan sebelumnya line (ADR-051): the payouts whose
+-- own date falls in [from_date, to_date) (to_date NULL: no upper bound) but
+-- whose claim's incurred_on does not - cash that left in the period for
+-- spending another period counts - optionally one pos's (the stored tag, as
+-- the rows read it). Its twin, Talangan dibayar kemudian, is summed from the
+-- list's own placed rows, so Total keluar and the two lines cannot disagree.
+-- name: ReportPayoutsPaidEarlier :one
+SELECT CAST(COALESCE(SUM(t.amount), 0) AS INTEGER) AS paid_amount
+FROM "transaction" t
+JOIN reimbursement r ON r.id = t.reimbursement_id
 WHERE t.fund_id = sqlc.arg('fund_id')
+  AND t.kind = 'reimbursement'
   AND t.occurred_on >= sqlc.arg('from_date')
   AND (CAST(sqlc.narg('to_date') AS TEXT) IS NULL OR t.occurred_on < CAST(sqlc.narg('to_date') AS TEXT))
-ORDER BY t.occurred_on DESC, t.created_at DESC;
+  AND (r.incurred_on < sqlc.arg('from_date')
+       OR (CAST(sqlc.narg('to_date') AS TEXT) IS NOT NULL AND r.incurred_on >= CAST(sqlc.narg('to_date') AS TEXT)))
+  AND (CAST(sqlc.narg('purpose_id') AS INTEGER) IS NULL OR t.purpose_id = CAST(sqlc.narg('purpose_id') AS INTEGER));
 
 -- The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
 -- NULL is the running month and reads exactly like its unbounded twin

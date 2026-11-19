@@ -76,9 +76,14 @@ type Copy struct {
 	WalkStart         func(date string) string
 	WalkEnd           func(date string) string
 	WalkMoved         string
-	HasReceipt        string
-	NoRows            string
-	NoRowsRange       string
+	// WalkPaidLater and WalkPaidEarlier are the walk's two talangan lines
+	// (ADR-051): payouts counted in this period's Total keluar but paid after it
+	// (added), and payouts paid in it for an earlier period's (subtracted).
+	WalkPaidLater   string
+	WalkPaidEarlier string
+	HasReceipt      string
+	NoRows          string
+	NoRowsRange     string
 
 	// The dues section (#375). The four statuses are web/src/copy/id.ts's
 	// dues.statuses verbatim; the filter offers three, "Lunas" covering paid in
@@ -144,6 +149,12 @@ type Copy struct {
 	RowOpening        string
 	RowAdjustment     string
 	RowMoved          func(from, to string) string
+	// RowPaid and RowFronted are a talangan payout's second line (ADR-051): the
+	// row sits on the day its member fronted it and says when it was paid (never
+	// from where: the report names no location, ADR-035); sat on its payment day, it says when it was fronted. Dates are
+	// the short form ("12 Nov").
+	RowPaid    func(date string) string
+	RowFronted func(date string) string
 
 	// A row's kind (#257's kind words, as Riwayat's screen reader hears them):
 	// the PDF's Jenis column, and the page's sr-only word beside the kind icon.
@@ -247,6 +258,8 @@ var Text = Copy{
 	WalkStart:         func(date string) string { return "Saldo " + date },
 	WalkEnd:           func(date string) string { return "Saldo " + date },
 	WalkMoved:         "Dipindah",
+	WalkPaidLater:     "Talangan dibayar kemudian",
+	WalkPaidEarlier:   "Pelunasan talangan sebelumnya",
 	HasReceipt:        "Ada nota",
 	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
 	NoRowsRange:       "Tidak ada transaksi yang cocok pada rentang ini.",
@@ -294,6 +307,8 @@ var Text = Copy{
 	RowOpening:              "Saldo awal",
 	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
+	RowPaid:                 func(date string) string { return "Dibayar " + date },
+	RowFronted:              func(date string) string { return "Ditalangi " + date },
 
 	KindDues:         "Iuran",
 	RowAnonymous:     "Tanpa nama",
@@ -349,6 +364,39 @@ func (c Copy) longDate(iso string) string {
 		return iso
 	}
 	return strconv.Itoa(t.Day()) + " " + c.Months[t.Month()-1] + " " + strconv.Itoa(t.Year())
+}
+
+// shortDate renders "YYYY-MM-DD" as "12 Nov": a row's second line names the day
+// it reads on elsewhere (ADR-051), and the row's own date, ref, is already on the
+// line above it, in full. Across a year boundary the year is kept ("5 Jan
+// 2027"), since the line above no longer supplies it. An unparseable value comes
+// back as given.
+func (c Copy) shortDate(iso, ref string) string {
+	t, err := time.Parse(time.DateOnly, iso)
+	if err != nil {
+		return iso
+	}
+	s := strconv.Itoa(t.Day()) + " " + c.MonthsShort[t.Month()-1]
+	if len(ref) < 4 || ref[:4] != iso[:4] {
+		s += " " + iso[:4]
+	}
+	return s
+}
+
+// payoutNote is a settled talangan's second line (ADR-051): where else the row
+// reads. date is the day the row is placed on. Placed on the day it was
+// fronted, it says when it was paid; placed on the day it was
+// paid (a cash view), when it was fronted. A claim fronted and paid on one day
+// has no other date to name: "" for it, and for every row that is no payout.
+func (c Copy) payoutNote(date string, p *ledger.ReportPayout) string {
+	switch {
+	case p == nil || p.FrontedOn == p.PaidOn:
+		return ""
+	case date == p.FrontedOn:
+		return c.RowPaid(c.shortDate(p.PaidOn, date))
+	default:
+		return c.RowFronted(c.shortDate(p.FrontedOn, date))
+	}
 }
 
 // rangeText is a range of two "YYYY-MM-DD" days as it is named on the page and

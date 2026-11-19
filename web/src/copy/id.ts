@@ -83,6 +83,12 @@ export const copy = {
       summaryOut: 'Total keluar',
       summaryAdjustments: 'Penyesuaian',
       summaryMoved: 'Dipindah',
+      // The two talangan lines (ADR-051): a talangan counts in the month its
+      // member fronted it, the cash leaves in the month it is paid. Each has one
+      // fixed sign - spent here, paid later (+); paid here, spent earlier (-) -
+      // and shows only when not zero, as on the public report.
+      summaryPaidLater: 'Talangan dibayar kemudian',
+      summaryPaidEarlier: 'Pelunasan talangan sebelumnya',
       memberFilterLabel: (name: string) => `Anggota: ${name}`,
       filterClear: (label: string) => `Hapus filter ${label}`,
       filterEmpty: 'Tidak ada transaksi yang cocok dengan filter ini.',
@@ -1576,6 +1582,7 @@ export const copy = {
     errors: {
       reimbursement_already_settled: 'Talangan ini sudah dibayar.',
       reimbursement_waived: 'Talangan ini sudah diputihkan.',
+      settled_before_fronted: 'Tanggal bayar tidak bisa sebelum tanggal talangan.',
       // DELETE /api/reimbursements/{id} refuses a claim that still has a
       // receipt attached - the shared common.errors wording ("dipakai di
       // catatan lain") is true but not actionable here; this names the fix.

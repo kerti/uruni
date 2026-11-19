@@ -65,7 +65,7 @@ func TestReportListsAMultiMonthPaymentAsOneRow(t *testing.T) {
 			gotInOut = append(gotInOut, line)
 		}
 	}
-	if want := inOut(75_000, 0); !equalLines(gotInOut, want) {
+	if want := walkInOut(75_000, 0); !equalLines(gotInOut, want) {
 		t.Errorf("totals = %v, want %v", gotInOut, want)
 	}
 
