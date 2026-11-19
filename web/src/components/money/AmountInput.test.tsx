@@ -22,6 +22,15 @@ function ControlledAmountInput({ onChange }: { onChange: (amount: number) => voi
   )
 }
 
+/** Lets the focus handler's caret frame run. Focusing schedules a
+ * requestAnimationFrame that moves a collapsed caret to the end (AmountInput's
+ * handleFocus); a test that places the caret itself must wait for that frame
+ * first, or on a slow runner it lands after the placement and the keystroke
+ * goes to the end instead (CI failures on #839 and two Dependabot runs). */
+async function focusFrameDone() {
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+}
+
 describe('AmountInput', () => {
   it('accepts digits only while typing and emits a plain integer', async () => {
     const onChange = vi.fn()
@@ -91,6 +100,7 @@ describe('AmountInput', () => {
     render(<ControlledAmountInput onChange={onChange} />)
     const input = screen.getByLabelText('Jumlah') as HTMLInputElement
     await userEvent.type(input, '45000')
+    await focusFrameDone()
 
     // A digit typed after the "4" of Rp45.000: Rp415.000, caret after the "1".
     input.setSelectionRange(3, 3)
@@ -110,6 +120,7 @@ describe('AmountInput', () => {
     render(<ControlledAmountInput onChange={onChange} />)
     const input = screen.getByLabelText('Jumlah') as HTMLInputElement
     await userEvent.type(input, '45000')
+    await focusFrameDone()
 
     // Caret just after the dot in Rp45.|000.
     await userEvent.type(input, '{Backspace}', { initialSelectionStart: 5, initialSelectionEnd: 5 })
