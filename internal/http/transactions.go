@@ -579,7 +579,14 @@ type transactionSummaryResponse struct {
 	Out         int64   `json:"out"`
 	Adjustments int64   `json:"adjustments"`
 	Moved       int64   `json:"moved"`
-	End         int64   `json:"end"`
+	// PaidLater and PaidEarlier are the two talangan lines (ADR-051), each
+	// unsigned and of one fixed sign in the walk: payouts counted in this
+	// month's out but paid after it (added), and payouts paid in it that an
+	// earlier month counted (subtracted). Zero under a location filter and
+	// where full is false.
+	PaidLater   int64 `json:"paid_later"`
+	PaidEarlier int64 `json:"paid_earlier"`
+	End         int64 `json:"end"`
 }
 
 // transactionSummary is GET /api/transactions/summary (#751): Riwayat's
@@ -615,7 +622,7 @@ func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := transactionSummaryResponse{
 		Full: walk.Full, Start: walk.Start.Int64(), Openings: walk.Openings.Int64(), In: walk.In.Int64(), Out: walk.Out.Int64(),
-		Adjustments: walk.Adjustments.Int64(), Moved: walk.Moved.Int64(), End: walk.End.Int64(),
+		Adjustments: walk.Adjustments.Int64(), Moved: walk.Moved.Int64(), PaidLater: walk.PaidLater.Int64(), PaidEarlier: walk.PaidEarlier.Int64(), End: walk.End.Int64(),
 	}
 	if walk.Full {
 		resp.StartOn, resp.EndOn = &walk.StartOn, &walk.EndOn

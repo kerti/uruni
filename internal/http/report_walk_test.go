@@ -90,10 +90,10 @@ func TestReportShowsTheMonthAsAWalkFromStartToEnd(t *testing.T) {
 
 	want := []totalLine{
 		{report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(27_000)},
-		{report.Text.RowOpening, money.FormatIDR(100_000)},
-		{report.Text.TotalIn, money.FormatIDR(180_000)}, // 200.000 less the reversed 20.000
-		{report.Text.TotalOut, money.FormatIDR(6_000)},
-		{report.Text.RowAdjustment, money.FormatIDR(-4_000)},
+		{report.Text.RowOpening, walkSigned(100_000)},
+		{report.Text.TotalIn, walkSigned(180_000)}, // 200.000 less the reversed 20.000
+		{report.Text.TotalOut, walkSigned(-(6_000))},
+		{report.Text.RowAdjustment, walkSigned(-4_000)},
 		{report.Text.WalkEnd("30 September 2026"), money.FormatIDR(297_000)},
 	}
 	if got := totalsOf(t, body); !equalLines(got, want) {
@@ -119,8 +119,8 @@ func TestReportWalkHidesSaldoAwalAndPenyesuaianWhenZero(t *testing.T) {
 
 	want := []totalLine{
 		{report.Text.WalkStart("31 Juli 2026"), money.FormatIDR(0)},
-		{report.Text.TotalIn, money.FormatIDR(27_000)},
-		{report.Text.TotalOut, money.FormatIDR(0)},
+		{report.Text.TotalIn, walkSigned(27_000)},
+		{report.Text.TotalOut, walkSigned(0)},
 		{report.Text.WalkEnd("31 Agustus 2026"), money.FormatIDR(27_000)},
 	}
 	if !equalLines(got, want) {
@@ -144,8 +144,8 @@ func TestReportWalkOfTheRunningMonthEndsOnToday(t *testing.T) {
 	got := totalsOf(t, w.get(t, "/report/"+w.fund.ReportSlug).Body.String())
 	want := []totalLine{
 		{report.Text.WalkStart("30 September 2026"), money.FormatIDR(297_000)},
-		{report.Text.TotalIn, money.FormatIDR(1_000)},
-		{report.Text.TotalOut, money.FormatIDR(250)},
+		{report.Text.TotalIn, walkSigned(1_000)},
+		{report.Text.TotalOut, walkSigned(-(250))},
 		{report.Text.WalkEnd("2 Oktober 2026"), money.FormatIDR(297_750)},
 	}
 	if !equalLines(got, want) {
@@ -252,10 +252,10 @@ func TestReportPDFCarriesTheSameWalk(t *testing.T) {
 
 	want := []string{
 		report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(27_000),
-		report.Text.RowOpening, money.FormatIDR(100_000),
-		report.Text.TotalIn, money.FormatIDR(180_000),
-		report.Text.TotalOut, money.FormatIDR(6_000),
-		report.Text.RowAdjustment, money.FormatIDR(-4_000),
+		report.Text.RowOpening, walkSigned(100_000),
+		report.Text.TotalIn, walkSigned(180_000),
+		report.Text.TotalOut, walkSigned(-(6_000)),
+		report.Text.RowAdjustment, walkSigned(-4_000),
 		report.Text.WalkEnd("30 September 2026"), money.FormatIDR(297_000),
 	}
 	at := slicesIndexFrom(runs, report.Text.WalkStart("31 Agustus 2026"))
@@ -312,20 +312,20 @@ func TestReportPurposeFilterShowsThatPosAsAWalk(t *testing.T) {
 	}{
 		{"Kas Utama", w.mainID, []totalLine{
 			{report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
-			{report.Text.RowOpening, money.FormatIDR(100_000)},
-			{report.Text.TotalIn, money.FormatIDR(200_000)},
-			{report.Text.TotalOut, money.FormatIDR(6_000)},
-			{report.Text.RowAdjustment, money.FormatIDR(-4_000)},
-			{report.Text.WalkMoved, money.FormatIDR(-5_000)},
+			{report.Text.RowOpening, walkSigned(100_000)},
+			{report.Text.TotalIn, walkSigned(200_000)},
+			{report.Text.TotalOut, walkSigned(-(6_000))},
+			{report.Text.RowAdjustment, walkSigned(-4_000)},
+			{report.Text.WalkMoved, walkSigned(-5_000)},
 			{report.Text.WalkEnd("30 September 2026"), money.FormatIDR(292_000)},
 		}},
 		// No opening and no adjustment, so neither line; the reversal nets the
 		// 20.000 given in August against Total masuk.
 		{"Duka", w.duka, []totalLine{
 			{report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(20_000)},
-			{report.Text.TotalIn, money.FormatIDR(-20_000)},
-			{report.Text.TotalOut, money.FormatIDR(0)},
-			{report.Text.WalkMoved, money.FormatIDR(5_000)},
+			{report.Text.TotalIn, walkSigned(-20_000)},
+			{report.Text.TotalOut, walkSigned(0)},
+			{report.Text.WalkMoved, walkSigned(5_000)},
 			{report.Text.WalkEnd("30 September 2026"), money.FormatIDR(5_000)},
 		}},
 	}
@@ -395,11 +395,11 @@ func TestReportPDFDrawsTheWalkLinesInThePagesOrder(t *testing.T) {
 
 	want := []string{
 		report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000),
-		report.Text.RowOpening, money.FormatIDR(100_000),
-		report.Text.TotalIn, money.FormatIDR(200_000),
-		report.Text.TotalOut, money.FormatIDR(6_000),
-		report.Text.RowAdjustment, money.FormatIDR(-4_000),
-		report.Text.WalkMoved, money.FormatIDR(-5_000),
+		report.Text.RowOpening, walkSigned(100_000),
+		report.Text.TotalIn, walkSigned(200_000),
+		report.Text.TotalOut, walkSigned(-(6_000)),
+		report.Text.RowAdjustment, walkSigned(-4_000),
+		report.Text.WalkMoved, walkSigned(-5_000),
 		report.Text.WalkEnd("30 September 2026"), money.FormatIDR(292_000),
 	}
 	at := slicesIndexFrom(runs, report.Text.WalkStart("31 Agustus 2026"))
@@ -411,4 +411,19 @@ func TestReportPDFDrawsTheWalkLinesInThePagesOrder(t *testing.T) {
 			t.Errorf("walk run %d = %q, want %q", i, runs[at+i], wantRun)
 		}
 	}
+}
+
+// walkSigned is a full walk's line figure as the page shows it: the sign it is
+// added with, "+" before a positive one and FormatIDR's "-" before a negative.
+func walkSigned(v money.Amount) string {
+	if v > 0 {
+		return "+" + money.FormatIDR(v)
+	}
+	return money.FormatIDR(v)
+}
+
+// walkInOut is a full walk's Total masuk and Total keluar, signed as the page
+// shows them; inOut is the unsigned pair of a filtered summary.
+func walkInOut(in, out int64) []totalLine {
+	return []totalLine{{report.Text.TotalIn, walkSigned(money.Amount(in))}, {report.Text.TotalOut, walkSigned(money.Amount(-out))}}
 }

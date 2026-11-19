@@ -7,6 +7,8 @@
   "moved": 0,
   "openings": 0,
   "out": 75000,
+  "paid_earlier": 0,
+  "paid_later": 0,
   "start": 520000,
   "start_on": "2026-08-31"
 }

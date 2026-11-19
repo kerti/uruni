@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/store"
 )
 
 // The month-as-a-walk claim (ADR-038) for one location (#784): under Riwayat's
@@ -137,12 +138,39 @@ func TestMonthWalkFootsEachLocationEveryMonthWithAndWithoutAPos(t *testing.T) {
 // The location's walk is the fund's walk cut by location: across every location
 // the lines add up to the fund's, and the Pindah lokasi, which the fund's walk
 // cannot see, cancel to nothing.
+//
+// A talangan fronted in one month and paid from Bank in the next (ADR-051) is
+// the one place the two walks disagree on a line: the fund counts the payout in
+// the month it was fronted and bridges the gap with its Talangan line, while a
+// location walk is cash end to end and counts it where the cash left. So the
+// locations' Total keluar add up to the fund's with its bridge folded in
+// (Out - Fronted), and everything else, Start and End included, to the fund's
+// as it stands. Over the run the two differ only in which month holds the
+// payout, never in a rupiah.
 func TestMonthWalkLocationsAddUpToTheFundsWalk(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	s := newLocationWalk(t, l)
 	at := l.at(reportNow)
+
+	// 12.000 fronted on 25 Aug and paid out of Bank on 12 Sep.
+	var memberID int64
+	if err := l.db.QueryRowContext(ctx, `SELECT id FROM member WHERE fund_id = ? LIMIT 1`, s.fundID).Scan(&memberID); err != nil {
+		t.Fatalf("finding a member: %v", err)
+	}
+	claim, err := store.New(l.db).CreateReimbursement(ctx, store.CreateReimbursementParams{
+		FundID: s.fundID, MemberID: memberID, PurposeID: s.mainID, Amount: 12_000, IncurredOn: "2026-08-25", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateReimbursement() = %v, want no error", err)
+	}
+	if _, err := l.at(onTheDay("2026-09-12")).SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: s.fundID, ReimbursementID: claim.ID, AccountID: s.bankID, OccurredOn: "2026-09-12",
+	}); err != nil {
+		t.Fatalf("SettleReimbursement() = %v, want no error", err)
+	}
+	wantFronted := map[string]money.Amount{"2026-08": 12_000, "2026-09": -12_000}
 
 	for _, month := range locationMonths {
 		fund, err := at.MonthWalk(ctx, ReportParams{FundID: s.fundID, Month: month})
@@ -152,11 +180,17 @@ func TestMonthWalkLocationsAddUpToTheFundsWalk(t *testing.T) {
 		if fund.Moved != 0 {
 			t.Errorf("%s: the fund's Moved = %d, want 0: a move between locations is invisible to it", month, fund.Moved)
 		}
+		if bridge(fund) != wantFronted[month] {
+			t.Errorf("%s: the fund's Fronted = %d, want %d", month, bridge(fund), wantFronted[month])
+		}
 		var sum ReportWalk
 		for _, accountID := range []int64{s.cashID, s.bankID, s.bankBID} {
 			w, err := at.MonthWalk(ctx, ReportParams{FundID: s.fundID, Month: month, AccountID: int64Ptr(accountID)})
 			if err != nil {
 				t.Fatalf("MonthWalk(%s, %d) = %v, want no error", month, accountID, err)
+			}
+			if bridge(w) != 0 {
+				t.Errorf("%s: location %d has Fronted = %d, want 0: a location walk has no Talangan line", month, accountID, bridge(w))
 			}
 			sum.Start += w.Start
 			sum.Openings += w.Openings
@@ -166,9 +200,12 @@ func TestMonthWalkLocationsAddUpToTheFundsWalk(t *testing.T) {
 			sum.Moved += w.Moved
 			sum.End += w.End
 		}
-		want := ReportWalk{Start: fund.Start, Openings: fund.Openings, In: fund.In, Out: fund.Out, Adjustments: fund.Adjustments, Moved: 0, End: fund.End}
+		// Placed by the fronting day, the fund's Out holds the payout one month early,
+		// and its Talangan line, which is that payout counted but not yet paid, is what
+		// puts the cash back where the locations count it.
+		want := ReportWalk{Start: fund.Start, Openings: fund.Openings, In: fund.In, Out: fund.Out - bridge(fund), Adjustments: fund.Adjustments, Moved: 0, End: fund.End}
 		if sum != want {
-			t.Errorf("%s: the locations' lines sum to %+v, want the fund's %+v", month, sum, want)
+			t.Errorf("%s: the locations' lines sum to %+v, want the fund's %+v with its Talangan line (%d) folded into Total keluar", month, sum, want, bridge(fund))
 		}
 	}
 }

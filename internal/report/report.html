@@ -147,6 +147,7 @@
           {{if .Label}}{{if .KindIcon}}<span class="label-row">{{template "icon" .KindIcon}}{{if .KindSpoken}}<span class="sr-only">{{.Kind}} </span>{{end}}<span class="label-line">{{.Label}}</span></span>{{else}}<span class="label-line">{{.Label}}</span>{{end}}{{end}}
           {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
           <span class="muted">{{.Date}}{{if .HasReceipt}} &middot; {{$.Text.HasReceipt}}{{end}}</span>
+          {{if .Elsewhere}}<span class="muted">{{.Elsewhere}}</span>{{end}}
           {{if .Reversed}}<span class="muted">{{$.Text.RowReversed}}</span>{{end}}
           {{if .PartlyReversed}}<span class="muted">{{$.Text.RowPartlyReversed}}</span>{{end}}
         </span>

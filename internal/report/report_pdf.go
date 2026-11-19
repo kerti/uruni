@@ -603,6 +603,9 @@ func (d *pdfDoc) rowGroup(g RowGroup) {
 		if len(meta) > 0 {
 			note.lines = append(note.lines, pdfLine{text: strings.Join(meta, " \u00b7 "), size: pdfSmallSize, color: "muted-foreground"})
 		}
+		if r.Elsewhere != "" {
+			note.lines = append(note.lines, pdfLine{text: r.Elsewhere, size: pdfSmallSize, color: "muted-foreground"})
+		}
 		if r.Reversed {
 			note.lines = append(note.lines, pdfLine{text: Text.RowReversed, size: pdfSmallSize, color: "muted-foreground"})
 		}

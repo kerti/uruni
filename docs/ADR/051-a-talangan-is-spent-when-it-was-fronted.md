@@ -17,20 +17,28 @@ Three shapes were grilled:
 - **Balances** - Saldo kas, Saldo per lokasi, the balance per pos, the walk's start and end, every cek kas - use the row's own date. The cash left Kas tunai on 12 Nov and a balance never says otherwise.
 - **Flows** - the walk's *Total keluar*, the report's transaction rows (by kind or by month, [ADR-049](./049-the-reports-period-and-grouping.md)), Riwayat > Transaksi, and Beranda's *Arus kas bulan ini* - date the payout by its claim's `incurred_on`. Okt's Kas Utama spending holds the Rp450.000.
 - **A location filter is a cash view.** Riwayat or the report narrowed to a location ([#784](https://github.com/kerti/uruni/issues/784)) places the payout on its own date, since that view walks the location's balance.
-- **The row names its other date.** Placed by `incurred_on`, it carries a second line *Dibayar 12 Nov · Kas tunai*; placed by its own date, *Talangan 27 Okt*. Wherever the row sits, the treasurer can see where else it reads. The settle confirmation says where the row went.
+- **The row names its other date.** Placed by `incurred_on`, it carries a second line *Dibayar 12 Nov · Kas tunai* in the app, and *Dibayar 12 Nov* on the public report and its PDF, which never name a location ([ADR-035](./035-public-report.md)); placed by its own date, *Ditalangi 27 Okt*. Wherever the row sits, the treasurer can see where else it reads. The settle confirmation says where the row went.
 
-**The walk gets one bridge line.** With the payout counted in Okt but the cash leaving in Nov, Okt's walk no longer reaches its own end. A signed **Talangan** line closes it, shown only when non-zero, like Dipindah:
+**The walk gets two talangan lines.** With the payout counted in Okt but the cash leaving in Nov, Okt's walk no longer reaches its own end. Two lines close it, each with its own words and one fixed sign, each shown only when non-zero, like Dipindah:
+
+- **Talangan dibayar kemudian** (always +): payouts counted in this period whose cash left after it.
+- **Pelunasan talangan sebelumnya** (always -): payouts whose cash left in this period for spending an earlier period counts.
 
 ```
-                Okt          Nov
-Start           300.000      300.000
-Total masuk           0      600.000   (Nov's dues)
-Total keluar   -450.000            0
-Talangan       +450.000     -450.000
-End             300.000      450.000
+                                 Okt          Nov
+Start                            300.000      300.000
+Total masuk                            0     +600.000   (Nov's dues)
+Total keluar                    -450.000            0
+Talangan dibayar kemudian       +450.000
+Pelunasan talangan sebelumnya                -450.000
+End                              300.000      450.000
 ```
 
-Its value is: talangan payouts counted in this period's flows but paid after it, minus payouts paid in this period but counted in an earlier one. It applies to the whole fund and to a pos filter, on the page, the PDF and Riwayat alike (one derivation, as `MonthWalk` already guarantees). A location walk never has it: it is a cash walk end to end. Summed over the locations, the location walks still equal the fund walk *with* its bridge line.
+A payout fronted and paid inside one period is in neither. A month or a range can hold both, e.g. one that repays an old claim while a new one is still out. The words are their own because the hero's *Talangan* already means what is owed, subtracted, and one page cannot use one word for two things; the lines are two because a single signed line (tried first) read as *sometimes plus, sometimes minus* and could not be tallied by eye (the maintainer, on the first screenshots). For the same reason **every line between the two balances shows the sign it is added with** - *+Rp409.000*, Total keluar as *-Rp605.500* - on the page, the PDF and Riwayat; the balances stay unsigned, and so do the two totals of a member-filtered summary, which is no walk.
+
+**A talangan cannot be settled before the day it was fronted.** Money is not repaid before it was lent, so such a date is a typo, and settling refuses it by name (*Tanggal bayar tidak bisa sebelum tanggal talangan.*). It also keeps the two lines one sign each: a payout counted in a period is paid in it or after it. A payout stored before this rule, if any exists, still foots; its lines then read only "outside the period".
+
+Both lines apply to the whole fund and to a pos filter, on the page, the PDF and Riwayat alike (one derivation, as `MonthWalk` already guarantees). A location walk has neither: it is a cash walk end to end. Summed over the locations, the location walks still equal the fund walk *with* its two lines.
 
 **An unsettled claim stays off the ledger and editable.** It is in no walk, no flow and no balance; what is owed shows where it shows today (the hero's *Talangan*, ADR-037's owed figure), and a wrong amount, member, pos or date is still an edit, not a reversal (PRD 7.4). The talangan enters Okt's spending on the day it is settled - **a past period's flows change when a claim settles**, and that is the accepted cost: an Okt report read on 31 Okt and one read on 13 Nov differ by the Rp450.000, because on 31 Okt nobody knew yet that the fund would pay it.
 
@@ -51,5 +59,6 @@ Its value is: talangan payouts counted in this period's flows but paid after it,
 - No schema change and no ledger write change: both VPS instances take this release by image upgrade, not by rebuild.
 - Every flow read learns one rule for one row kind, and one test must hold it everywhere: a fixture with a payout fronted in one month and paid in the next, asserting each view's placement and that every walk still foots.
 - Riwayat > Transaksi pages by the placed date, which joins `reimbursement` into the paging key; the query plan must stay on the indexes [#839](https://github.com/kerti/uruni/pull/839) added (`internal/store/plan_test.go`).
-- The walk has a fifth optional line, and the report a new section.
+- The walk has two more optional lines, every walk line between the balances is signed, and the report gains a new section.
+- Settling gains one refusal (`settled_before_fronted`).
 - ADR-024 and ADR-038 are marked superseded in part in the PR whose code makes it true.

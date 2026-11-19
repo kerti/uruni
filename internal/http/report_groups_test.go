@@ -44,7 +44,7 @@ func TestReportGroupsByKindWithSubtotalsThatAreTheWalksTotals(t *testing.T) {
 		}
 	}
 	// The subtotals are the walk's lines, to the rupiah.
-	want := map[string]string{report.Text.TotalIn: money.FormatIDR(240_000), report.Text.TotalOut: money.FormatIDR(60_000)}
+	want := map[string]string{report.Text.TotalIn: walkSigned(240_000), report.Text.TotalOut: walkSigned(-60_000)}
 	for _, l := range totals {
 		if v, ok := want[l.label]; ok && v != l.value {
 			t.Errorf("%s = %s, want the group's subtotal %s", l.label, l.value, v)

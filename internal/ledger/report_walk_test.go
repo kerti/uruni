@@ -202,7 +202,9 @@ func ledgerSumThrough(t *testing.T, l *Ledger, fundID int64, through string) mon
 	return money.FromDB(sum)
 }
 
-// walkFoots is Start + Openings + In - Out + Adjustments, checked.
+// walkFoots is Start + Openings + In - Out + Adjustments + PaidLater -
+// PaidEarlier, checked. The last two are the talangan lines (ADR-051), zero in
+// any walk without a settled claim fronted and paid in different periods.
 func walkFoots(t *testing.T, w ReportWalk) money.Amount {
 	t.Helper()
 	sum := w.Start
@@ -219,8 +221,18 @@ func walkFoots(t *testing.T, w ReportWalk) money.Amount {
 	if sum, err = sum.Add(w.Adjustments); err != nil {
 		t.Fatalf("+ Adjustments: %v", err)
 	}
+	if sum, err = sum.Add(w.PaidLater); err != nil {
+		t.Fatalf("+ PaidLater: %v", err)
+	}
+	if sum, err = sum.Sub(w.PaidEarlier); err != nil {
+		t.Fatalf("- PaidEarlier: %v", err)
+	}
 	return sum
 }
+
+// bridge is a walk's two talangan lines netted, PaidLater - PaidEarlier: what
+// the single signed line was before ADR-051 gave each direction its own.
+func bridge(w ReportWalk) money.Amount { return w.PaidLater - w.PaidEarlier }
 
 func TestMonthlyReportWalkFootsEveryMonthOfAScenarioHoldingEveryRowShape(t *testing.T) {
 	t.Parallel()

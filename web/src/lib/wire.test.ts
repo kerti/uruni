@@ -112,6 +112,8 @@ const transactionSummaryKeys: Keys<TransactionSummary> = {
   out: true,
   adjustments: true,
   moved: true,
+  paid_later: true,
+  paid_earlier: true,
   end: true,
 }
 const transactionKeys: Keys<Transaction> = {

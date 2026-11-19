@@ -171,6 +171,9 @@ type Row struct {
 	Purpose string
 	Amount  string
 	Figure  string
+	// Elsewhere is a settled talangan's second line (ADR-051), "Dibayar 12 Nov":
+	// the row sits on the day it was fronted and names when it was paid. "" for every other row.
+	Elsewhere string
 	// Kind is the row's kind word (the PDF's Jenis column); KindIcon the
 	// page's icon before the label ("" for none) and KindSpoken whether the
 	// page reads Kind aloud beside it. See entryKind.
@@ -651,31 +654,63 @@ func asOf(r ledger.Report) string {
 	return Text.AsOf(Text.longDate(r.AsOf))
 }
 
-// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian
-// and Dipindah appear only when non-zero.
+// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian,
+// Dipindah and Talangan (ADR-051) appear only when non-zero. Talangan is signed
+// like the others: plus for payouts counted here and paid later.
+//
+// A full walk is a sum a reader can check by hand, so every line between the
+// two balances carries the sign it is added with: "+Rp409.000", and Total
+// keluar as "-Rp605.500". The balances themselves, and the two totals of a
+// filtered summary that is no walk, stay unsigned.
 func walkLines(w ledger.ReportWalk) []Total {
 	var lines []Total
 	add := func(label string, v money.Amount, last bool) {
 		lines = append(lines, Total{Label: label, Value: money.FormatIDR(v), Last: last})
 	}
+	addSigned := func(label string, v money.Amount) {
+		if !w.Full {
+			add(label, v, false)
+			return
+		}
+		lines = append(lines, Total{Label: label, Value: signedIDR(v)})
+	}
 	if w.Full {
 		add(Text.WalkStart(Text.longDate(w.StartOn)), w.Start, false)
 		if w.Openings != 0 {
-			add(Text.RowOpening, w.Openings, false)
+			addSigned(Text.RowOpening, w.Openings)
 		}
 	}
-	add(Text.TotalIn, w.In, false)
-	add(Text.TotalOut, w.Out, false)
+	addSigned(Text.TotalIn, w.In)
+	if w.Full {
+		addSigned(Text.TotalOut, -w.Out)
+	} else {
+		add(Text.TotalOut, w.Out, false)
+	}
 	if w.Full {
 		if w.Adjustments != 0 {
-			add(Text.RowAdjustment, w.Adjustments, false)
+			addSigned(Text.RowAdjustment, w.Adjustments)
 		}
 		if w.Moved != 0 {
-			add(Text.WalkMoved, w.Moved, false)
+			addSigned(Text.WalkMoved, w.Moved)
+		}
+		if w.PaidLater != 0 {
+			addSigned(Text.WalkPaidLater, w.PaidLater)
+		}
+		if w.PaidEarlier != 0 {
+			addSigned(Text.WalkPaidEarlier, -w.PaidEarlier)
 		}
 		add(Text.WalkEnd(Text.longDate(w.EndOn)), w.End, true)
 	}
 	return lines
+}
+
+// signedIDR is a walk line's figure with the sign it is added with: "+" before
+// a positive one, FormatIDR's own "-" before a negative one, and none on zero.
+func signedIDR(v money.Amount) string {
+	if v > 0 {
+		return "+" + money.FormatIDR(v)
+	}
+	return money.FormatIDR(v)
 }
 
 // NewPage shapes a ledger.Report into the page's display text: formatted
@@ -763,7 +798,7 @@ func NewPage(r ledger.Report, empty bool) Page {
 			}
 			page.Rows = append(page.Rows, Row{
 				Date: date, Label: label, Note: noteText(e.Note), Purpose: e.PurposeName,
-				Amount: sign + figure, Figure: figure, DirectionWord: word,
+				Amount: sign + figure, Figure: figure, DirectionWord: word, Elsewhere: Text.payoutNote(row.Date, e.Payout),
 				Kind: kind, KindIcon: icon, KindSpoken: spoken,
 				Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed, PartlyReversed: e.PartlyReversed,
 				line: lineKey(e.Line), month: row.Date[:7],

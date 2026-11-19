@@ -99,3 +99,32 @@ func TestListTransactionsPageJoinsNothingByScan(t *testing.T) {
 		}
 	}
 }
+
+func TestListReportTransactionsReadsTheTwoPlacedHalvesBySearch(t *testing.T) {
+	t.Parallel()
+	// The report places a settled talangan's payout by its claim's incurred_on
+	// (ADR-051), so the rows are two searches, one per half, never one OR over
+	// two tables (which would visit every row of the fund). The scan of receipt
+	// is has_receipt's EXISTS, older than this guard and held to nothing here.
+	plan := queryPlan(t, planDB(t), listReportTransactions)
+	joined := strings.Join(plan, "\n")
+	for _, want := range []string{
+		"SEARCH x USING INDEX transaction_by_date (fund_id=? AND occurred_on>?)",
+		"SEARCH c USING COVERING INDEX reimbursement_by_date (fund_id=? AND incurred_on>?)",
+		"SEARCH x USING COVERING INDEX reimbursement_settled_once (reimbursement_id=?)",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("the report's rows have no %q; plan:\n%s", want, joined)
+		}
+	}
+	for _, line := range plan {
+		if strings.HasPrefix(line, "SCAN ") && line != "SCAN rc" {
+			t.Errorf("the report's rows scan: %q; plan:\n%s", line, joined)
+		}
+	}
+
+	plan = queryPlan(t, planDB(t), reportPayoutsPaidEarlier)
+	if joined := strings.Join(plan, "\n"); !strings.Contains(joined, "SEARCH t USING INDEX transaction_by_date") {
+		t.Errorf("the paid-earlier sum is not a date search; plan:\n%s", joined)
+	}
+}

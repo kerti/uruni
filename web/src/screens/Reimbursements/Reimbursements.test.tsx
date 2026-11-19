@@ -7,6 +7,7 @@ import Correct from '@/screens/Reimbursements/Correct'
 import SettleDialog from '@/screens/Reimbursements/SettleDialog'
 import { chooseOption, selectedOptionName, selectOptionNames } from '@/test/select'
 import { copy } from '@/copy/id'
+import { dateBounds } from '@/lib/dates'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement } from '@/lib/reimbursements'
 import type { Account, Member, Transaction } from '@/lib/setup'
@@ -147,6 +148,23 @@ describe('SettleDialog', () => {
     ...lookups.filter((h) => !h.match('GET', '/api/accounts')),
     { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(list)) },
   ]
+
+  it('never offers a pay date before the day the talangan was fronted (ADR-051)', async () => {
+    // Fronted on the latest day the window allows, so today is not after it:
+    // the date starts on the fronting day, not before, and that is what posts.
+    const fronted = dateBounds.entry().max
+    const fetchMock = routedFetch([settle, getClaim(claim({ incurred_on: fronted })), ...withAccounts(accounts)])
+    vi.stubGlobal('fetch', fetchMock)
+    const onSettled = vi.fn()
+    renderScreen(<SettleDialog claimId={1} onClose={vi.fn()} onSettled={onSettled} onUnusable={vi.fn()} />)
+
+    await screen.findByRole('heading', { name: text.settle.heading })
+    await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
+    await waitFor(() => expect(onSettled).toHaveBeenCalled())
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ occurred_on: fronted })
+    expect(copy.reimbursements.errors.settled_before_fronted).toBe('Tanggal bayar tidak bisa sebelum tanggal talangan.')
+  })
 
   it('opens Bayar dari blank when there are two locations, and pays from the one she picks', async () => {
     // A key a previous version left behind is ignored.

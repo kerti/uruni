@@ -133,7 +133,9 @@ var datePaths = []datePath{
 		return err
 	}},
 	{"SettleReimbursement occurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		claim := createReimbursement(t, store.New(l.db), f, 1000, "2026-01-05", nil)
+		// Fronted on the window's floor, so only the window, not the rule that a
+		// payout cannot precede its claim (ADR-051), decides the settle date.
+		claim := createReimbursement(t, store.New(l.db), f, 1000, "2000-01-01", nil)
 		_, err := l.at(now).SettleReimbursement(context.Background(), SettleReimbursementParams{
 			FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: date,
 		})

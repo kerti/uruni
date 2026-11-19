@@ -28,6 +28,13 @@ export function formatIDR(amount: number): string {
   return amount < 0 ? '-\u2060' + figure : figure
 }
 
+// A balance walk's line: the sign it is added with, "+" before a positive
+// figure (the word joiner again, so "+" never parts from "Rp") and formatIDR's
+// own "-" before a negative one; zero is unsigned.
+export function formatSignedIDR(amount: number): string {
+  return amount > 0 ? '+\u2060' + formatIDR(amount) : formatIDR(amount)
+}
+
 // The grouped form a treasurer sees while typing: no "Rp", just the digits
 // with Indonesian thousands separators, so an <input> can echo what she typed
 // without the currency symbol fighting the caret.

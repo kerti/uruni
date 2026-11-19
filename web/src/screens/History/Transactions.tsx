@@ -380,24 +380,29 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
 
 /** The month as the public report reads it (#751, ADR-038): the balance it
  * started on, what came in and went out, and the balance it ended on, every
- * figure the server's. Saldo awal, Penyesuaian and Dipindah only when not
- * zero, as on the report. Under a member or direction filter a balance means
+ * figure the server's. Saldo awal, Penyesuaian, Dipindah and Talangan only when
+ * not zero, as on the report. Under a member or direction filter a balance means
  * nothing, so only the two totals show. */
 function MonthSummary({ summary }: { summary: TransactionSummary }) {
-  const lines: { label: string; amount: number; last?: boolean }[] = []
-  if (summary.full && summary.start_on) lines.push({ label: text.summaryBalance(formatIsoDate(summary.start_on)), amount: summary.start })
-  if (summary.full && summary.openings !== 0) lines.push({ label: text.summaryOpenings, amount: summary.openings })
-  lines.push({ label: text.summaryIn, amount: summary.in })
-  lines.push({ label: text.summaryOut, amount: summary.out })
-  if (summary.full && summary.adjustments !== 0) lines.push({ label: text.summaryAdjustments, amount: summary.adjustments })
-  if (summary.full && summary.moved !== 0) lines.push({ label: text.summaryMoved, amount: summary.moved })
-  if (summary.full && summary.end_on)
-    lines.push({ label: text.summaryBalance(formatIsoDate(summary.end_on)), amount: summary.end, last: true })
+  // A full summary is a walk the reader can tally, so each line between the two
+  // balances shows the sign it is added with (Total keluar as a minus); the two
+  // totals of a filtered summary are no walk and stay unsigned.
+  const walk = summary.full
+  const lines: { label: string; amount: number; last?: boolean; signed?: boolean }[] = []
+  if (walk && summary.start_on) lines.push({ label: text.summaryBalance(formatIsoDate(summary.start_on)), amount: summary.start })
+  if (walk && summary.openings !== 0) lines.push({ label: text.summaryOpenings, amount: summary.openings, signed: true })
+  lines.push({ label: text.summaryIn, amount: summary.in, signed: walk })
+  lines.push({ label: text.summaryOut, amount: walk ? -summary.out : summary.out, signed: walk })
+  if (walk && summary.adjustments !== 0) lines.push({ label: text.summaryAdjustments, amount: summary.adjustments, signed: true })
+  if (walk && summary.moved !== 0) lines.push({ label: text.summaryMoved, amount: summary.moved, signed: true })
+  if (walk && summary.paid_later !== 0) lines.push({ label: text.summaryPaidLater, amount: summary.paid_later, signed: true })
+  if (walk && summary.paid_earlier !== 0) lines.push({ label: text.summaryPaidEarlier, amount: -summary.paid_earlier, signed: true })
+  if (walk && summary.end_on) lines.push({ label: text.summaryBalance(formatIsoDate(summary.end_on)), amount: summary.end, last: true })
 
   return (
     <Figures className={card}>
       {lines.map((line) => (
-        <FigureRow key={line.label} label={line.label} amount={line.amount} total={line.last} />
+        <FigureRow key={line.label} label={line.label} amount={line.amount} total={line.last} signed={line.signed} />
       ))}
     </Figures>
   )

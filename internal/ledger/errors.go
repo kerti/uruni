@@ -117,6 +117,14 @@ var ErrReimbursementWaived = refuse("ledger: reimbursement has been waived",
 	ClassConflict, "reimbursement_waived",
 	"This reimbursement has been waived.")
 
+// ErrSettledBeforeFronted is returned by SettleReimbursement for a payout dated
+// before the claim's incurred_on: money cannot be repaid before it was fronted,
+// so the date is a typo. Refusing it also keeps the walk's two talangan lines
+// one sign each (ADR-051): a payout fronted in a period is paid in it or later.
+var ErrSettledBeforeFronted = refuse("ledger: payout dated before the claim was fronted",
+	ClassInvalid, "settled_before_fronted",
+	"A reimbursement cannot be paid before the date it was fronted.")
+
 // ErrReimbursementAlreadySettled is returned by SettleReimbursement when
 // GetReimbursementSettlement finds an existing kind='reimbursement' row for
 // the claim.

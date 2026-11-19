@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { exceedsAmountCeiling, formatIDR, formatRupiahDigits, MAX_AMOUNT, MAX_AMOUNT_DIGITS, parseRupiah } from '@/lib/money'
+import {
+  exceedsAmountCeiling,
+  formatIDR,
+  formatRupiahDigits,
+  formatSignedIDR,
+  MAX_AMOUNT,
+  MAX_AMOUNT_DIGITS,
+  parseRupiah,
+} from '@/lib/money'
 
 // Exact strings, no normalizing: the format is the contract (#724). Intl's
 // currency style printed "Rp\u00a01.000" in Chrome and "Rp1.000" in Safari, so
@@ -86,5 +94,13 @@ describe('the amount ceiling', () => {
     // (amount_too_large) instead of a clamp quietly saving a different amount.
     expect(parseRupiah('1000000000000')).toBe(1_000_000_000_000)
     expect(parseRupiah('99999999999999999999')).toBeGreaterThan(MAX_AMOUNT)
+  })
+})
+
+describe('formatSignedIDR', () => {
+  it('signs a walk line as it is added: "+" before a positive figure, formatIDR\'s "-" before a negative, none on zero', () => {
+    expect(formatSignedIDR(409_000)).toBe('+\u2060Rp409.000')
+    expect(formatSignedIDR(-605_500)).toBe(formatIDR(-605_500))
+    expect(formatSignedIDR(0)).toBe('Rp0')
   })
 })

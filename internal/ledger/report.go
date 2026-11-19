@@ -181,7 +181,10 @@ type ReportPurposeBalance struct {
 
 // ReportRow is one line of the month. Exactly one of Entry and Move is set.
 type ReportRow struct {
-	Date  string // "YYYY-MM-DD"
+	// Date is the day the row is placed on ("YYYY-MM-DD"): its own date, except a
+	// settled claim's payout, which sits on the day it was fronted (ADR-051)
+	// unless the report is a cash view.
+	Date  string
 	Entry *ReportEntry
 	Move  *ReportMove
 }
@@ -253,6 +256,22 @@ type ReportEntry struct {
 	// reversed (data from before ADR-048 only): Sebagian dibatalkan. Reversed is
 	// then false, and true only when every month is reversed.
 	PartlyReversed bool
+
+	// Payout is set on a settled claim's payout (ADR-051): the row's two dates,
+	// so a renderer can say where else it reads. nil on every other row.
+	Payout *ReportPayout
+}
+
+// ReportPayout is a settled talangan's payout with both its dates (ADR-051).
+// The ReportRow carrying it is dated FrontedOn in every flow view, and PaidOn
+// under a location filter, a cash view: a renderer compares the row's date with
+// the two to say which other date to name. Balances use PaidOn always.
+type ReportPayout struct {
+	// FrontedOn is the claim's incurred_on, the day the member fronted it.
+	FrontedOn string
+	// PaidOn is the payout's own date, the day the cash left. The location it
+	// left is not carried: the report never names one (ADR-035).
+	PaidOn string
 }
 
 // ReportMove is a reclass_purpose pair folded into one row: an envelope's
@@ -282,7 +301,7 @@ type ReportMove struct {
 // month started on to the balance it ended on, in which every posted row
 // lands on exactly one line.
 //
-//	Start + Openings + In - Out + Adjustments + Moved = End
+//	Start + Openings + In - Out + Adjustments + Moved + PaidLater - PaidEarlier = End
 //
 // In is net of the reversals of income and Out of the reversals of spending
 // (ADR-042), so either can read below zero, but only after a cek kas counted
@@ -322,7 +341,24 @@ type ReportWalk struct {
 	// reclass pair on a location has both legs there and nets to zero). Always
 	// zero for the whole fund, where the two legs of a move cancel.
 	Moved money.Amount
-	End   money.Amount
+
+	// PaidLater and PaidEarlier are the whole fund's and a pos's two talangan
+	// lines (ADR-051). A settled claim's payout counts in Out in the period its
+	// member fronted it, while the cash leaves, and every balance moves, on the
+	// day it was paid; the two lines close that gap, each with one fixed sign so
+	// a reader can tally the walk. PaidLater (Talangan dibayar kemudian, added)
+	// is the payouts counted in this period's Out whose cash left outside it;
+	// PaidEarlier (Pelunasan talangan sebelumnya, subtracted) is the payouts
+	// whose cash left in this period for spending counted outside it. A claim
+	// fronted and paid inside the period is in neither. Settling before the
+	// fronting date is refused (ErrSettledBeforeFronted), so outside means after
+	// and before respectively; a row older than that rule still foots. Both zero
+	// under a location filter, a cash view: the payout then sits on its own date
+	// and counts in Out in the period the cash moved, and zero where the walk is
+	// not Full.
+	PaidLater   money.Amount
+	PaidEarlier money.Amount
+	End         money.Amount
 }
 
 // ReportDuesRow is one member's standing for the month: DuesStatusForPeriod's
@@ -939,10 +975,19 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 		next := period.end.AddDate(0, 0, 1).Format(reportDayLayout)
 		to = &next
 	}
+	// A location filter is a cash view: a talangan's payout sits on the day its
+	// cash left, as the location's balance does (ADR-051). Everywhere else it
+	// sits on the day its member fronted it.
+	cashView := p.AccountID != nil
+	var cash int64
+	if cashView {
+		cash = 1
+	}
 	rows, err := l.q.ListReportTransactions(ctx, store.ListReportTransactionsParams{
 		FundID:   p.FundID,
 		FromDate: period.startDay(),
 		ToDate:   to,
+		CashView: cash,
 	})
 	if err != nil {
 		return nil, ReportWalk{}, fmt.Errorf("listing report transactions: %w", err)
@@ -958,6 +1003,9 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 		walk          = ReportWalk{Full: p.MemberID == nil && p.Direction == ""}
 		moveSeen      = make(map[int64]bool)
 		correctedSeen = make(map[int64]bool)
+		// paidLater is the payouts counted in Out here whose cash left outside
+		// the period: the PaidLater line, summed from these very rows.
+		paidLater money.Amount
 		// groups folds a dues payment's rows, and a reversal group's, into the one
 		// listed row they are (ADR-048); see duesGroupKey.
 		groups = make(map[string]*duesGroup)
@@ -1008,7 +1056,7 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 					if !ok || !moveMatches(p, net) {
 						continue
 					}
-					out = append(out, ReportRow{Date: row.OccurredOn, Move: &net})
+					out = append(out, ReportRow{Date: row.PlacedOn, Move: &net})
 					continue
 				}
 
@@ -1019,7 +1067,7 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 				if !moveMatches(p, move) {
 					continue
 				}
-				out = append(out, ReportRow{Date: row.OccurredOn, Move: &move})
+				out = append(out, ReportRow{Date: row.PlacedOn, Move: &move})
 				continue
 			default:
 				return nil, ReportWalk{}, fmt.Errorf("unknown transfer kind %q", *row.TransferKind)
@@ -1038,6 +1086,11 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 		if err := walk.add(entry); err != nil {
 			return nil, ReportWalk{}, fmt.Errorf("totalling report rows: %w", err)
 		}
+		if entry.Payout != nil && !cashView && !period.holds(entry.Payout.PaidOn, to) {
+			if paidLater, err = paidLater.Add(entry.Amount); err != nil {
+				return nil, ReportWalk{}, fmt.Errorf("totalling payouts paid later: %w", err)
+			}
+		}
 
 		key := duesGroupKey(row)
 		if g, ok := groups[key]; ok && key != "" {
@@ -1053,12 +1106,42 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, period reportPe
 			}
 			groups[key] = g
 		}
-		out = append(out, ReportRow{Date: row.OccurredOn, Entry: &entry})
+		out = append(out, ReportRow{Date: row.PlacedOn, Entry: &entry})
 	}
 	for _, g := range groups {
 		g.finish()
 	}
+	if walk.Full && !cashView {
+		walk.PaidLater = paidLater
+		if walk.PaidEarlier, err = l.paidEarlier(ctx, p, period, to); err != nil {
+			return nil, ReportWalk{}, err
+		}
+	}
 	return out, walk, nil
+}
+
+// paidEarlier is the walk's Pelunasan talangan sebelumnya line (ADR-051): the
+// payouts whose cash left in the period for spending another period counts,
+// read for the same pos. to is the list's exclusive upper bound, nil for a
+// running period.
+func (l *Ledger) paidEarlier(ctx context.Context, p ReportParams, period reportPeriod, to *string) (money.Amount, error) {
+	paid, err := l.q.ReportPayoutsPaidEarlier(ctx, store.ReportPayoutsPaidEarlierParams{
+		FundID:    p.FundID,
+		FromDate:  period.startDay(),
+		ToDate:    to,
+		PurposeID: p.PurposeID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("report payouts paid earlier: %w", err)
+	}
+	return money.FromDB(paid), nil
+}
+
+// holds reports whether day ("YYYY-MM-DD") falls in the period as the list
+// reads it: on or after its first day and before to, the list's exclusive
+// upper bound (nil for a running period, which has none).
+func (rp reportPeriod) holds(day string, to *string) bool {
+	return day >= rp.startDay() && (to == nil || day < *to)
 }
 
 // duesGroupKey is the key a dues row folds under in the report's list (ADR-048),
@@ -1234,6 +1317,9 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 	}
 	if row.Kind == string(TransactionKindReimbursement) {
 		e.Note = row.ClaimNote
+		if row.ClaimIncurredOn != nil {
+			e.Payout = &ReportPayout{FrontedOn: *row.ClaimIncurredOn, PaidOn: row.OccurredOn}
+		}
 	}
 	return e, nil
 }

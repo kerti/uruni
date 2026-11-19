@@ -67,6 +67,7 @@
   "reversal_reimbursement",
   "reversal_transfer",
   "server_busy",
+  "settled_before_fronted",
   "too_many_requests",
   "transaction_already_reversed",
   "unauthenticated",
