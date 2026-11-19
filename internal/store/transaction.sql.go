@@ -1131,8 +1131,10 @@ LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
-LEFT JOIN keyed gk ON gk.id = t.id
-LEFT JOIN grp_stats gs ON gs.gkey = gk.gkey
+LEFT JOIN grp_stats gs ON gs.gkey = CAST(CASE
+  WHEN t.kind = 'dues' THEN 'p' || t.dues_payment_id
+  WHEN orig.kind = 'dues' THEN 'r' || orig.dues_payment_id || ':' || t.occurred_on
+END AS TEXT)
 WHERE t.id IN (SELECT id FROM kept)
   AND (
     ?1 IS NULL
@@ -1330,6 +1332,11 @@ type ListTransactionsPageRow struct {
 // other row). reverses_dues_payment_id is, on a reversal of a dues row, the
 // payment it reverses: with dues_payment_id it names the payment a group item
 // belongs to, so ListDuesGroupRows can fetch its months.
+// The row's group key, computed here from t and orig exactly as `keyed`
+// computes it, rather than by joining `keyed` back on id: a materialized CTE
+// has no index, and without ANALYZE statistics (production never runs it)
+// SQLite scanned all of `keyed` for every row - quadratic in the ledger
+// (#838). grp_stats is still searched by key through an automatic index.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
 		arg.CursorOccurredOn,

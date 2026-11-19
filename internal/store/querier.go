@@ -746,6 +746,11 @@ type Querier interface {
 	// other row). reverses_dues_payment_id is, on a reversal of a dues row, the
 	// payment it reverses: with dues_payment_id it names the payment a group item
 	// belongs to, so ListDuesGroupRows can fetch its months.
+	// The row's group key, computed here from t and orig exactly as `keyed`
+	// computes it, rather than by joining `keyed` back on id: a materialized CTE
+	// has no index, and without ANALYZE statistics (production never runs it)
+	// SQLite scanned all of `keyed` for every row - quadratic in the ledger
+	// (#838). grp_stats is still searched by key through an automatic index.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The backup export's read (ADR-012): the whole table, password hash included
