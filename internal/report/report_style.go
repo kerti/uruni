@@ -78,6 +78,10 @@ p{margin:0}
 .hero .amount.s32{font-size:32px}
 .hero .amount.s28{font-size:28px}
 .hero .amount.s24{font-size:24px}
+.hero .split{margin:12px 0 0;padding-top:12px;border-top:1px solid rgb(255 255 255 / .25);display:flex;flex-direction:column;gap:4px;text-align:left}
+.hero .split div{display:flex;justify-content:space-between;gap:12px}
+.hero .split dt{opacity:.85}
+.hero .split dd{margin:0;white-space:nowrap;text-align:right}
 .status{display:flex;align-items:center;gap:8px;margin-top:-24px;padding:36px 16px 12px;
   border-radius:0 0 24px 24px;background:var(--card);color:var(--foreground);box-shadow:inset 0 0 0 1px rgb(34 50 58 / .1)}
 .status .icon{width:24px;height:24px;flex-shrink:0}

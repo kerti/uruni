@@ -66,10 +66,21 @@
 </nav>
 
 <div class="balance">
+{{if .Owed}}
+<section class="hero" aria-label="{{.Text.UsableLabel}}">
+  <p class="label">{{.Text.UsableLabel}}</p>
+  <p class="amount tabular {{.UsableSize}}">{{.Usable}}</p>
+  <dl class="split">
+    <div><dt>{{.Text.BalanceLabel}}</dt><dd class="tabular">{{.Balance}}</dd></div>
+    <div><dt>{{.Text.OwedLabel}}</dt><dd class="tabular">{{.OwedLess}}</dd></div>
+  </dl>
+</section>
+{{else}}
 <section class="hero" aria-label="{{.Text.BalanceLabel}}">
   <p class="label">{{.Text.BalanceLabel}}</p>
   <p class="amount tabular {{.BalanceSize}}">{{.Balance}}</p>
 </section>
+{{end}}
 {{with .Check}}
 <p class="status {{.Class}}" role="status">{{if eq .Class "matched"}}{{template "icon" "check"}}{{else if eq .Class "discrepancy"}}{{template "icon" "search"}}{{else}}{{template "icon" "question"}}{{end}}<span class="lines"><span>{{.Message}}</span>{{if .When}}<span class="when">{{.When}}</span>{{end}}{{if .Since}}<span class="when">{{.Since}}</span>{{end}}</span></p>
 {{end}}
@@ -82,14 +93,6 @@
     {{range .Purposes}}
     <li><span>{{.Name}}</span><span class="tabular{{if .Negative}} negative{{end}}">{{.Balance}}</span></li>
     {{end}}
-  </ul>
-</section>
-{{end}}
-
-{{if .Owed}}
-<section aria-label="{{.Text.OwedLabel}}">
-  <ul class="rows">
-    <li><span>{{.Text.OwedLabel}}</span><span class="tabular">{{.Owed}}</span></li>
   </ul>
 </section>
 {{end}}

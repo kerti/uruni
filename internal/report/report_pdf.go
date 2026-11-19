@@ -426,18 +426,36 @@ func (d *pdfDoc) header(p Page) {
 	d.SetY(d.GetY() + 2)
 
 	// The balance, in a quiet panel: ink-light for print, Forest for the figure.
+	// While talangan is outstanding (#836) the headline is what the fund can
+	// use, and the two figures that make it - cash and what is owed - sit under
+	// it on their own lines, amounts right-aligned.
 	y := d.GetY()
+	label, headline, h := Text.BalanceLabel, p.Balance, 15.0
+	if p.Owed != "" {
+		label, headline, h = Text.UsableLabel, p.Usable, 15+2*6.0
+	}
 	d.fill("muted")
-	d.RoundedRect(pdfMarginX, y, pdfContentW, 15, 2, "1234", "F")
+	d.RoundedRect(pdfMarginX, y, pdfContentW, h, 2, "1234", "F")
 	d.face(false, 10)
 	d.ink("muted-foreground")
 	d.SetXY(pdfMarginX+5, y+4.6)
-	d.CellFormat(70, 6, Text.BalanceLabel, "", 0, "L", false, 0, "")
+	d.CellFormat(70, 6, label, "", 0, "L", false, 0, "")
 	d.face(true, 16)
 	d.ink("primary")
 	d.SetXY(pdfMarginX+70, y+3.6)
-	d.CellFormat(pdfContentW-75, 8, p.Balance, "", 0, "R", false, 0, "")
-	d.SetY(y + 15 + 3)
+	d.CellFormat(pdfContentW-75, 8, headline, "", 0, "R", false, 0, "")
+	if p.Owed != "" {
+		for i, l := range [][2]string{{Text.BalanceLabel, p.Balance}, {Text.OwedLabel, p.OwedLess}} {
+			ly := y + 15 + float64(i)*6 - 2
+			d.face(false, pdfBodySize)
+			d.ink("foreground")
+			d.SetXY(pdfMarginX+5, ly)
+			d.CellFormat(pdfContentW*0.6-5, 6, l[0], "", 0, "L", false, 0, "")
+			d.SetXY(pdfMarginX+pdfContentW*0.6, ly)
+			d.CellFormat(pdfContentW*0.4-5, 6, l[1], "", 0, "R", false, 0, "")
+		}
+	}
+	d.SetY(y + h + 3)
 
 	if c := p.Check; c != nil {
 		// A card edged in the status colour, as the page's banner and the
@@ -489,16 +507,6 @@ func (d *pdfDoc) header(p Page) {
 				{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: pu.Balance, size: pdfBodySize, color: color}}},
 			}, true)
 		}
-	}
-
-	// What the fund owes members who fronted an expense, beneath the pos it
-	// already sits inside; absent when nothing is owed, as on the page (#406).
-	if p.Owed != "" {
-		d.SetY(d.GetY() + 3)
-		d.row([]pdfCell{
-			{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: Text.OwedLabel, size: pdfBodySize, color: "foreground"}}},
-			{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: p.Owed, size: pdfBodySize, color: "foreground"}}},
-		}, true)
 	}
 }
 
