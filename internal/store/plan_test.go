@@ -98,6 +98,13 @@ func TestListTransactionsPageJoinsNothingByScan(t *testing.T) {
 			t.Errorf("GET /api/transactions' query joins by scan: %q; plan:\n%s", line, strings.Join(plan, "\n"))
 		}
 	}
+	// The placed date (ADR-051, #845) reads the claim's incurred_on for the
+	// filter in `matched` and for the order and keyset outside it: both joins to
+	// reimbursement must be a primary-key search, one per payout.
+	joined := strings.Join(plan, "\n")
+	if n := strings.Count(joined, "SEARCH rb USING INTEGER PRIMARY KEY (rowid=?)"); n != 2 {
+		t.Errorf("GET /api/transactions' query searches the claim %d times by key, want 2; plan:\n%s", n, joined)
+	}
 }
 
 func TestListReportTransactionsReadsTheTwoPlacedHalvesBySearch(t *testing.T) {

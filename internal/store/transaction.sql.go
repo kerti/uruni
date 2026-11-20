@@ -1041,7 +1041,7 @@ WITH keyed AS (
          END AS TEXT) AS gkey
   FROM "transaction" t
   LEFT JOIN "transaction" o ON o.id = t.reverses_transaction_id
-  WHERE t.fund_id = ?4
+  WHERE t.fund_id = ?5
 ),
 grp_stats AS (
   SELECT gkey, CAST(SUM(amount) AS INTEGER) AS group_amount
@@ -1066,21 +1066,22 @@ matched AS (
   LEFT JOIN grp_stats gs ON gs.gkey = k.gkey
   JOIN purpose p ON p.id = t.purpose_id
   LEFT JOIN member m ON m.id = t.member_id
-  WHERE t.fund_id = ?4
+  LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
+  WHERE t.fund_id = ?5
     AND (
-      ?5 IS NULL
-      OR INSTR(LOWER(t.note), LOWER(?5)) > 0
-      OR INSTR(LOWER(p.name), LOWER(?5)) > 0
-      OR INSTR(LOWER(m.name), LOWER(?5)) > 0
-      OR t.amount = ?6
-      OR gs.group_amount = ?6
+      ?6 IS NULL
+      OR INSTR(LOWER(t.note), LOWER(?6)) > 0
+      OR INSTR(LOWER(p.name), LOWER(?6)) > 0
+      OR INSTR(LOWER(m.name), LOWER(?6)) > 0
+      OR t.amount = ?7
+      OR gs.group_amount = ?7
     )
-    AND (?7 IS NULL OR t.member_id = ?7)
-    AND (?8 IS NULL OR t.dues_period = ?8)
-    AND (?9 IS NULL OR t.purpose_id = ?9)
-    AND (?10 IS NULL OR t.account_id = ?10)
-    AND (?11 IS NULL OR substr(t.occurred_on, 1, 7) = ?11)
-    AND (?12 IS NULL OR (t.direction = ?12 AND t.kind <> 'transfer'))
+    AND (?8 IS NULL OR t.member_id = ?8)
+    AND (?9 IS NULL OR t.dues_period = ?9)
+    AND (?10 IS NULL OR t.purpose_id = ?10)
+    AND (?11 IS NULL OR t.account_id = ?11)
+    AND (?12 IS NULL OR substr(CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(?1 AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT), 1, 7) = ?12)
+    AND (?13 IS NULL OR (t.direction = ?13 AND t.kind <> 'transfer'))
 ),
 kept AS (
   SELECT id FROM matched WHERE gkey IS NULL AND (transfer_id IS NULL OR leg_rank = 1)
@@ -1090,6 +1091,8 @@ kept AS (
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
+       CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(?1 AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT) AS placed_on,
+       rb.incurred_on AS claim_incurred_on,
        a.name AS account_name,
        p.kind AS purpose_kind,
        m.name AS member_name,
@@ -1137,26 +1140,27 @@ LEFT JOIN grp_stats gs ON gs.gkey = CAST(CASE
 END AS TEXT)
 WHERE t.id IN (SELECT id FROM kept)
   AND (
-    ?1 IS NULL
-    OR (t.occurred_on, t.id) < (?1, CAST(?2 AS INTEGER))
+    ?2 IS NULL
+    OR (CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(?1 AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT), t.id) < (?2, CAST(?3 AS INTEGER))
   )
-ORDER BY t.occurred_on DESC, t.id DESC
-LIMIT ?3
+ORDER BY placed_on DESC, t.id DESC
+LIMIT ?4
 `
 
 type ListTransactionsPageParams struct {
-	CursorOccurredOn interface{}
-	CursorID         *int64
-	PageLimit        int64
-	FundID           int64
-	Q                interface{}
-	QAmount          *int64
-	MemberID         interface{}
-	DuesPeriod       interface{}
-	PurposeID        interface{}
-	AccountID        interface{}
-	Month            interface{}
-	Direction        interface{}
+	CashView       int64
+	CursorPlacedOn interface{}
+	CursorID       *int64
+	PageLimit      int64
+	FundID         int64
+	Q              interface{}
+	QAmount        *int64
+	MemberID       interface{}
+	DuesPeriod     interface{}
+	PurposeID      interface{}
+	AccountID      interface{}
+	Month          interface{}
+	Direction      interface{}
 }
 
 type ListTransactionsPageRow struct {
@@ -1176,6 +1180,8 @@ type ListTransactionsPageRow struct {
 	ReversesTransactionID         *int64
 	Note                          *string
 	CreatedAt                     int64
+	PlacedOn                      string
+	ClaimIncurredOn               *string
 	AccountName                   string
 	PurposeKind                   string
 	MemberName                    *string
@@ -1205,7 +1211,7 @@ type ListTransactionsPageRow struct {
 // it orders by. LIMIT/OFFSET was rejected: occurred_on is backdatable (PRD
 // section 7.2), so a row can land mid-list between two page fetches and an
 // offset would skip or duplicate it. The row-value comparison cannot:
-// cursor_occurred_on/cursor_id are NULL on the first page (the clause
+// cursor_placed_on/cursor_id are NULL on the first page (the clause
 // short-circuits true), and a later page passes the previous page's last row,
 // keeping only strictly older pairs. cursor_id is CAST to INTEGER inside the
 // tuple because otherwise sqlc infers its Go type from the tuple's other
@@ -1233,6 +1239,14 @@ type ListTransactionsPageRow struct {
 // payment history panel alone. month is "YYYY-MM", prefix-compared against
 // occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 // with q and the keyset cursor.
+//
+// Placed (ADR-051), as ListReportTransactions: a settled talangan's payout
+// (kind='reimbursement') is a flow, so the list dates it by its claim's
+// incurred_on - the month filter, the order and the keyset all read placed_on,
+// never occurred_on. cash_view (non-zero: the Lokasi filter, a cash view) puts
+// it back on its own date. occurred_on stays the cash date; claim_incurred_on
+// lets the row name its other date. The claim is joined by primary key, so
+// the key costs one search per payout (internal/store/plan_test.go).
 //
 // page_limit is page size + 1: the caller peeks at the extra row to know
 // whether a next page exists, then trims it.
@@ -1339,7 +1353,8 @@ type ListTransactionsPageRow struct {
 // (#838). grp_stats is still searched by key through an automatic index.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
-		arg.CursorOccurredOn,
+		arg.CashView,
+		arg.CursorPlacedOn,
 		arg.CursorID,
 		arg.PageLimit,
 		arg.FundID,
@@ -1376,6 +1391,8 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
+			&i.PlacedOn,
+			&i.ClaimIncurredOn,
 			&i.AccountName,
 			&i.PurposeKind,
 			&i.MemberName,

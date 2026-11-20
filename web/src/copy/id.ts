@@ -721,6 +721,13 @@ export const copy = {
     settlement: {
       kind: 'Talangan',
       text: (memberName: string) => memberName,
+      // The payout's second line (ADR-051): a talangan is spending on the day it
+      // was fronted, so Riwayat lists it there and says when and from where the
+      // cash left; under the Lokasi filter it sits on the day it was paid and
+      // says when it was fronted. The public report says the first without the
+      // location.
+      paidOn: (date: string, accountName: string) => `Dibayar ${date} · ${accountName}`,
+      frontedOn: (date: string) => `Ditalangi ${date}`,
     },
     transferLocation: {
       kind: 'Pindah lokasi',
@@ -1538,6 +1545,10 @@ export const copy = {
       submit: 'Bayar',
       submitting: 'Membayar…',
       success: 'Talangan sudah dibayar.',
+      // Paid on another day than it was fronted, the payout is listed on the
+      // fronting day (ADR-051): the toast says where the row went, in the
+      // words of the claim form's Tanggal pengeluaran.
+      successFronted: (date: string) => `Talangan sudah dibayar. Tercatat sebagai pengeluaran ${date}.`,
     },
     actions: {
       settle: 'Bayar',

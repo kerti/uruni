@@ -11,7 +11,7 @@ import { useToast } from '@/components/toast/useToast'
 import { copy } from '@/copy/id'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { noteForDisplay } from '@/lib/transactions'
+import { noteForDisplay, payoutNote, placedOn } from '@/lib/transactions'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
 import { useDialogParam } from '@/lib/useDialogParam'
@@ -189,7 +189,10 @@ export default function TransactionList({
                         )}
                         <TransactionRowLabel transaction={transaction} bare={kind !== null} kindShown={kind !== null} />
                         {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
-                        <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
+                        <span className="text-sm text-muted-foreground">{formatIsoDate(placedOn(transaction))}</span>
+                        {/* A settled talangan sits on one of its two dates (ADR-051)
+                          and names the other here. */}
+                        {payoutNote(transaction) && <span className="text-sm text-muted-foreground">{payoutNote(transaction)}</span>}
                         {reversalBadge(transaction) && <span className="text-sm text-muted-foreground">{reversalBadge(transaction)}</span>}
                       </span>
                     </span>
@@ -330,7 +333,7 @@ function PurposeLine({ transaction, purposeNames }: { transaction: Transaction; 
 function groupByMonth(transactions: Transaction[]): { month: string | null; rows: Transaction[] }[] {
   const groups: { month: string | null; rows: Transaction[] }[] = []
   for (const transaction of transactions) {
-    const month = transaction.occurred_on.slice(0, 7)
+    const month = placedOn(transaction).slice(0, 7)
     const last = groups[groups.length - 1]
     if (last && last.month === month) last.rows.push(transaction)
     else groups.push({ month, rows: [transaction] })
