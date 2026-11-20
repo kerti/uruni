@@ -104,7 +104,7 @@ type Report struct {
 	Today string
 
 	// Month is the month shown ("YYYY-MM"); Months is every month offered,
-	// oldest first: the first transaction's month through the current one. For a
+	// oldest first: the month of the first day a row is placed on (#849) through the current one. For a
 	// date range (IsRange) Month is the month that holds To: the month the dues
 	// list and the twelve-month grid read, which are monthly by nature (ADR-049).
 	Month  string
@@ -779,8 +779,10 @@ func (l *Ledger) ReportMonths(ctx context.Context, fundID int64) ([]string, erro
 }
 
 // ReportDays is the span a date range may cover, as "YYYY-MM-DD" days in the
-// fund's zone: the fund's first transaction day and today. A fund with no
-// transaction, or whose first one is dated after today, starts today. The
+// fund's zone: the first day a row is placed on and today. That is the first
+// transaction's day, or earlier when a settled talangan was fronted before it
+// (#849, ADR-051). A fund with no transaction, or whose first row is placed
+// after today, starts today. The
 // report's edge clamps a requested range into it (ADR-049).
 func (l *Ledger) ReportDays(ctx context.Context, fundID int64) (first, today string, err error) {
 	fund, err := l.q.GetFund(ctx, fundID)
@@ -793,36 +795,38 @@ func (l *Ledger) ReportDays(ctx context.Context, fundID int64) (first, today str
 	}
 	today = l.now().In(loc).Format(reportDayLayout)
 	first = today
-	firstDate, err := l.q.FirstTransactionDateByFund(ctx, fundID)
+	firstDate, err := l.q.FirstPlacedDateByFund(ctx, fundID)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
-		return "", "", fmt.Errorf("first transaction date: %w", err)
+		return "", "", fmt.Errorf("first placed date: %w", err)
 	case firstDate < first:
 		first = firstDate
 	}
 	return first, today, nil
 }
 
-// reportMonths lists the months the report offers, oldest first: the first
-// transaction's month through the current month in the fund's zone. An empty fund, or one
+// reportMonths lists the months the report offers, oldest first: the month of
+// the first day a row is placed on (FirstPlacedDateByFund: a talangan fronted
+// before the first transaction counts, #849) through the current month in the
+// fund's zone. An empty fund, or one
 // whose first row is dated after today, offers the current month alone.
 func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time) ([]string, error) {
 	current := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	first := current
-	firstDate, err := l.q.FirstTransactionDateByFund(ctx, fundID)
+	firstDate, err := l.q.FirstPlacedDateByFund(ctx, fundID)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		// An empty fund: nothing before the current month.
 	case err != nil:
-		return nil, fmt.Errorf("first transaction date: %w", err)
+		return nil, fmt.Errorf("first placed date: %w", err)
 	default:
 		// occurred_on is a CHECKed "YYYY-MM-DD"; its first seven characters
 		// are the month.
 		t, err := time.Parse(reportMonthLayout, firstDate[:len(reportMonthLayout)])
 		if err != nil {
-			return nil, fmt.Errorf("parsing first transaction date %q: %w", firstDate, err)
+			return nil, fmt.Errorf("parsing first placed date %q: %w", firstDate, err)
 		}
 		if t.Before(first) {
 			first = t

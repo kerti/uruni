@@ -190,10 +190,10 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 
 // reportMonthsResponse is GET /api/report/months: the first and last month
 // the public report offers ("YYYY-MM", inclusive). The list has no gaps - the
-// first transaction's month through the current one - so its two ends are
+// month of the first day a row is placed on (#849) through the current one - so its two ends are
 // the whole of it, and exactly the bounds the app's month picker takes.
 // FirstDay and Today ("YYYY-MM-DD", the fund's zone) bound the date range the
-// report offers (ADR-049): the first transaction's day (today for an empty
+// report offers (ADR-049): the first day a row is placed on (today for an empty
 // fund) and today, the bounds of the app's two date fields.
 type reportMonthsResponse struct {
 	Min      string `json:"min"`
