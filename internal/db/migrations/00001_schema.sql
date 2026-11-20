@@ -416,6 +416,13 @@ CREATE TABLE receipt (                    -- attachment, not a ledger fact; adda
   FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id)
 ) STRICT;
 
+-- Every read of a row's photos finds them by parent: the report's has_receipt
+-- probe once per listed row, the lists' batched receipt_ids, the viewer.
+-- Without these each was a scan of every photo, per row (#848). Partial, as
+-- each row has exactly one parent.
+CREATE INDEX receipt_by_transaction ON receipt(transaction_id) WHERE transaction_id IS NOT NULL;
+CREATE INDEX receipt_by_reimbursement ON receipt(reimbursement_id) WHERE reimbursement_id IS NOT NULL;
+
 CREATE TABLE reconciliation (             -- a count of the real money, frozen
   -- The one place a total is stored rather than derived (CLAUDE.md rule 2), and
   -- only because it is a historical claim: "on this day the recorded figure was

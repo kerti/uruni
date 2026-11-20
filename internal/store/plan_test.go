@@ -34,12 +34,18 @@ func planDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-var sqlcParam = regexp.MustCompile(`\?(\d+)`)
+var (
+	sqlcParam = regexp.MustCompile(`\?(\d+)`)
+	sqlcSlice = regexp.MustCompile(`/\*SLICE:\w+\*/\?`)
+)
 
 // queryPlan returns EXPLAIN QUERY PLAN's detail lines for query, binding
-// every ?N parameter to NULL (the plan does not depend on the values).
+// every parameter to NULL (the plan does not depend on the values): sqlc's
+// numbered ?N, or a query's bare ? placeholders, one each. A sqlc.slice
+// becomes one bare ?.
 func queryPlan(t *testing.T, sqlDB *sql.DB, query string) []string {
 	t.Helper()
+	query = sqlcSlice.ReplaceAllString(query, "?")
 	n := 0
 	for _, m := range sqlcParam.FindAllStringSubmatch(query, -1) {
 		var i int
@@ -47,6 +53,9 @@ func queryPlan(t *testing.T, sqlDB *sql.DB, query string) []string {
 			i = i*10 + int(c-'0')
 		}
 		n = max(n, i)
+	}
+	if n == 0 {
+		n = strings.Count(query, "?")
 	}
 	args := make([]any, n)
 	rows, err := sqlDB.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+query, args...)
@@ -111,21 +120,23 @@ func TestListReportTransactionsReadsTheTwoPlacedHalvesBySearch(t *testing.T) {
 	t.Parallel()
 	// The report places a settled talangan's payout by its claim's incurred_on
 	// (ADR-051), so the rows are two searches, one per half, never one OR over
-	// two tables (which would visit every row of the fund). The scan of receipt
-	// is has_receipt's EXISTS, older than this guard and held to nothing here.
+	// two tables (which would visit every row of the fund). has_receipt's
+	// EXISTS runs once per row, so its two halves are searches too (#848).
 	plan := queryPlan(t, planDB(t), listReportTransactions)
 	joined := strings.Join(plan, "\n")
 	for _, want := range []string{
 		"SEARCH x USING INDEX transaction_by_date (fund_id=? AND occurred_on>?)",
 		"SEARCH c USING COVERING INDEX reimbursement_by_date (fund_id=? AND incurred_on>?)",
 		"SEARCH x USING COVERING INDEX reimbursement_settled_once (reimbursement_id=?)",
+		"SEARCH rc USING INDEX receipt_by_transaction (transaction_id=?)",
+		"SEARCH rc USING INDEX receipt_by_reimbursement (reimbursement_id=?)",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("the report's rows have no %q; plan:\n%s", want, joined)
 		}
 	}
 	for _, line := range plan {
-		if strings.HasPrefix(line, "SCAN ") && line != "SCAN rc" {
+		if strings.HasPrefix(line, "SCAN ") {
 			t.Errorf("the report's rows scan: %q; plan:\n%s", line, joined)
 		}
 	}
@@ -133,5 +144,24 @@ func TestListReportTransactionsReadsTheTwoPlacedHalvesBySearch(t *testing.T) {
 	plan = queryPlan(t, planDB(t), reportPayoutsPaidEarlier)
 	if joined := strings.Join(plan, "\n"); !strings.Contains(joined, "SEARCH t USING INDEX transaction_by_date") {
 		t.Errorf("the paid-earlier sum is not a date search; plan:\n%s", joined)
+	}
+}
+
+func TestReceiptLookupsSearchByParent(t *testing.T) {
+	t.Parallel()
+	// Every read of a row's photos finds them by parent, never by a scan of
+	// every photo the fund has (#848): the viewer's, and the lists' batched
+	// receipt_ids, one query per page.
+	sqlDB := planDB(t)
+	for name, c := range map[string]struct{ query, want string }{
+		"ListReceiptsByTransaction":        {listReceiptsByTransaction, "SEARCH receipt USING INDEX receipt_by_transaction (transaction_id=?)"},
+		"ListReceiptsByReimbursement":      {listReceiptsByReimbursement, "SEARCH receipt USING INDEX receipt_by_reimbursement (reimbursement_id=?)"},
+		"ListReceiptIDsByTransactionIDs":   {listReceiptIDsByTransactionIDs, "SEARCH receipt USING INDEX receipt_by_transaction (transaction_id=?)"},
+		"ListReceiptIDsByReimbursementIDs": {listReceiptIDsByReimbursementIDs, "SEARCH receipt USING INDEX receipt_by_reimbursement (reimbursement_id=?)"},
+	} {
+		plan := queryPlan(t, sqlDB, c.query)
+		if joined := strings.Join(plan, "\n"); !strings.Contains(joined, c.want) {
+			t.Errorf("%s has no %q; plan:\n%s", name, c.want, joined)
+		}
 	}
 }
