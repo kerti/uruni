@@ -181,6 +181,12 @@ type Querier interface {
 	// now. Defined once as ledger_entry.effective_purpose_id (schema file); this
 	// only reads it. A row nothing corrects answers its own purpose_id.
 	EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error)
+	// The first day the report offers (#849): the earliest day a row is PLACED on.
+	// That is the first transaction's own date, unless a settled talangan was
+	// fronted before it: its payout sits on the claim's incurred_on (ADR-051), so
+	// the month holding that day must be offered too. An unsettled claim places
+	// no row. Zero rows for a fund with no ledger, as FirstTransactionDateByFund.
+	FirstPlacedDateByFund(ctx context.Context, fundID int64) (string, error)
 	// The public report's reads (ADR-035, #372): read-only, fund-scoped, and none
 	// orders by primary key - a month is read by date, ties left unordered on
 	// purpose (a display list, not an assertion about insertion order).

@@ -88,7 +88,7 @@ type Page struct {
 	// same as a bool for the template. From and To are the two days of the date
 	// fields ("YYYY-MM-DD"), the range's own in a range and, in a month, the
 	// defaults the fields start from (the current month's first day and today);
-	// MinDay and MaxDay bound them: the fund's first transaction day and today.
+	// MinDay and MaxDay bound them: the first day a row is placed on (#849) and today.
 	// RangeText names the range ("" in a month); DuesCaption captions the dues
 	// section in a range, which reads the month Month names.
 	Period      string

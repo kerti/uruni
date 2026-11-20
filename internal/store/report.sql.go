@@ -9,6 +9,33 @@ import (
 	"context"
 )
 
+const firstPlacedDateByFund = `-- name: FirstPlacedDateByFund :one
+SELECT placed_on FROM (
+  SELECT t.occurred_on AS placed_on
+  FROM "transaction" t
+  WHERE t.fund_id = ?1
+  UNION ALL
+  SELECT r.incurred_on AS placed_on
+  FROM "transaction" t
+  JOIN reimbursement r ON r.fund_id = t.fund_id AND r.id = t.reimbursement_id
+  WHERE t.fund_id = ?1 AND t.kind = 'reimbursement'
+)
+ORDER BY placed_on
+LIMIT 1
+`
+
+// The first day the report offers (#849): the earliest day a row is PLACED on.
+// That is the first transaction's own date, unless a settled talangan was
+// fronted before it: its payout sits on the claim's incurred_on (ADR-051), so
+// the month holding that day must be offered too. An unsettled claim places
+// no row. Zero rows for a fund with no ledger, as FirstTransactionDateByFund.
+func (q *Queries) FirstPlacedDateByFund(ctx context.Context, fundID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, firstPlacedDateByFund, fundID)
+	var placed_on string
+	err := row.Scan(&placed_on)
+	return placed_on, err
+}
+
 const firstTransactionDateByFund = `-- name: FirstTransactionDateByFund :one
 
 SELECT occurred_on

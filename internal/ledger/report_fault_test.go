@@ -36,14 +36,14 @@ func (f faultQuerier) GetFund(ctx context.Context, id int64) (store.Fund, error)
 	return f.Querier.GetFund(ctx, id)
 }
 
-func (f faultQuerier) FirstTransactionDateByFund(ctx context.Context, fundID int64) (string, error) {
-	if f.fail == "FirstTransactionDateByFund" {
+func (f faultQuerier) FirstPlacedDateByFund(ctx context.Context, fundID int64) (string, error) {
+	if f.fail == "FirstPlacedDateByFund" {
 		return "", errFault
 	}
 	if f.firstDate != nil {
 		return *f.firstDate, nil
 	}
-	return f.Querier.FirstTransactionDateByFund(ctx, fundID)
+	return f.Querier.FirstPlacedDateByFund(ctx, fundID)
 }
 
 func (f faultQuerier) ReportLatestReconciliation(ctx context.Context, arg store.ReportLatestReconciliationParams) (store.Reconciliation, error) {
@@ -193,7 +193,7 @@ func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
 	t.Parallel()
 	for _, method := range []string{
 		"GetFund",
-		"FirstTransactionDateByFund",
+		"FirstPlacedDateByFund",
 		"ReportLatestReconciliation",
 		"ReportOpenReconciliationLines",
 		"FundHasTransactionsAfter",
@@ -302,15 +302,15 @@ func TestMonthlyReportRefusesACorrectionWithNoDirection(t *testing.T) {
 	}
 }
 
-func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
+func TestMonthlyReportRefusesAMalformedFirstPlacedDate(t *testing.T) {
 	t.Parallel()
 	l, fundID := faultyReportFixture(t)
 	bad := "20x6-09-10"
 	odd := l.onQuerier(faultQuerier{Querier: l.q, firstDate: &bad})
 
 	_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
-	if err == nil || !strings.Contains(err.Error(), "first transaction date") {
-		t.Fatalf("monthlyReport() = %v, want an error naming the first transaction date", err)
+	if err == nil || !strings.Contains(err.Error(), "first placed date") {
+		t.Fatalf("monthlyReport() = %v, want an error naming the first placed date", err)
 	}
 }
 

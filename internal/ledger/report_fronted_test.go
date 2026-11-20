@@ -708,3 +708,73 @@ func TestReportOwedClaimsListWhatIsOwedAndAddUpToTheHero(t *testing.T) {
 		})
 	}
 }
+
+// #849: a talangan fronted before the fund's first transaction and settled
+// after it places its payout in a month before the first transaction's. The
+// report offers that month and its first day, so the row can be opened; an
+// unsettled claim places no row and moves neither bound.
+func TestReportOffersTheMonthOfATalanganFrontedBeforeTheFirstTransaction(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	now := jakartaAt(2026, time.October, 10, 12, 0, 0)
+
+	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 300_000, "2026-09-15", nil)
+	bounds := func() (string, string) {
+		t.Helper()
+		months, err := l.at(now).ReportMonths(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ReportMonths() = %v, want no error", err)
+		}
+		first, _, err := l.at(now).ReportDays(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ReportDays() = %v, want no error", err)
+		}
+		return months[0], first
+	}
+	claim := func(amount int64, incurredOn string) store.Reimbursement {
+		t.Helper()
+		c, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+			FundID: f.fundID, MemberID: f.memberID, PurposeID: f.mainID, Amount: amount, IncurredOn: incurredOn, CreatedAt: 1,
+		})
+		if err != nil {
+			t.Fatalf("CreateReimbursement(%s) = %v, want no error", incurredOn, err)
+		}
+		return c
+	}
+
+	// Unsettled, it is off the ledger: no row, no earlier month.
+	early := claim(40_000, "2026-08-20")
+	claim(5_000, "2026-07-01")
+	if month, day := bounds(); month != "2026-09" || day != "2026-09-15" {
+		t.Fatalf("with only unsettled claims before it, the report starts %s / %s, want 2026-09 / 2026-09-15", month, day)
+	}
+
+	if _, err := l.at(onTheDay("2026-09-20")).SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: f.fundID, ReimbursementID: early.ID, AccountID: f.cashID, OccurredOn: "2026-09-20",
+	}); err != nil {
+		t.Fatalf("SettleReimbursement() = %v, want no error", err)
+	}
+	if month, day := bounds(); month != "2026-08" || day != "2026-08-20" {
+		t.Errorf("the report starts %s / %s, want 2026-08 / 2026-08-20: the payout sits on 20 Aug", month, day)
+	}
+
+	// The month opens and holds the payout, and its walk foots.
+	r := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID, Month: "2026-08"})
+	if r.Months[0] != "2026-08" {
+		t.Errorf("Months = %v, want August first", r.Months)
+	}
+	if len(r.Rows) != 1 || r.Rows[0].Date != "2026-08-20" || r.Rows[0].Entry == nil || r.Rows[0].Entry.Amount != 40_000 {
+		t.Fatalf("August rows = %+v, want the payout on 20 Aug", r.Rows)
+	}
+	assertWalk(t, "August", r.Walk, ReportWalk{StartOn: "2026-07-31", EndOn: "2026-08-31", Out: 40_000, PaidLater: 40_000},
+		ledgerSumThrough(t, l, f.fundID, "2026-08-31"), ledgerSumThrough(t, l, f.fundID, "2026-07-31"))
+
+	// A range may start on that day.
+	r = monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID, From: "2026-08-20", To: "2026-08-31"})
+	if r.From != "2026-08-20" || len(r.Rows) != 1 {
+		t.Errorf("range from 20 Aug = from %s, %d rows; want from 2026-08-20 with the payout", r.From, len(r.Rows))
+	}
+}
