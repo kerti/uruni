@@ -274,6 +274,59 @@ describe('TransactionList row labels (#257)', () => {
   })
 })
 
+describe('TransactionList a settled talangan on its fronting date (ADR-051, #845)', () => {
+  const payout = (overrides: Partial<Transaction> = {}) =>
+    transaction({
+      kind: 'reimbursement',
+      direction: 'out',
+      amount: 450_000,
+      occurred_on: '2026-11-12',
+      placed_on: '2026-10-27',
+      claim_incurred_on: '2026-10-27',
+      reimbursement_id: 7,
+      member_name: 'Jane',
+      account_name: 'Kas tunai',
+      ...overrides,
+    })
+
+  it('dates the row and its month by the fronting day, and names when and from where it was paid', () => {
+    render(
+      <TransactionList
+        transactions={[transaction({ id: 2, occurred_on: '2026-11-03' }), payout()]}
+        purposeNames={purposeNames}
+        emptyMessage="Belum ada."
+        monthHeaders
+      />,
+    )
+    expect(screen.getByRole('heading', { name: formatPeriod('2026-10') })).toBeInTheDocument()
+    const card = screen.getByRole('button', { name: containing('Jane') })
+    expect(card).toHaveTextContent('27 Oktober 2026')
+    expect(card).toHaveTextContent(copy.rowLabels.settlement.paidOn('12 Nov', 'Kas tunai'))
+    expect(card).not.toHaveTextContent('12 November 2026')
+  })
+
+  it('under the Lokasi filter sits on the day it was paid and names when it was fronted', () => {
+    renderRows([payout({ placed_on: '2026-11-12' })])
+    const card = screen.getByRole('button', { name: containing('Jane') })
+    expect(card).toHaveTextContent('12 November 2026')
+    expect(card).toHaveTextContent(copy.rowLabels.settlement.frontedOn('27 Okt'))
+  })
+
+  it('has no second line when fronted and paid on one day', () => {
+    renderRows([payout({ occurred_on: '2026-10-27' })])
+    const card = screen.getByRole('button', { name: containing('Jane') })
+    expect(card).not.toHaveTextContent(copy.rowLabels.settlement.paidOn('27 Okt', 'Kas tunai'))
+    expect(card).not.toHaveTextContent('Dibayar')
+  })
+
+  it('keeps the year when the other date is in another one', () => {
+    renderRows([payout({ occurred_on: '2027-01-05', placed_on: '2026-12-30', claim_incurred_on: '2026-12-30' })])
+    expect(screen.getByRole('button', { name: containing('Jane') })).toHaveTextContent(
+      copy.rowLabels.settlement.paidOn('5 Jan 2027', 'Kas tunai'),
+    )
+  })
+})
+
 describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it('labels a correction leg with PenLine and Perbaikan pos, never Tutup amplop', () => {
     // A roll and a correction are the same shape on the wire - kind='transfer',

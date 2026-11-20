@@ -383,7 +383,7 @@ func TestAGroupStraddlingASmallPageIsNeverSplit(t *testing.T) {
 				t.Fatalf("size %d: paging did not terminate", size)
 			}
 			rows, err := q.ListTransactionsPage(context.Background(), store.ListTransactionsPageParams{
-				FundID: w.setup.Fund.ID, PageLimit: size + 1, CursorOccurredOn: cursorOn, CursorID: cursorID,
+				FundID: w.setup.Fund.ID, PageLimit: size + 1, CursorPlacedOn: cursorOn, CursorID: cursorID,
 			})
 			if err != nil {
 				t.Fatalf("ListTransactionsPage() = %v", err)
@@ -397,7 +397,7 @@ func TestAGroupStraddlingASmallPageIsNeverSplit(t *testing.T) {
 				break
 			}
 			last := rows[len(rows)-1]
-			cursorOn, cursorID = last.OccurredOn, &last.ID
+			cursorOn, cursorID = last.PlacedOn, &last.ID
 		}
 
 		if len(got) != len(want) {

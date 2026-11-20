@@ -135,6 +135,8 @@ const transactionKeys: Keys<Transaction> = {
   purpose_kind: true,
   member_name: true,
   claim_note: true,
+  placed_on: true,
+  claim_incurred_on: true,
   transfer_kind: true,
   transfer_from_name: true,
   transfer_to_name: true,

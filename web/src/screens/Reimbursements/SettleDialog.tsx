@@ -47,6 +47,13 @@ interface SettleData {
  * opens and `onUnusable` lets the caller strip the param - a stale bookmark, or
  * a claim settled from another device. `claimId` is null while closed.
  */
+/** The two dates of a settled claim (ADR-051): the confirmation names where
+ * the payout is listed when they differ. */
+export interface Settled {
+  frontedOn: string
+  paidOn: string
+}
+
 export default function SettleDialog({
   claimId,
   onClose,
@@ -55,7 +62,7 @@ export default function SettleDialog({
 }: {
   claimId: number | null
   onClose: () => void
-  onSettled: () => void
+  onSettled: (settled: Settled) => void
   onUnusable: () => void
 }) {
   const [dataState, dataRun] = useApi<SettleData>()
@@ -144,7 +151,7 @@ function SettleForm({
   memberName: string
   purposeName: string
   reload: () => Promise<void>
-  onSettled: () => void
+  onSettled: (settled: Settled) => void
 }) {
   // Here, not in the dialog: the form is mounted per open, so a failed
   // attempt's message never greets the next one.
@@ -173,7 +180,7 @@ function SettleForm({
     void submitRun(
       async () => {
         await settleReimbursement(claim.id, { account_id: accountId, occurred_on: occurredOn })
-        onSettled()
+        onSettled({ frontedOn: claim.incurred_on, paidOn: occurredOn })
       },
       { settle: reload },
     )

@@ -81,7 +81,7 @@ ORDER BY occurred_on, id;
 -- it orders by. LIMIT/OFFSET was rejected: occurred_on is backdatable (PRD
 -- section 7.2), so a row can land mid-list between two page fetches and an
 -- offset would skip or duplicate it. The row-value comparison cannot:
--- cursor_occurred_on/cursor_id are NULL on the first page (the clause
+-- cursor_placed_on/cursor_id are NULL on the first page (the clause
 -- short-circuits true), and a later page passes the previous page's last row,
 -- keeping only strictly older pairs. cursor_id is CAST to INTEGER inside the
 -- tuple because otherwise sqlc infers its Go type from the tuple's other
@@ -109,6 +109,14 @@ ORDER BY occurred_on, id;
 -- payment history panel alone. month is "YYYY-MM", prefix-compared against
 -- occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 -- with q and the keyset cursor.
+--
+-- Placed (ADR-051), as ListReportTransactions: a settled talangan's payout
+-- (kind='reimbursement') is a flow, so the list dates it by its claim's
+-- incurred_on - the month filter, the order and the keyset all read placed_on,
+-- never occurred_on. cash_view (non-zero: the Lokasi filter, a cash view) puts
+-- it back on its own date. occurred_on stays the cash date; claim_incurred_on
+-- lets the row name its other date. The claim is joined by primary key, so
+-- the key costs one search per payout (internal/store/plan_test.go).
 --
 -- page_limit is page size + 1: the caller peeks at the extra row to know
 -- whether a next page exists, then trims it.
@@ -233,6 +241,7 @@ matched AS (
   LEFT JOIN grp_stats gs ON gs.gkey = k.gkey
   JOIN purpose p ON p.id = t.purpose_id
   LEFT JOIN member m ON m.id = t.member_id
+  LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
   WHERE t.fund_id = sqlc.arg('fund_id')
     AND (
       sqlc.narg('q') IS NULL
@@ -246,7 +255,7 @@ matched AS (
     AND (sqlc.narg('dues_period') IS NULL OR t.dues_period = sqlc.narg('dues_period'))
     AND (sqlc.narg('purpose_id') IS NULL OR t.purpose_id = sqlc.narg('purpose_id'))
     AND (sqlc.narg('account_id') IS NULL OR t.account_id = sqlc.narg('account_id'))
-    AND (sqlc.narg('month') IS NULL OR substr(t.occurred_on, 1, 7) = sqlc.narg('month'))
+    AND (sqlc.narg('month') IS NULL OR substr(CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(sqlc.arg('cash_view') AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT), 1, 7) = sqlc.narg('month'))
     AND (sqlc.narg('direction') IS NULL OR (t.direction = sqlc.narg('direction') AND t.kind <> 'transfer'))
 ),
 kept AS (
@@ -257,6 +266,8 @@ kept AS (
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.dues_payment_id, t.reverses_transaction_id,
        t.note, t.created_at,
+       CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(sqlc.arg('cash_view') AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT) AS placed_on,
+       rb.incurred_on AS claim_incurred_on,
        a.name AS account_name,
        p.kind AS purpose_kind,
        m.name AS member_name,
@@ -309,10 +320,10 @@ LEFT JOIN grp_stats gs ON gs.gkey = CAST(CASE
 END AS TEXT)
 WHERE t.id IN (SELECT id FROM kept)
   AND (
-    sqlc.narg('cursor_occurred_on') IS NULL
-    OR (t.occurred_on, t.id) < (sqlc.narg('cursor_occurred_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
+    sqlc.narg('cursor_placed_on') IS NULL
+    OR (CAST(CASE WHEN t.kind = 'reimbursement' AND CAST(sqlc.arg('cash_view') AS INTEGER) = 0 THEN rb.incurred_on ELSE t.occurred_on END AS TEXT), t.id) < (sqlc.narg('cursor_placed_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
   )
-ORDER BY t.occurred_on DESC, t.id DESC
+ORDER BY placed_on DESC, t.id DESC
 LIMIT sqlc.arg('page_limit');
 
 -- Every balance in Uruni is this shape: sum the ledger, never read a stored
