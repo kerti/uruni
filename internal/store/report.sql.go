@@ -31,6 +31,76 @@ func (q *Queries) FirstTransactionDateByFund(ctx context.Context, fundID int64) 
 	return occurred_on, err
 }
 
+const listReportOwedClaims = `-- name: ListReportOwedClaims :many
+SELECT m.name AS member_name, p.name AS purpose_name, r.incurred_on, r.amount
+FROM reimbursement r
+JOIN member m ON m.fund_id = r.fund_id AND m.id = r.member_id
+JOIN purpose p ON p.fund_id = r.fund_id AND p.id = r.purpose_id
+WHERE r.fund_id = ?1
+  AND (CAST(?2 AS TEXT) IS NULL OR r.incurred_on <= CAST(?2 AS TEXT))
+  AND (r.waived_on IS NULL OR (CAST(?2 AS TEXT) IS NOT NULL AND r.waived_on > CAST(?2 AS TEXT)))
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      AND (CAST(?2 AS TEXT) IS NULL OR t.occurred_on <= CAST(?2 AS TEXT))
+  )
+  AND (CAST(?3 AS INTEGER) IS NULL OR r.purpose_id = CAST(?3 AS INTEGER))
+  AND (CAST(?4 AS INTEGER) IS NULL OR r.member_id = CAST(?4 AS INTEGER))
+ORDER BY r.incurred_on, m.name COLLATE NOCASE, p.name COLLATE NOCASE, r.amount DESC
+`
+
+type ListReportOwedClaimsParams struct {
+	FundID    int64
+	Through   *string
+	PurposeID *int64
+	MemberID  *int64
+}
+
+type ListReportOwedClaimsRow struct {
+	MemberName  string
+	PurposeName string
+	IncurredOn  string
+	Amount      int64
+}
+
+// The claims behind ReportOwedToMembers, one row each (ADR-051, #847): the
+// report's Talangan belum dibayar section. The WHERE is ReportOwedToMembers'
+// word for word, so unfiltered the rows add up to the hero's Talangan; the
+// optional pos and member filters narrow it. The claim's note is not read:
+// it stays private on the public report.
+func (q *Queries) ListReportOwedClaims(ctx context.Context, arg ListReportOwedClaimsParams) ([]ListReportOwedClaimsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listReportOwedClaims,
+		arg.FundID,
+		arg.Through,
+		arg.PurposeID,
+		arg.MemberID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReportOwedClaimsRow{}
+	for rows.Next() {
+		var i ListReportOwedClaimsRow
+		if err := rows.Scan(
+			&i.MemberName,
+			&i.PurposeName,
+			&i.IncurredOn,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReportTransactions = `-- name: ListReportTransactions :many
 WITH placed AS (
   SELECT x.id AS id, x.occurred_on AS placed_on

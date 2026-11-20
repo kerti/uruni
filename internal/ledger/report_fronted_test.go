@@ -642,3 +642,69 @@ func TestSettlingBeforeTheFrontingDateIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// The report's Talangan belum dibayar (ADR-051, #847) lists the claims behind
+// OwedToMembers, by the same rule: owed as of the period's last day, so
+// unfiltered they add up to the hero's figure. Settled, waived and
+// fronted-after-the-period claims drop out; the pos and member filters narrow
+// the list.
+func TestReportOwedClaimsListWhatIsOwedAndAddUpToTheHero(t *testing.T) {
+	t.Parallel()
+	l := newTestLedger(t)
+	s := newFrontedScenario(t, l)
+	f := s.f
+
+	type claim struct {
+		on      string
+		amount  money.Amount
+		purpose string
+	}
+	tests := []struct {
+		name     string
+		p        ReportParams
+		filtered bool
+		want     []claim
+	}{
+		// D unsettled; E waived only on 2 Nov; A and B paid in November; C
+		// fronted in November.
+		{"October", ReportParams{Month: "2026-10"}, false,
+			[]claim{{"2026-10-20", 99_000, "Primary Cash"}, {"2026-10-21", 7_000, "Primary Cash"}, {"2026-10-27", 450_000, "Primary Cash"}, {"2026-10-28", 10_000, "Pass-through"}}},
+		// Everything else settled or waived by the end of November.
+		{"November", ReportParams{Month: "2026-11"}, false, []claim{{"2026-10-20", 99_000, "Primary Cash"}}},
+		{"September, before any claim", ReportParams{Month: "2026-09"}, false, nil},
+		{"the running month", ReportParams{Month: "2026-12"}, false, []claim{{"2026-10-20", 99_000, "Primary Cash"}}},
+		// Through 12 Nov: A paid that day and E waived before it; B paid after.
+		{"a range ending on A's payment", ReportParams{From: "2026-10-27", To: "2026-11-12"}, false,
+			[]claim{{"2026-10-20", 99_000, "Primary Cash"}, {"2026-10-28", 10_000, "Pass-through"}}},
+		{"October, one pos", ReportParams{Month: "2026-10", PurposeID: int64Ptr(f.passID)}, true, []claim{{"2026-10-28", 10_000, "Pass-through"}}},
+		{"October, a member with no claim then", ReportParams{Month: "2026-10", MemberID: int64Ptr(s.budiID)}, true, nil},
+		{"November, the member whose claim is open", ReportParams{Month: "2026-11", MemberID: int64Ptr(f.memberID)}, true, []claim{{"2026-10-20", 99_000, "Primary Cash"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := tt.p
+			p.FundID = f.fundID
+			r := monthlyReportAt(t, l, frontedNow, p)
+			var got []claim
+			var sum money.Amount
+			for _, c := range r.OwedClaims {
+				got = append(got, claim{c.FrontedOn, c.Amount, c.PurposeName})
+				sum += c.Amount
+				if c.MemberName == "" {
+					t.Errorf("claim on %s has no member name", c.FrontedOn)
+				}
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("claims = %+v, want %+v", got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("claim %d = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+			if !tt.filtered && sum != r.OwedToMembers {
+				t.Errorf("claims add up to %d, the hero's Talangan is %d", sum, r.OwedToMembers)
+			}
+		})
+	}
+}

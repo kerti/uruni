@@ -97,6 +97,24 @@
 </section>
 {{end}}
 
+{{if .OwedClaims}}
+<section id="owed" aria-labelledby="owed-heading">
+  <h2 id="owed-heading">{{.Text.OwedClaimsLabel}}</h2>
+  <ul class="rows txns">
+    {{range .OwedClaims}}
+    <li>
+      <span class="what">
+        <span class="title">{{.Member}}</span>
+        <span class="label-line">{{.Purpose}}</span>
+        <span class="muted">{{.Fronted}}</span>
+      </span>
+      <span class="tabular amt">{{.Amount}}</span>
+    </li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
+
 {{if .Empty}}<p class="empty">{{.Text.Empty}}</p>{{else}}
 <section id="transactions" aria-labelledby="transactions-heading">
   <h2 id="transactions-heading">{{.Text.TransactionsLabel}}</h2>

@@ -123,6 +123,12 @@ type Report struct {
 	// OwedToMembers is what the fund owed members for talangan as of AsOf.
 	OwedToMembers money.Amount
 
+	// OwedClaims are the claims behind OwedToMembers, one each (ADR-051): the
+	// report's Talangan belum dibayar section. Read by OwedToMembers' rule, so
+	// unfiltered they add up to it; the pos and member filters narrow them.
+	// Oldest fronted first. Empty when nothing is owed.
+	OwedClaims []ReportOwedClaim
+
 	// Reconciliation is nil when no count has ever been taken. A fund nobody has
 	// counted is not a fund that matches.
 	Reconciliation *ReportReconciliation
@@ -151,6 +157,16 @@ type Report struct {
 
 	// Envelopes are every envelope open at some point during Month.
 	Envelopes []ReportEnvelope
+}
+
+// ReportOwedClaim is one talangan still owed as of AsOf: who fronted it, the
+// day they did ("YYYY-MM-DD"), its pos and the amount. The claim's note is not
+// here: it stays private on the public report (ADR-051).
+type ReportOwedClaim struct {
+	MemberName  string
+	FrontedOn   string
+	PurposeName string
+	Amount      money.Amount
 }
 
 // ReportReconciliation is the latest cek kas as the home banner reads it.
@@ -505,6 +521,17 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("report owed to members: %w", err)
 	}
 	r.OwedToMembers = money.FromDB(owed)
+	claims, err := l.q.ListReportOwedClaims(ctx, store.ListReportOwedClaimsParams{
+		FundID: p.FundID, Through: b.through, PurposeID: p.PurposeID, MemberID: p.MemberID,
+	})
+	if err != nil {
+		return Report{}, fmt.Errorf("report owed claims: %w", err)
+	}
+	for _, c := range claims {
+		r.OwedClaims = append(r.OwedClaims, ReportOwedClaim{
+			MemberName: c.MemberName, FrontedOn: c.IncurredOn, PurposeName: c.PurposeName, Amount: money.FromDB(c.Amount),
+		})
+	}
 	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b, loc); err != nil {
 		return Report{}, err
 	}

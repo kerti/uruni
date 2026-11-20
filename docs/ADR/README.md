@@ -75,7 +75,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [048](./048-a-dues-payment-is-one-row.md) | A dues payment is one row | implemented |
 | [049](./049-the-reports-period-and-grouping.md) | The report's period and grouping | implemented |
 | [050](./050-waiving-a-members-dues.md) | Waiving a member's dues | implemented |
-| [051](./051-a-talangan-is-spent-when-it-was-fronted.md) | A talangan is spent when it was fronted | `draft` |
+| [051](./051-a-talangan-is-spent-when-it-was-fronted.md) | A talangan is spent when it was fronted | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
