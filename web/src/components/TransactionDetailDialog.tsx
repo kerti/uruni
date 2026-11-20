@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { formatIsoDate, formatPeriod, formatUnixSecondsWithTime } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { receiptUrl, uploadReceipt } from '@/lib/receipts'
-import { canCorrectPurpose, noteForDisplay } from '@/lib/transactions'
+import { canCorrectPurpose, frontedOnAnotherDay, noteForDisplay } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Transaction } from '@/lib/transactions'
 
@@ -114,6 +114,7 @@ function Detail({
   const purposeName = purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown
   const corrected = transaction.effective_purpose_id !== undefined && transaction.effective_purpose_id !== transaction.purpose_id
   const note = noteForDisplay(transaction)
+  const fronted = frontedOnAnotherDay(transaction)
   const receiptIds = transaction.receipt_ids ?? []
   const periods = transaction.periods ?? []
   const canCorrect = onCorrectPurpose !== undefined && !transfer && canCorrectPurpose(transaction)
@@ -207,7 +208,16 @@ function Detail({
         {transaction.account_name && !(transfer && transaction.transfer_kind === 'between_accounts') && (
           <DetailField label={text.locationLabel}>{transaction.account_name}</DetailField>
         )}
-        <DetailField label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</DetailField>
+        {/* A talangan paid on another day is filed in the list on the day it
+            was fronted (ADR-051): both dates, that one first (#858). */}
+        {fronted ? (
+          <>
+            <DetailField label={text.frontedDateLabel}>{formatIsoDate(fronted)}</DetailField>
+            <DetailField label={text.paidDateLabel}>{formatIsoDate(transaction.occurred_on)}</DetailField>
+          </>
+        ) : (
+          <DetailField label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</DetailField>
+        )}
         <DetailField label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</DetailField>
         {receiptIds.length > 0 && (
           <DetailField label={text.receiptsLabel}>

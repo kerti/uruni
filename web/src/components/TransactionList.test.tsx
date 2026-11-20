@@ -319,6 +319,35 @@ describe('TransactionList a settled talangan on its fronting date (ADR-051, #845
     expect(card).not.toHaveTextContent('Dibayar')
   })
 
+  it('gives the detail both dates, the fronting day first, when paid on another day (#858)', async () => {
+    renderRows([payout()])
+    const detail = await openDetail()
+    const labels = within(detail)
+      .getAllByRole('term')
+      .map((term) => term.textContent)
+    expect(labels).not.toContain(copy.transactionDetail.dateLabel)
+    const fronted = labels.indexOf(copy.transactionDetail.frontedDateLabel)
+    const paid = labels.indexOf(copy.transactionDetail.paidDateLabel)
+    expect(fronted).toBeGreaterThanOrEqual(0)
+    expect(paid).toBeGreaterThan(fronted)
+    const values = within(detail)
+      .getAllByRole('definition')
+      .map((value) => value.textContent)
+    expect(values[fronted]).toBe('27 Oktober 2026')
+    expect(values[paid]).toBe('12 November 2026')
+  })
+
+  it('keeps the one Tanggal in the detail of a payout made the day it was fronted', async () => {
+    renderRows([payout({ occurred_on: '2026-10-27' })])
+    const detail = await openDetail()
+    const labels = within(detail)
+      .getAllByRole('term')
+      .map((term) => term.textContent)
+    expect(labels).toContain(copy.transactionDetail.dateLabel)
+    expect(labels).not.toContain(copy.transactionDetail.frontedDateLabel)
+    expect(labels).not.toContain(copy.transactionDetail.paidDateLabel)
+  })
+
   it('keeps the year when the other date is in another one', () => {
     renderRows([payout({ occurred_on: '2027-01-05', placed_on: '2026-12-30', claim_incurred_on: '2026-12-30' })])
     expect(screen.getByRole('button', { name: containing('Jane') })).toHaveTextContent(
