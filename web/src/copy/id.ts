@@ -1486,6 +1486,11 @@ export const copy = {
     noteLabel: 'Catatan',
     locationLabel: 'Lokasi',
     dateLabel: 'Tanggal',
+    // A talangan paid on another day than it was fronted has two dates
+    // (ADR-051, #858), in the words of the forms they were typed under:
+    // Catat talangan's and Bayar talangan's.
+    frontedDateLabel: 'Tanggal pengeluaran',
+    paidDateLabel: 'Tanggal pembayaran',
     amountLabel: 'Jumlah',
     recordedAtLabel: 'Dicatat pada',
     receiptsLabel: 'Foto nota',

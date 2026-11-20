@@ -143,6 +143,16 @@ export function placedOn(transaction: Transaction): string {
   return transaction.placed_on ?? transaction.occurred_on
 }
 
+/** The day a settled talangan was fronted, when the fund paid it on another
+ * day (ADR-051); null for a same-day payout and for every row that is no
+ * payout. The one test behind the row's second line and the detail's two
+ * dates (#858). */
+export function frontedOnAnotherDay(transaction: Transaction): string | null {
+  const fronted = transaction.claim_incurred_on
+  if (transaction.kind !== 'reimbursement' || !fronted || fronted === transaction.occurred_on) return null
+  return fronted
+}
+
 /**
  * A settled talangan's second line (ADR-051): where else the row reads. Placed
  * on the day it was fronted, it says when and from where it was paid; placed on
@@ -151,8 +161,8 @@ export function placedOn(transaction: Transaction): string {
  * report's payoutNote, which never names the location (ADR-035).
  */
 export function payoutNote(transaction: Transaction): string | null {
-  const fronted = transaction.claim_incurred_on
-  if (transaction.kind !== 'reimbursement' || !fronted || fronted === transaction.occurred_on) return null
+  const fronted = frontedOnAnotherDay(transaction)
+  if (!fronted) return null
   const placed = placedOn(transaction)
   if (placed === fronted)
     return copy.rowLabels.settlement.paidOn(formatShortDate(transaction.occurred_on, placed), transaction.account_name ?? '')
