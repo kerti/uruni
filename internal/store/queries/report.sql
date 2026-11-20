@@ -177,6 +177,28 @@ WHERE r.fund_id = sqlc.arg('fund_id')
       AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
   );
 
+-- The claims behind ReportOwedToMembers, one row each (ADR-051, #847): the
+-- report's Talangan belum dibayar section. The WHERE is ReportOwedToMembers'
+-- word for word, so unfiltered the rows add up to the hero's Talangan; the
+-- optional pos and member filters narrow it. The claim's note is not read:
+-- it stays private on the public report.
+-- name: ListReportOwedClaims :many
+SELECT m.name AS member_name, p.name AS purpose_name, r.incurred_on, r.amount
+FROM reimbursement r
+JOIN member m ON m.fund_id = r.fund_id AND m.id = r.member_id
+JOIN purpose p ON p.fund_id = r.fund_id AND p.id = r.purpose_id
+WHERE r.fund_id = sqlc.arg('fund_id')
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.incurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  AND (r.waived_on IS NULL OR (CAST(sqlc.narg('through') AS TEXT) IS NOT NULL AND r.waived_on > CAST(sqlc.narg('through') AS TEXT)))
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  )
+  AND (CAST(sqlc.narg('purpose_id') AS INTEGER) IS NULL OR r.purpose_id = CAST(sqlc.narg('purpose_id') AS INTEGER))
+  AND (CAST(sqlc.narg('member_id') AS INTEGER) IS NULL OR r.member_id = CAST(sqlc.narg('member_id') AS INTEGER))
+ORDER BY r.incurred_on, m.name COLLATE NOCASE, p.name COLLATE NOCASE, r.amount DESC;
+
 -- A snapshot is never edited (ADR-024), so the latest count before the bound
 -- and the lines it left open are exactly what the report said back then.
 -- name: ReportLatestReconciliation :one

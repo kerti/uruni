@@ -35,6 +35,8 @@ type Copy struct {
 	NeverChecked    string
 	PurposesLabel   string
 	OwedLabel       string
+	// OwedClaimsLabel heads the list of who is owed what (ADR-051).
+	OwedClaimsLabel string
 	UsableLabel     string
 
 	MonthLabel  string
@@ -222,6 +224,7 @@ var Text = Copy{
 	Discrepancy:     func(amount string) string { return "Ada selisih " + amount + "." },
 	NeverChecked:    "Belum pernah dicek.",
 	OwedLabel:       "Talangan",
+	OwedClaimsLabel: "Talangan belum dibayar",
 	UsableLabel:     "Dana tersedia",
 	PurposesLabel:   "Saldo per pos",
 

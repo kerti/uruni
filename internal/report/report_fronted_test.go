@@ -1,6 +1,8 @@
 package report
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/kerti/uruni/internal/ledger"
@@ -133,5 +135,57 @@ func TestNewPagePlacesAPayoutOnItsFrontingDayWithASecondLine(t *testing.T) {
 	r.Rows[0].Entry.Payout = nil
 	if got := NewPage(r, false).Rows[0].Elsewhere; got != "" {
 		t.Errorf("a row with no payout says %q, want nothing", got)
+	}
+}
+
+// Talangan belum dibayar (ADR-051, #847): each claim owed is a line on the page
+// and in the PDF - who, when it was fronted, its pos, the amount - and the
+// section is gone when nothing is owed. A long name is drawn, not cut.
+func TestNewPageListsTheClaimsOwed(t *testing.T) {
+	t.Parallel()
+	long := "Raden Mas Bagus Hadiwijaya Kusumanegara Prawirodirdjo Wicaksono"
+	r := ledger.Report{
+		FundName: "Kas", AsOf: "2026-10-31", Month: "2026-10", Months: []string{"2026-10"},
+		Balance: 600_000, OwedToMembers: 459_000,
+		OwedClaims: []ledger.ReportOwedClaim{
+			{MemberName: "Jane", FrontedOn: "2026-10-27", PurposeName: "Kas Utama", Amount: 450_000},
+			{MemberName: long, FrontedOn: "2026-10-28", PurposeName: "Sunatan Adit", Amount: 9_000},
+		},
+	}
+	page := NewPage(r, false)
+	want := []OwedClaim{
+		{Member: "Jane", Fronted: "Ditalangi 27 Oktober 2026", Purpose: "Kas Utama", Amount: "Rp450.000"},
+		{Member: long, Fronted: "Ditalangi 28 Oktober 2026", Purpose: "Sunatan Adit", Amount: "Rp9.000"},
+	}
+	if len(page.OwedClaims) != len(want) {
+		t.Fatalf("OwedClaims = %+v, want %+v", page.OwedClaims, want)
+	}
+	for i := range want {
+		if page.OwedClaims[i] != want[i] {
+			t.Errorf("claim %d = %+v, want %+v", i, page.OwedClaims[i], want[i])
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := RenderHTML(&buf, page, "n"); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, s := range []string{"Talangan belum dibayar", "Jane", long, "Ditalangi 27 Oktober 2026", "Sunatan Adit", "Rp450.000", "Rp9.000"} {
+		if !strings.Contains(html, s) {
+			t.Errorf("html lacks %q", s)
+		}
+	}
+	if pdf, err := RenderPDF(page); err != nil || len(pdf) == 0 {
+		t.Errorf("RenderPDF: %d bytes, err %v", len(pdf), err)
+	}
+
+	r.OwedToMembers, r.OwedClaims = 0, nil
+	buf.Reset()
+	if err := RenderHTML(&buf, NewPage(r, false), "n"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Talangan belum dibayar") {
+		t.Error("the section shows with nothing owed")
 	}
 }

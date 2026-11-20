@@ -82,9 +82,13 @@ jobs:
         working-directory: web
         timeout-minutes: 8
         run: npx playwright install --with-deps chromium
-            # Normally under a minute. One retry, as its own step: a step that hits
-            # its limit has its whole process tree killed, so no apt is left holding
-            # the lock, and dpkg --configure -a finishes anything it interrupted.
+            # Normally under a minute. One retry, as its own step. A step that hits
+            # its limit does NOT take its sudo'd apt-get with it: on 2026-11-20 the
+            # first attempt timed out and its apt-get, running as root, still held
+            # the dpkg lock when the retry began, so the retry's dpkg failed at
+            # once. The retry therefore stops whatever the first attempt left
+            # running, waits for the lock to clear, and lets dpkg --configure -a
+            # finish anything that was interrupted.
       - name: Install the browser's OS packages
         id: os-deps
         if: steps.pw-cache.outputs.cache-hit == 'true'
@@ -97,6 +101,15 @@ jobs:
         working-directory: web
         timeout-minutes: 5
         run: |
+          # The first attempt's leftovers: its npm parent, then apt and dpkg.
+          pkill -f 'playwright install-deps' || true
+          sudo pkill -TERM -x apt-get || true
+          sudo pkill -TERM -x apt || true
+          for _ in $(seq 1 30); do
+            pgrep -x 'apt-get|apt|dpkg' > /dev/null || break
+            sleep 2
+          done
+          sudo pkill -KILL -x 'apt-get|apt|dpkg' || true
           sudo dpkg --configure -a
           npx playwright install-deps chromium
       - name: Run the ${{ inputs.tier }} tier

@@ -587,6 +587,12 @@ type Querier interface {
 	//
 	// page_limit is page size + 1: peek at one extra row.
 	ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error)
+	// The claims behind ReportOwedToMembers, one row each (ADR-051, #847): the
+	// report's Talangan belum dibayar section. The WHERE is ReportOwedToMembers'
+	// word for word, so unfiltered the rows add up to the hero's Talangan; the
+	// optional pos and member filters narrow it. The claim's note is not read:
+	// it stays private on the public report.
+	ListReportOwedClaims(ctx context.Context, arg ListReportOwedClaimsParams) ([]ListReportOwedClaimsRow, error)
 	// Every ledger row of one fund PLACED in [from_date, to_date) (to_date NULL: no
 	// upper bound), with the facts a display-time label needs (#257) and nothing
 	// the public page must not carry: no receipt path or id (has_receipt is 0/1),

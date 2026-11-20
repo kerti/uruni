@@ -508,6 +508,24 @@ func (d *pdfDoc) header(p Page) {
 			}, true)
 		}
 	}
+
+	// Talangan belum dibayar (ADR-051): who is owed what, under the hero that
+	// subtracts it, as the page lists it.
+	if len(p.OwedClaims) > 0 {
+		d.SetY(d.GetY() + 3)
+		d.need(20)
+		d.text(pdfLine{text: Text.OwedClaimsLabel, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
+		for _, c := range p.OwedClaims {
+			d.row([]pdfCell{
+				{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{
+					{text: c.Member, size: pdfBodySize, color: "foreground"},
+					{text: c.Purpose, size: pdfSmallSize, color: "foreground"},
+					{text: c.Fronted, size: pdfSmallSize, color: "muted-foreground"},
+				}},
+				{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: c.Amount, size: pdfBodySize, color: "foreground"}}},
+			}, true)
+		}
+	}
 }
 
 // pdfStatement is the statement's line under the fund's name, and the file's

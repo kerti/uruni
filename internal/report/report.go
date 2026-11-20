@@ -71,6 +71,11 @@ type Page struct {
 	UsableSize string
 	OwedLess   string
 
+	// OwedClaims is the Talangan belum dibayar section (ADR-051): one line per
+	// claim owed as of AsOf, narrowed by the pos and member filters. Unfiltered
+	// the amounts add up to Owed. Hidden when empty.
+	OwedClaims []OwedClaim
+
 	PDFHref string
 
 	PrevMonth    string
@@ -125,6 +130,15 @@ type Page struct {
 	// Empty is a fund with nothing recorded at all, not a quiet month: it gets
 	// the warm line instead of a bare Rp0.
 	Empty bool
+}
+
+// OwedClaim is one talangan still owed: who fronted it, "Ditalangi 27 Oktober
+// 2026", its pos and the amount. Never the claim's note (ADR-051).
+type OwedClaim struct {
+	Member  string
+	Fronted string
+	Purpose string
+	Amount  string
 }
 
 // Check is the latest cek kas as the home banner reads it: matched, a
@@ -750,6 +764,13 @@ func NewPage(r ledger.Report, empty bool) Page {
 		// Integer subtraction: both are int64 rupiah, never a float.
 		page.Usable = money.FormatIDR(r.Balance - r.OwedToMembers)
 		page.UsableSize = heroSizeClass(page.Usable)
+	}
+
+	for _, c := range r.OwedClaims {
+		page.OwedClaims = append(page.OwedClaims, OwedClaim{
+			Member: c.MemberName, Fronted: Text.RowFronted(Text.longDate(c.FrontedOn)),
+			Purpose: c.PurposeName, Amount: money.FormatIDR(c.Amount),
+		})
 	}
 
 	for _, p := range r.PurposeBalances {
