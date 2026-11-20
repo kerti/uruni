@@ -84,6 +84,15 @@ type transactionResponse struct {
 	// the claim was for though the settlement's Note is nil (#257: nothing
 	// generated is ever stored).
 	ClaimNote *string `json:"claim_note"`
+	// PlacedOn is the day a list places the row on (ADR-051): its own
+	// occurred_on, except a settled talangan's payout, which a flow dates by
+	// its claim's incurred_on - unless the list is a cash view (the Lokasi
+	// filter). The list's month headers, dates and cursor read it. A write's
+	// response answers occurred_on.
+	PlacedOn string `json:"placed_on"`
+	// ClaimIncurredOn is the settled claim's incurred_on, set only on a
+	// kind='reimbursement' row: with OccurredOn, the row's other date.
+	ClaimIncurredOn *string `json:"claim_incurred_on"`
 	// TransferKind is the pair's kind ('between_accounts' or 'reclass_purpose'),
 	// nil outside kind='transfer'. TransferFromName/TransferToName are that
 	// kind's two location or purpose names in the transfer's from->to order,
@@ -201,6 +210,7 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 		Direction:       t.Direction,
 		Amount:          t.Amount,
 		OccurredOn:      t.OccurredOn,
+		PlacedOn:        t.OccurredOn,
 		Kind:            t.Kind,
 		MemberID:        t.MemberID,
 		DuesPeriod:      t.DuesPeriod,
@@ -256,6 +266,8 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.L
 	resp.AccountName = t.AccountName
 	resp.PurposeKind = t.PurposeKind
 	resp.ClaimNote = t.ClaimNote
+	resp.PlacedOn = t.PlacedOn
+	resp.ClaimIncurredOn = t.ClaimIncurredOn
 	resp.TransferKind = t.TransferKind
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
 	resp.TransferReason = t.TransferReason
@@ -657,7 +669,7 @@ func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
 //
 // ListTransactionsPage is asked for one row more than the page size, so the
 // handler can tell an empty next page from a next page without a second
-// round trip; the extra row is trimmed and its (occurred_on, id) becomes
+// round trip; the extra row is trimmed and its (placed_on, id) becomes
 // next_cursor.
 func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
@@ -671,12 +683,12 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		occurredOn, id, ok := decodeDateCursor(cursor)
+		placedOn, id, ok := decodeDateCursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
 		}
-		params.CursorOccurredOn = occurredOn
+		params.CursorPlacedOn = placedOn
 		params.CursorID = &id
 	}
 
@@ -703,6 +715,8 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	if filters.accountID != nil {
 		params.AccountID = *filters.accountID
+		// A location is a cash view (ADR-051): a payout sits on its own date.
+		params.CashView = 1
 	}
 	// Set only when given: these params are untyped (sqlc's nullable
 	// arguments), and an empty string is a filter, where nil is none.
@@ -737,7 +751,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > transactionsPageSize {
 		rows = rows[:transactionsPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeCursor(last.OccurredOn, last.ID)
+		encoded := encodeCursor(last.PlacedOn, last.ID)
 		nextCursor = &encoded
 	}
 

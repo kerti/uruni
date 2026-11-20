@@ -123,6 +123,18 @@ export function formatUnixSecondsWithTime(unixSeconds: number): string {
   return `${formatted} ${copy.timeZone.options[zone].abbreviation}`
 }
 
+/** "2026-11-12" -> "12 Nov": a date named beside another one already shown in
+ * full, ref. Across a year boundary the year is kept ("5 Jan 2027"), since ref
+ * no longer supplies it. Twin of the report's Copy.shortDate. A value that is
+ * not a date comes back as given. */
+export function formatShortDate(isoDate: string, ref: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
+  const month = match ? Number(match[2]) : 0
+  if (!match || month < 1 || month > 12) return isoDate
+  const text = `${Number(match[3])} ${copy.rowLabels.monthsShort[month - 1]}`
+  return ref.slice(0, 4) === match[1] ? text : `${text} ${match[1]}`
+}
+
 /** "2026-09" -> "September 2026". A dues period, a rate's `effective_from`. */
 export function formatPeriod(period: string): string {
   const [year, month] = period.split('-').map(Number)

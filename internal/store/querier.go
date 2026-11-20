@@ -644,7 +644,7 @@ type Querier interface {
 	// it orders by. LIMIT/OFFSET was rejected: occurred_on is backdatable (PRD
 	// section 7.2), so a row can land mid-list between two page fetches and an
 	// offset would skip or duplicate it. The row-value comparison cannot:
-	// cursor_occurred_on/cursor_id are NULL on the first page (the clause
+	// cursor_placed_on/cursor_id are NULL on the first page (the clause
 	// short-circuits true), and a later page passes the previous page's last row,
 	// keeping only strictly older pairs. cursor_id is CAST to INTEGER inside the
 	// tuple because otherwise sqlc infers its Go type from the tuple's other
@@ -672,6 +672,14 @@ type Querier interface {
 	// payment history panel alone. month is "YYYY-MM", prefix-compared against
 	// occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
 	// with q and the keyset cursor.
+	//
+	// Placed (ADR-051), as ListReportTransactions: a settled talangan's payout
+	// (kind='reimbursement') is a flow, so the list dates it by its claim's
+	// incurred_on - the month filter, the order and the keyset all read placed_on,
+	// never occurred_on. cash_view (non-zero: the Lokasi filter, a cash view) puts
+	// it back on its own date. occurred_on stays the cash date; claim_incurred_on
+	// lets the row name its other date. The claim is joined by primary key, so
+	// the key costs one search per payout (internal/store/plan_test.go).
 	//
 	// page_limit is page size + 1: the caller peeks at the extra row to know
 	// whether a next page exists, then trims it.

@@ -13,7 +13,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
-import { formatIsoDate, todayISODate } from '@/lib/dates'
+import { formatIsoDate, formatShortDate, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { listReimbursements, updateReimbursement, deleteReimbursement } from '@/lib/reimbursements'
@@ -25,7 +25,7 @@ import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
-import SettleDialog from '@/screens/Reimbursements/SettleDialog'
+import SettleDialog, { type Settled } from '@/screens/Reimbursements/SettleDialog'
 import ClaimSummary from '@/screens/Reimbursements/ClaimSummary'
 import ClaimDetailDialog from '@/screens/Reimbursements/ClaimDetailDialog'
 import { errorText, pickTalanganArrival } from '@/screens/Reimbursements/helpers'
@@ -289,9 +289,9 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     })
   }
 
-  function handleSettled() {
+  function handleSettled({ frontedOn, paidOn }: Settled) {
     dialog.close()
-    toast.success(text.settle.success)
+    toast.success(frontedOn === paidOn ? text.settle.success : text.settle.successFronted(formatShortDate(frontedOn, paidOn)))
     refetchFirstPage()
   }
 

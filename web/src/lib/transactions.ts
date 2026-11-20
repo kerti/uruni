@@ -2,6 +2,8 @@
 // response shape is defined in lib/setup.ts - re-exported here.
 
 import { apiFetch } from '@/lib/api'
+import { copy } from '@/copy/id'
+import { formatShortDate } from '@/lib/dates'
 import type { Transaction } from '@/lib/setup'
 import type { Direction } from '@/lib/enums'
 
@@ -133,6 +135,28 @@ export function getTransactionSummary(
   if (input.accountId !== undefined) params.set('account_id', String(input.accountId))
   if (input.direction) params.set('direction', input.direction)
   return apiFetch<TransactionSummary>(`/api/transactions/summary?${params.toString()}`)
+}
+
+/** The day the list places a row on (ADR-051): placed_on, or occurred_on on a
+ * row from a route that does not place (a write's response). */
+export function placedOn(transaction: Transaction): string {
+  return transaction.placed_on ?? transaction.occurred_on
+}
+
+/**
+ * A settled talangan's second line (ADR-051): where else the row reads. Placed
+ * on the day it was fronted, it says when and from where it was paid; placed on
+ * the day it was paid (the Lokasi filter), when it was fronted. Null for a claim
+ * fronted and paid on one day, and for every row that is no payout. Twin of the
+ * report's payoutNote, which never names the location (ADR-035).
+ */
+export function payoutNote(transaction: Transaction): string | null {
+  const fronted = transaction.claim_incurred_on
+  if (transaction.kind !== 'reimbursement' || !fronted || fronted === transaction.occurred_on) return null
+  const placed = placedOn(transaction)
+  if (placed === fronted)
+    return copy.rowLabels.settlement.paidOn(formatShortDate(transaction.occurred_on, placed), transaction.account_name ?? '')
+  return copy.rowLabels.settlement.frontedOn(formatShortDate(fronted, placed))
 }
 
 /**

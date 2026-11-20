@@ -79,6 +79,14 @@ export interface Transaction {
   purpose_kind?: PurposeKind
   member_name?: string | null
   claim_note?: string | null
+  /** The day the list places this row on (ADR-051): its occurred_on, except a
+   * settled talangan's payout, which a flow dates by its claim's incurred_on
+   * and the Lokasi filter (a cash view) by its own date. Month headers, the
+   * row's date line and the cursor read it. */
+  placed_on?: string
+  /** The settled claim's incurred_on, only on a kind='reimbursement' row: with
+   * occurred_on, the payout's other date. */
+  claim_incurred_on?: string | null
   transfer_kind?: TransferKind | null
   transfer_from_name?: string | null
   transfer_to_name?: string | null

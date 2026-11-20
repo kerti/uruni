@@ -9,6 +9,7 @@ import { copy } from '@/copy/id'
 import { containing } from '@/test/card'
 import { formatIDR } from '@/lib/money'
 import type { Purpose } from '@/lib/purposes'
+import { formatShortDate, todayISODate } from '@/lib/dates'
 import type { ReceiptUploadResult } from '@/lib/receipts'
 import type { Reimbursement } from '@/lib/reimbursements'
 import type { Account, Member } from '@/lib/setup'
@@ -537,7 +538,9 @@ describe('Reimbursements tab', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: text.settle.submit }))
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-      expect(screen.getByText(text.settle.success)).toBeInTheDocument()
+      // Fronted on 1 Sep and paid today: the toast says where the payout is
+      // listed (ADR-051).
+      expect(screen.getByText(text.settle.successFronted(formatShortDate('2026-09-01', todayISODate())))).toBeInTheDocument()
       expect(await screen.findByText(text.emptyOutstanding)).toBeInTheDocument()
       const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
       expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ account_id: 1 })
