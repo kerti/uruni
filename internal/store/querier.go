@@ -294,6 +294,11 @@ type Querier interface {
 	// id its session carries. An email change stores the normalized form
 	// (auth.NormalizeEmail), as register does.
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	// Closing an amplop is refused while a claim on it is neither settled nor
+	// waived (ADR-051, #846): the leftover rolled into Kas Utama is only knowable
+	// once every claim is done. Same two conditions as
+	// ListOutstandingReimbursementsByFund.
+	HasOutstandingReimbursementOnPurpose(ctx context.Context, arg HasOutstandingReimbursementOnPurposeParams) (bool, error)
 	// What the occasion itself collected and disbursed (PRD section 7.5's detail
 	// screen), as opposed to IncidentalTotals' net-including-rolls. The LEFT JOIN
 	// excludes only a reclass_purpose leg that is a roll (CloseIncidentalAndRoll,

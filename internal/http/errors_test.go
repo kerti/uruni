@@ -377,6 +377,7 @@ func TestEveryLedgerErrorKeepsItsWireStatusAndCode(t *testing.T) {
 		ledger.ErrContributionRequiresIncidentalPurpose: {400, "invalid_argument"},
 		ledger.ErrIncidentalNotClosed:                   {409, "incidental_not_closed"},
 		ledger.ErrIncidentalAlreadyClosed:               {409, "incidental_already_closed"},
+		ledger.ErrIncidentalHasOutstandingReimbursement: {409, "incidental_has_outstanding_reimbursement"},
 		ledger.ErrPurposeCorrectionNotFound:             {404, "not_found"},
 		ledger.ErrPurposeCorrectionOpening:              {409, "purpose_correction_opening"},
 		ledger.ErrPurposeCorrectionDues:                 {409, "purpose_correction_dues"},

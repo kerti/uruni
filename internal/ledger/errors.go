@@ -265,6 +265,16 @@ var ErrIncidentalAlreadyClosed = refuse("ledger: incidental has already been clo
 	ClassConflict, "incidental_already_closed",
 	"This incidental has already been closed.")
 
+// ErrIncidentalHasOutstandingReimbursement is returned by
+// CloseIncidentalAndRoll while a talangan on the envelope is neither settled
+// nor waived (ADR-051, #846). The leftover rolled into Kas Utama is only
+// knowable once every claim on the envelope is done; closing first would
+// overstate it and then refuse the settle (ADR-031, #473). The treasurer
+// settles or waives the claim, then closes. This guards new closes only.
+var ErrIncidentalHasOutstandingReimbursement = refuse("ledger: incidental has an outstanding reimbursement",
+	ClassConflict, "incidental_has_outstanding_reimbursement",
+	"This incidental still has a reimbursement that is neither settled nor waived.")
+
 // ErrPurposeCorrectionNotFound is returned by PostPurposeCorrection when
 // GetTransactionForFund finds no row for the fund and transaction id,
 // including a real id of another fund (fund-scoped like ErrReversalNotFound,

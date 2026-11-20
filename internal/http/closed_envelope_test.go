@@ -15,13 +15,14 @@ import (
 // posting gets, so the client's copy points at reopening either way.
 func TestClosedEnvelopeRefusesClaimsAndPayoutsWith409(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	db := testStoreDB(t)
+	r := authedRouterFor(t, db)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
 
 	onEnvelope := createdReimbursement(t, r, reimbursementRequest{
-		MemberID: memberID, PurposeID: envelope.PurposeID, Amount: 40_000, IncurredOn: "2026-08-05",
+		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 40_000, IncurredOn: "2026-08-05",
 	})
 	onMain := createdReimbursement(t, r, reimbursementRequest{
 		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 20_000, IncurredOn: "2026-08-05",
@@ -30,6 +31,11 @@ func TestClosedEnvelopeRefusesClaimsAndPayoutsWith409(t *testing.T) {
 		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("POST .../close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	// A close over an open claim is refused since ADR-051 (#846); a close from
+	// before it left this state behind, so the claim is moved on in SQL.
+	if _, err := db.Exec(`UPDATE reimbursement SET purpose_id = ? WHERE id = ?`, envelope.PurposeID, onEnvelope.ID); err != nil {
+		t.Fatalf("moving the claim onto the closed envelope: %v", err)
 	}
 
 	for _, tc := range []struct {
@@ -51,6 +57,30 @@ func TestClosedEnvelopeRefusesClaimsAndPayoutsWith409(t *testing.T) {
 		if code := decodeError(t, tc.rec).Code; code != "incidental_closed" {
 			t.Errorf("%s: error code = %q, want %q", tc.name, code, "incidental_closed")
 		}
+	}
+}
+
+// ADR-051 on the wire (#846): closing an envelope over a claim neither settled
+// nor waived answers 409 incidental_has_outstanding_reimbursement, and the
+// envelope stays open.
+func TestCloseIncidentalWithAnOutstandingClaimIsANamed409(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
+	createdReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: envelope.PurposeID, Amount: 40_000, IncurredOn: "2026-08-05",
+	})
+
+	rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
+	})
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("POST .../close = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if code := decodeError(t, rec).Code; code != "incidental_has_outstanding_reimbursement" {
+		t.Errorf("error code = %q, want %q", code, "incidental_has_outstanding_reimbursement")
 	}
 }
 

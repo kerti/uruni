@@ -19,6 +19,7 @@
   "image_too_large",
   "incidental_already_closed",
   "incidental_closed",
+  "incidental_has_outstanding_reimbursement",
   "incidental_not_closed",
   "internal_error",
   "invalid_argument",
