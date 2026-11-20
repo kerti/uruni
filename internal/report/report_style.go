@@ -117,7 +117,7 @@ button{border:0;background:var(--primary);color:var(--primary-foreground);paddin
   box-shadow:0 0 0 1px rgb(34 50 58 / .1),0 1px 2px rgb(34 50 58 / .06),0 4px 12px rgb(34 50 58 / .08)}
 .totals div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .totals dt{color:var(--muted-foreground)}
-.totals dd{margin:0;font-weight:500}
+.totals dd{margin:0;font-weight:500;white-space:nowrap}
 .totals .last{border-top:1px solid var(--border);padding-top:8px}
 .totals .last dt{color:var(--foreground);font-weight:600}
 .totals .last dd{font-weight:600}

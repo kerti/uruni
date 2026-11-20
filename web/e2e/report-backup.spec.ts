@@ -157,11 +157,16 @@ test.describe('report and backup', () => {
   test("Riwayat's month summary reads the report's walk, for the fund and for one pos (#751)", async ({ page }) => {
     await logIn(page)
     const main = await byName(page.context().request, '/api/purposes', 'purposes', 'Kas Utama')
-    // Each line as label and figure, in order.
+    // Each line as label and figure, in order. The app's formatter puts a word
+    // joiner (U+2060) after a sign so a narrow row cannot break there; the
+    // report holds its figures together with CSS instead. Both read the same,
+    // so the comparison drops the invisible joiner.
     const pairs = (list: Locator) =>
       list
         .locator(':scope > div')
-        .evaluateAll((lines) => lines.map((line) => [line.querySelector('dt')?.textContent, line.querySelector('dd')?.textContent]))
+        .evaluateAll((lines) =>
+          lines.map((line) => [line.querySelector('dt')?.textContent, line.querySelector('dd')?.textContent?.replaceAll('\u2060', '')]),
+        )
 
     for (const filter of ['', `&purpose=${main}`]) {
       await page.goto(`${reportPath}?month=${prevMonth}${filter}`)
