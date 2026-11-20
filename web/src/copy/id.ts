@@ -1755,6 +1755,10 @@ export const copy = {
     errors: {
       incidental_already_closed: 'Amplop ini sudah ditutup.',
       incidental_not_closed: 'Amplop ini belum ditutup.',
+      // ADR-051 (#846): the leftover is only knowable once every talangan on
+      // the amplop is paid or waived, so the close waits for them.
+      incidental_has_outstanding_reimbursement:
+        'Masih ada talangan yang belum dibayar di amplop ini. Selesaikan dulu di Talangan, lalu tutup amplopnya.',
     },
   },
 } as const

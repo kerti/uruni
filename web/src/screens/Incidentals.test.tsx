@@ -422,42 +422,47 @@ describe('Incidentals', () => {
     expect(posted).toMatchObject({ account_id: 3 })
   })
 
-  it('a second close attempt surfaces the named 409 refusal', async () => {
-    const detail = {
-      ...openEnvelope,
-      collected_amount: 50_000,
-      disbursed_amount: 0,
-      balance_amount: 50000,
-      recipients: [],
-    } satisfies IncidentalDetail
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
-          handle: () => Promise.resolve(jsonResponse(detail)),
-        },
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
-          handle: () => Promise.resolve(jsonResponse({ error: { code: 'incidental_already_closed', message: 'already closed' } }, 409)),
-        },
-        ...getHandlers(),
-      ]),
-    )
+  // incidental_already_closed: a second close. incidental_has_outstanding_reimbursement:
+  // a talangan on the amplop is not yet paid or waived (ADR-051, #846).
+  it.each(['incidental_already_closed', 'incidental_has_outstanding_reimbursement'] as const)(
+    'a refused close surfaces the named 409 %s',
+    async (code) => {
+      const detail = {
+        ...openEnvelope,
+        collected_amount: 50_000,
+        disbursed_amount: 0,
+        balance_amount: 50000,
+        recipients: [],
+      } satisfies IncidentalDetail
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+            handle: () => Promise.resolve(jsonResponse(detail)),
+          },
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
+            handle: () => Promise.resolve(jsonResponse({ error: { code, message: 'refused' } }, 409)),
+          },
+          ...getHandlers(),
+        ]),
+      )
 
-    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
-    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+      renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+      await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
-    await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
-    await chooseOption(text.close.accountLabel, 'Tunai')
-    await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
+      await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
+      await waitFor(() => expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument())
+      await chooseOption(text.close.accountLabel, 'Tunai')
+      await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
-    // The named 409's copy is shown, never the English wire message, and the
-    // close form stays open so she can read why.
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.incidental_already_closed))
-    expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument()
-  })
+      // The named 409's copy is shown, never the English wire message, and the
+      // close form stays open so she can read why.
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors[code]))
+      expect(screen.getByRole('heading', { name: text.close.heading })).toBeInTheDocument()
+    },
+  )
 
   it('closes from a dialog addressed by ?edit=close:<id>, with no cancel button, ignoring a tap outside', async () => {
     const detail = {

@@ -143,6 +143,34 @@ func (q *Queries) GetReimbursementWithSettled(ctx context.Context, arg GetReimbu
 	return i, err
 }
 
+const hasOutstandingReimbursementOnPurpose = `-- name: HasOutstandingReimbursementOnPurpose :one
+SELECT EXISTS (
+  SELECT 1 FROM reimbursement r
+  WHERE r.fund_id = ? AND r.purpose_id = ?
+    AND r.waived_on IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "transaction" t
+      WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+    )
+) AS has_outstanding
+`
+
+type HasOutstandingReimbursementOnPurposeParams struct {
+	FundID    int64
+	PurposeID int64
+}
+
+// Closing an amplop is refused while a claim on it is neither settled nor
+// waived (ADR-051, #846): the leftover rolled into Kas Utama is only knowable
+// once every claim is done. Same two conditions as
+// ListOutstandingReimbursementsByFund.
+func (q *Queries) HasOutstandingReimbursementOnPurpose(ctx context.Context, arg HasOutstandingReimbursementOnPurposeParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasOutstandingReimbursementOnPurpose, arg.FundID, arg.PurposeID)
+	var has_outstanding bool
+	err := row.Scan(&has_outstanding)
+	return has_outstanding, err
+}
+
 const listOutstandingReimbursementsByFund = `-- name: ListOutstandingReimbursementsByFund :many
 SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
   0 AS settled

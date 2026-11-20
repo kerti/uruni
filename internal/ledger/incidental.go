@@ -283,6 +283,8 @@ type CloseIncidentalAndRollParams struct {
 //     since an error inside withTx would roll the close back. Returns 0.
 //   - Already closed: returns ErrIncidentalAlreadyClosed and posts nothing; a
 //     second roll would move money that already moved.
+//   - A talangan on the envelope neither settled nor waived: returns
+//     ErrIncidentalHasOutstandingReimbursement and posts nothing (ADR-051).
 //
 // A retired AccountID is ErrAccountInactive when a leftover has to be posted
 // on it (either direction); a zero leftover posts nothing and ignores the
@@ -310,6 +312,17 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 		}
 		if envelope.ClosedOn != nil {
 			return ErrIncidentalAlreadyClosed
+		}
+
+		// An open talangan would change the leftover once settled (ADR-051).
+		outstanding, err := q.HasOutstandingReimbursementOnPurpose(ctx, store.HasOutstandingReimbursementOnPurposeParams{
+			FundID: p.FundID, PurposeID: p.PurposeID,
+		})
+		if err != nil {
+			return fmt.Errorf("checking outstanding reimbursements: %w", err)
+		}
+		if outstanding {
+			return ErrIncidentalHasOutstandingReimbursement
 		}
 
 		totals, err := q.IncidentalTotals(ctx, store.IncidentalTotalsParams{

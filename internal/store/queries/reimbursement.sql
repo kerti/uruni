@@ -131,3 +131,18 @@ RETURNING id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, no
 -- name: DeleteReimbursement :exec
 DELETE FROM reimbursement
 WHERE id = ?;
+
+-- Closing an amplop is refused while a claim on it is neither settled nor
+-- waived (ADR-051, #846): the leftover rolled into Kas Utama is only knowable
+-- once every claim is done. Same two conditions as
+-- ListOutstandingReimbursementsByFund.
+-- name: HasOutstandingReimbursementOnPurpose :one
+SELECT EXISTS (
+  SELECT 1 FROM reimbursement r
+  WHERE r.fund_id = ? AND r.purpose_id = ?
+    AND r.waived_on IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "transaction" t
+      WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+    )
+) AS has_outstanding;
