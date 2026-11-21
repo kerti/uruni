@@ -1,6 +1,6 @@
 # ADR-047 - Amplop opens from Beranda
 
-**Status:** `draft` · M11 ([#752](https://github.com/kerti/uruni/issues/752)) · grilled with the maintainer 2026-11-02 · supersedes in part [ADR-032](./032-two-level-navigation.md) (the [#263](https://github.com/kerti/uruni/issues/263) amendment: "opening a new envelope is Pengaturan's") · [ADR index](./README.md)
+**Status:** Accepted · implemented at M11 ([#752](https://github.com/kerti/uruni/issues/752)) · grilled with the maintainer 2026-11-02 · supersedes in part [ADR-032](./032-two-level-navigation.md) (the [#263](https://github.com/kerti/uruni/issues/263) amendment: "opening a new envelope is Pengaturan's") · [ADR index](./README.md)
 
 **Context.** ADR-032's #263 amendment put *Buka amplop* and the envelope list in Pengaturan, for two reasons. First, Beranda's purpose breakdown rendered nothing when no envelope was open and no Titipan existed, so a button inside it would be invisible exactly when a treasurer wants her first envelope. Second, incidental and pass-through are two kinds of one `purpose`, and Titipan was already created in Pengaturan, so one rule - *a purpose is created in Pengaturan* - covered both.
 

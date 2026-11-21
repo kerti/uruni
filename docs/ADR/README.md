@@ -71,7 +71,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [044](./044-twelve-months-of-dues.md) | Twelve months of dues, in the app and on the report | implemented |
 | [045](./045-a-public-demo-on-fly.md) | A public demo on Fly.io: the shipped image plus `URUNI_DEMO`, reset on every start | implemented |
 | [046](./046-confirms-on-one-record-are-dialogs.md) | A confirm on one record is a dialog, even when it posts | implemented |
-| [047](./047-amplop-opens-from-beranda.md) | Amplop opens from Beranda | `draft` |
+| [047](./047-amplop-opens-from-beranda.md) | Amplop opens from Beranda | implemented |
 | [048](./048-a-dues-payment-is-one-row.md) | A dues payment is one row | implemented |
 | [049](./049-the-reports-period-and-grouping.md) | The report's period and grouping | implemented |
 | [050](./050-waiving-a-members-dues.md) | Waiving a member's dues | implemented |

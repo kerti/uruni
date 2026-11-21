@@ -78,4 +78,4 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M11 — one way to do each thing** is next. M10 — production readiness — is done (`v0.10.0`). What is in flight lives on the board, not in this line.
+**Status:** **Production** is next. M11 — one way to do each thing — is done (`v0.11.0`). What is in flight lives on the board, not in this line.
