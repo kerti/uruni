@@ -237,7 +237,7 @@ func TestIncidentalRecipientCascadesFromMemberDeleteAndScopesByFund(t *testing.T
 		t.Error("a recipient from another fund = nil error, want the composite FK to reject it")
 	}
 
-	recipients, err := q.ListIncidentalRecipients(ctx, envelopeID)
+	recipients, err := q.ListIncidentalRecipients(ctx, store.ListIncidentalRecipientsParams{FundID: f.fundID, PurposeID: envelopeID})
 	if err != nil {
 		t.Fatalf("ListIncidentalRecipients = %v, want no error", err)
 	}
@@ -249,7 +249,7 @@ func TestIncidentalRecipientCascadesFromMemberDeleteAndScopesByFund(t *testing.T
 		t.Fatalf("DeleteMember = %v, want no error - a recipient is a choice, not a record, and ON DELETE CASCADE should let it go", err)
 	}
 
-	recipients, err = q.ListIncidentalRecipients(ctx, envelopeID)
+	recipients, err = q.ListIncidentalRecipients(ctx, store.ListIncidentalRecipientsParams{FundID: f.fundID, PurposeID: envelopeID})
 	if err != nil {
 		t.Fatalf("ListIncidentalRecipients after the member delete = %v, want no error", err)
 	}

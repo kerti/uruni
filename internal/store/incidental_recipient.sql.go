@@ -46,9 +46,14 @@ const listIncidentalRecipients = `-- name: ListIncidentalRecipients :many
 SELECT ir.member_id, m.name AS member_name
 FROM incidental_recipient ir
 JOIN member m ON m.id = ir.member_id
-WHERE ir.purpose_id = ?
+WHERE ir.fund_id = ? AND ir.purpose_id = ?
 ORDER BY m.name COLLATE NOCASE, m.id
 `
+
+type ListIncidentalRecipientsParams struct {
+	FundID    int64
+	PurposeID int64
+}
 
 type ListIncidentalRecipientsRow struct {
 	MemberID   int64
@@ -58,8 +63,8 @@ type ListIncidentalRecipientsRow struct {
 // One envelope's recipients with the member name, so callers need no second
 // lookup. Ordered by name then id (as ListMembersPage), not insertion order,
 // which carries no meaning here.
-func (q *Queries) ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]ListIncidentalRecipientsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listIncidentalRecipients, purposeID)
+func (q *Queries) ListIncidentalRecipients(ctx context.Context, arg ListIncidentalRecipientsParams) ([]ListIncidentalRecipientsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIncidentalRecipients, arg.FundID, arg.PurposeID)
 	if err != nil {
 		return nil, err
 	}

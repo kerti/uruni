@@ -1607,7 +1607,7 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, period repor
 			v := money.FromDB(*e.MinimumPerMember)
 			env.MinimumPerMember = &v
 		}
-		recipients, err := l.q.ListIncidentalRecipients(ctx, e.PurposeID)
+		recipients, err := l.q.ListIncidentalRecipients(ctx, store.ListIncidentalRecipientsParams{FundID: fundID, PurposeID: e.PurposeID})
 		if err != nil {
 			return nil, fmt.Errorf("listing recipients: %w", err)
 		}

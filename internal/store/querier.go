@@ -401,6 +401,12 @@ type Querier interface {
 	// reversibility from the same facts as GetReversalTarget. A reversal of a
 	// non-dues row has no payment and is never returned. Fund-scoped; the order is
 	// the Go side's job (it sorts by month), not an id order.
+	//
+	// The rows are found by two searches, a payment's own rows by dues_payment_id
+	// and their reversals by the view's reversed_by_transaction_id, then joined to
+	// the view by id. One join ON own OR reversal got no index and scanned the
+	// whole ledger (#861). A reversal carries no dues_payment_id (dues rows only),
+	// so no row is found twice.
 	ListDuesGroupRows(ctx context.Context, arg ListDuesGroupRowsParams) ([]ListDuesGroupRowsRow, error)
 	// Every dues row of one payment, oldest month first (the anchor row is the
 	// first, ADR-048), with what a whole-payment reversal needs to decide each row
@@ -463,7 +469,7 @@ type Querier interface {
 	// One envelope's recipients with the member name, so callers need no second
 	// lookup. Ordered by name then id (as ListMembersPage), not insertion order,
 	// which carries no meaning here.
-	ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]ListIncidentalRecipientsRow, error)
+	ListIncidentalRecipients(ctx context.Context, arg ListIncidentalRecipientsParams) ([]ListIncidentalRecipientsRow, error)
 	// The backup export's read (ADR-012): raw table columns, no joined member_name,
 	// since a restore reads member_id. The primary key is the (fund_id, purpose_id,
 	// member_id) triple, so it orders by that, only for deterministic export bytes.

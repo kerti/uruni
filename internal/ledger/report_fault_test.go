@@ -101,11 +101,11 @@ func (f faultQuerier) ListDuesTiersByFund(ctx context.Context, fundID int64) ([]
 	return f.Querier.ListDuesTiersByFund(ctx, fundID)
 }
 
-func (f faultQuerier) ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]store.ListIncidentalRecipientsRow, error) {
+func (f faultQuerier) ListIncidentalRecipients(ctx context.Context, arg store.ListIncidentalRecipientsParams) ([]store.ListIncidentalRecipientsRow, error) {
 	if f.fail == "ListIncidentalRecipients" {
 		return nil, errFault
 	}
-	return f.Querier.ListIncidentalRecipients(ctx, purposeID)
+	return f.Querier.ListIncidentalRecipients(ctx, arg)
 }
 
 func (f faultQuerier) ReportFundBalance(ctx context.Context, arg store.ReportFundBalanceParams) (int64, error) {
