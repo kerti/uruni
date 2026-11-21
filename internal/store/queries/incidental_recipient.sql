@@ -20,7 +20,7 @@ WHERE purpose_id = ?;
 SELECT ir.member_id, m.name AS member_name
 FROM incidental_recipient ir
 JOIN member m ON m.id = ir.member_id
-WHERE ir.purpose_id = ?
+WHERE ir.fund_id = ? AND ir.purpose_id = ?
 ORDER BY m.name COLLATE NOCASE, m.id;
 
 -- The backup export's read (ADR-012): raw table columns, no joined member_name,

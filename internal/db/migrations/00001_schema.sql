@@ -527,6 +527,14 @@ CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 -- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
 
+-- The two facts a ledger read asks of the cek kas for EVERY row it returns:
+-- is this row counted (a snapshot's cutoff at or past it), and is it the entry
+-- that squared a counted line. Unindexed, each walked every snapshot or every
+-- line of the fund per row (#861). Partial: most snapshots and lines have no
+-- cutoff or entry to search by.
+CREATE INDEX reconciliation_by_cutoff ON reconciliation(fund_id, through_transaction_id) WHERE through_transaction_id IS NOT NULL;
+CREATE INDEX reconciliation_line_by_adjustment ON reconciliation_line(adjustment_transaction_id) WHERE adjustment_transaction_id IS NOT NULL;
+
 -- The ledger as every read sees it (#627, #628): "transaction" plus the derived
 -- facts each query used to re-write. internal/db/ledger_entry_test.go fails a
 -- query under internal/store/queries that derives any of them itself.

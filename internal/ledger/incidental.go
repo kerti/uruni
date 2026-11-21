@@ -453,7 +453,7 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 		return IncidentalDetail{}, err
 	}
 
-	recipientRows, err := l.q.ListIncidentalRecipients(ctx, purposeID)
+	recipientRows, err := l.q.ListIncidentalRecipients(ctx, store.ListIncidentalRecipientsParams{FundID: fundID, PurposeID: purposeID})
 	if err != nil {
 		return IncidentalDetail{}, fmt.Errorf("listing incidental recipients: %w", err)
 	}

@@ -35,6 +35,14 @@ WITH payment_rows AS (
   SELECT x.id, x.dues_payment_id AS payment_id
   FROM "transaction" x
   WHERE x.fund_id = ?1 AND x.dues_payment_id IN (/*SLICE:payment_ids*/?)
+),
+group_rows AS (
+  SELECT pr.id, pr.payment_id FROM payment_rows pr
+  UNION ALL
+  SELECT o.reversed_by_transaction_id, pr.payment_id
+  FROM payment_rows pr
+  JOIN ledger_entry o ON o.id = pr.id
+  WHERE o.reversed_by_transaction_id IS NOT NULL
 )
 SELECT t.id, t.kind, t.occurred_on, t.dues_period, t.amount,
        pr.payment_id,
@@ -44,9 +52,8 @@ SELECT t.id, t.kind, t.occurred_on, t.dues_period, t.amount,
        ei.closed_on AS effective_closed_on,
        CAST(EXISTS (SELECT 1 FROM reconciliation rc
                     WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
-FROM ledger_entry t
-LEFT JOIN "transaction" o ON o.id = t.reverses_transaction_id
-JOIN payment_rows pr ON pr.id = t.id OR pr.id = o.id
+FROM group_rows pr
+JOIN ledger_entry t ON t.id = pr.id
 LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
 `
 
@@ -77,6 +84,12 @@ type ListDuesGroupRowsRow struct {
 // reversibility from the same facts as GetReversalTarget. A reversal of a
 // non-dues row has no payment and is never returned. Fund-scoped; the order is
 // the Go side's job (it sorts by month), not an id order.
+//
+// The rows are found by two searches, a payment's own rows by dues_payment_id
+// and their reversals by the view's reversed_by_transaction_id, then joined to
+// the view by id. One join ON own OR reversal got no index and scanned the
+// whole ledger (#861). A reversal carries no dues_payment_id (dues rows only),
+// so no row is found twice.
 func (q *Queries) ListDuesGroupRows(ctx context.Context, arg ListDuesGroupRowsParams) ([]ListDuesGroupRowsRow, error) {
 	query := listDuesGroupRows
 	var queryParams []interface{}

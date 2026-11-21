@@ -42,10 +42,10 @@ var (
 // queryPlan returns EXPLAIN QUERY PLAN's detail lines for query, binding
 // every parameter to NULL (the plan does not depend on the values): sqlc's
 // numbered ?N, or a query's bare ? placeholders, one each. A sqlc.slice
-// becomes one bare ?.
+// becomes NULL, which binds nothing and plans as one value.
 func queryPlan(t *testing.T, sqlDB *sql.DB, query string) []string {
 	t.Helper()
-	query = sqlcSlice.ReplaceAllString(query, "?")
+	query = sqlcSlice.ReplaceAllString(query, "NULL")
 	n := 0
 	for _, m := range sqlcParam.FindAllStringSubmatch(query, -1) {
 		var i int
@@ -163,5 +163,62 @@ func TestReceiptLookupsSearchByParent(t *testing.T) {
 		if joined := strings.Join(plan, "\n"); !strings.Contains(joined, c.want) {
 			t.Errorf("%s has no %q; plan:\n%s", name, c.want, joined)
 		}
+	}
+}
+
+func TestDuesGroupRowsSearchesNotScans(t *testing.T) {
+	t.Parallel()
+	// A page's dues groups are its payments' rows and their reversals: two
+	// searches. One join ON own OR reversal scanned the whole ledger (#861).
+	plan := queryPlan(t, planDB(t), listDuesGroupRows)
+	joined := strings.Join(plan, "\n")
+	for _, want := range []string{
+		"SEARCH x USING INDEX transaction_by_dues_payment (dues_payment_id=?)",
+		"SEARCH r USING COVERING INDEX dues_payment_reversed_once (reverses_transaction_id=?)",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("ListDuesGroupRows has no %q; plan:\n%s", want, joined)
+		}
+	}
+	for _, line := range plan {
+		if strings.HasPrefix(line, "SCAN ") {
+			t.Errorf("ListDuesGroupRows scans: %q; plan:\n%s", line, joined)
+		}
+	}
+}
+
+func TestCekKasProbesSearchPerRow(t *testing.T) {
+	t.Parallel()
+	// Every ledger read asks two things of the cek kas per row it returns: is
+	// the row counted, and did it square a counted line. Each must be one
+	// search, not a walk of every snapshot or line of the fund (#861).
+	sqlDB := planDB(t)
+	for name, query := range map[string]string{
+		"ListTransactionsPage":           listTransactionsPage,
+		"ListDuesGroupRows":              listDuesGroupRows,
+		"ListDuesPaymentReversalTargets": listDuesPaymentReversalTargets,
+		"GetReversalTarget":              getReversalTarget,
+	} {
+		joined := strings.Join(queryPlan(t, sqlDB, query), "\n")
+		for _, want := range []string{
+			"SEARCH rl USING INDEX reconciliation_line_by_adjustment (adjustment_transaction_id=?)",
+			"SEARCH rc USING COVERING INDEX reconciliation_by_cutoff (fund_id=? AND through_transaction_id>?)",
+		} {
+			if !strings.Contains(joined, want) {
+				t.Errorf("%s has no %q; plan:\n%s", name, want, joined)
+			}
+		}
+		if strings.Contains(joined, "SCAN rl") || strings.Contains(joined, "SCAN rc") {
+			t.Errorf("%s scans the cek kas; plan:\n%s", name, joined)
+		}
+	}
+}
+
+func TestIncidentalRecipientsSearchByKey(t *testing.T) {
+	t.Parallel()
+	// The primary key leads with fund_id, so the lookup names it (#861).
+	plan := queryPlan(t, planDB(t), listIncidentalRecipients)
+	if joined := strings.Join(plan, "\n"); !strings.Contains(joined, "SEARCH ir USING COVERING INDEX sqlite_autoindex_incidental_recipient_1 (fund_id=? AND purpose_id=?)") {
+		t.Errorf("ListIncidentalRecipients is no key search; plan:\n%s", joined)
 	}
 }
