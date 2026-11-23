@@ -470,10 +470,6 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toTransactionResponse(posted))
 }
 
-// transactionsPageSize is GET /api/transactions's fixed page size (#225,
-// ADR-032): 25 a page, no client-supplied limit.
-const transactionsPageSize = 25
-
 // occurredOnLayout mirrors internal/ledger's unexported const (transaction.go).
 // A cursor is this route's opaque wire format, so this package validates its
 // date half itself rather than reaching into ledger.
@@ -679,17 +675,16 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	params := store.ListTransactionsPageParams{
 		FundID:    fund.ID,
-		PageLimit: transactionsPageSize + 1,
+		PageLimit: pageLimit,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		placedOn, id, ok := decodeDateCursor(cursor)
-		if !ok {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
-			return
-		}
-		params.CursorPlacedOn = placedOn
-		params.CursorID = &id
+	cursorKey, cursorID, ok := readCursor(w, r, decodeDateCursor)
+	if !ok {
+		return
+	}
+	if cursorID != nil {
+		params.CursorPlacedOn = cursorKey
+		params.CursorID = cursorID
 	}
 
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
@@ -747,13 +742,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nextCursor *string
-	if len(rows) > transactionsPageSize {
-		rows = rows[:transactionsPageSize]
-		last := rows[len(rows)-1]
-		encoded := encodeCursor(last.PlacedOn, last.ID)
-		nextCursor = &encoded
-	}
+	rows, nextCursor := trimPage(rows, func(r store.ListTransactionsPageRow) (string, int64) { return r.PlacedOn, r.ID })
 
 	// A dues payment and a dues-reversal group are one item each (ADR-048): one
 	// fund-scoped read brings the months of every payment the page touches, and

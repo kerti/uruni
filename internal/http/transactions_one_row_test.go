@@ -278,7 +278,7 @@ func TestListFilteredToTheInLegStillCarriesTheOutLegsReceipt(t *testing.T) {
 // the out leg. Every alignment must show the pair once and skip nothing.
 func TestListPageBoundaryNeverSplitsOrSkipsAPair(t *testing.T) {
 	t.Parallel()
-	for after := transactionsPageSize - 3; after <= transactionsPageSize+2; after++ {
+	for after := pageSize - 3; after <= pageSize+2; after++ {
 		t.Run(fmt.Sprintf("%d rows listed before the pair", after), func(t *testing.T) {
 			t.Parallel()
 			w := newOneRowWorld(t)
@@ -304,7 +304,7 @@ func TestListPageBoundaryNeverSplitsOrSkipsAPair(t *testing.T) {
 // representative is then the in leg, the one leg the list can show.
 func TestListPageBoundaryHoldsWhenOnlyTheInLegMatches(t *testing.T) {
 	t.Parallel()
-	for after := transactionsPageSize - 2; after <= transactionsPageSize+1; after++ {
+	for after := pageSize - 2; after <= pageSize+1; after++ {
 		t.Run(fmt.Sprintf("%d envelope rows listed before the pair", after), func(t *testing.T) {
 			t.Parallel()
 			w := newOneRowWorld(t)

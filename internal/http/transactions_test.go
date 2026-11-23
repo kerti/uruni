@@ -422,8 +422,8 @@ func TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 			t.Fatalf("GET /api/transactions?%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusOK, rec.Body.String())
 		}
 		page := decodeTransactionsPage(t, rec)
-		if pages < 2 && len(page.Transactions) != transactionsPageSize {
-			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Transactions), transactionsPageSize)
+		if pages < 2 && len(page.Transactions) != pageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Transactions), pageSize)
 		}
 		for _, row := range page.Transactions {
 			seen[row.ID]++
@@ -469,8 +469,8 @@ func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testi
 
 	// Page 1 is the newest 25: 2026-01-30 down through 2026-01-06.
 	page1 := decodeTransactionsPage(t, getTransactionsQuery(t, r, ""))
-	if len(page1.Transactions) != transactionsPageSize {
-		t.Fatalf("page 1 = %d rows, want %d", len(page1.Transactions), transactionsPageSize)
+	if len(page1.Transactions) != pageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.Transactions), pageSize)
 	}
 	if page1.NextCursor == nil {
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")

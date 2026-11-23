@@ -2,10 +2,49 @@ package http
 
 import (
 	"encoding/base64"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// pageSize is every keyset-paged list's page length: one number, no per-list
+// override. A list asks its query for pageLimit rows (one extra, the peek that
+// says whether a next page exists) and hands the rows to trimPage.
+const (
+	pageSize  = 25
+	pageLimit = pageSize + 1
+)
+
+// readCursor decodes ?cursor= with the list's key-type decoder. No cursor
+// answers the zero key and a nil id (the first page): a caller sets its
+// params' nullable cursor key only when the id is non-nil. A bad cursor writes
+// the 400 invalid_argument on field "cursor" and answers ok=false: the caller
+// returns.
+func readCursor[K any](w http.ResponseWriter, r *http.Request, decode func(string) (K, int64, bool)) (key K, id *int64, ok bool) {
+	raw := r.URL.Query().Get("cursor")
+	if raw == "" {
+		return key, nil, true
+	}
+	key, n, valid := decode(raw)
+	if !valid {
+		writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
+		return key, nil, false
+	}
+	return key, &n, true
+}
+
+// trimPage cuts the peeked extra row and, when there was one, encodes the last
+// kept row's (key, id) as next_cursor; nil on the last page. keyOf names the
+// list's keyset pair.
+func trimPage[R any](rows []R, keyOf func(R) (string, int64)) ([]R, *string) {
+	if len(rows) <= pageSize {
+		return rows, nil
+	}
+	rows = rows[:pageSize]
+	encoded := encodeCursor(keyOf(rows[len(rows)-1]))
+	return rows, &encoded
+}
 
 // Every keyset-paged list hands the client an opaque cursor: base64url (no
 // padding) of "key|id", the pair its keyset WHERE compares. The id is a
