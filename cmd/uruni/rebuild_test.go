@@ -807,11 +807,19 @@ func TestFormatRupiah(t *testing.T) {
 // TestRebuildTakesThePreviousReleasesBackup is #516's guard on ADR-012's 0.x
 // rule: the backup the last tag wrote still goes through ParseUpload and
 // rebuilds into the current schema with its totals proven. The fixture is the
-// golden uruni.json at v0.9.0-alpha.2; refresh it from the new tag whenever
-// URUNI_TAG is bumped. A schema change that makes this fail has to keep that
-// backup restorable, or ship its converter in the same PR.
+// golden uruni.json as of the tag named in testdata/previous-release/TAG, which
+// must equal the URUNI_TAG that .env.example pins: bumping URUNI_TAG fails this
+// test until the fixture is refreshed from internal/backup/testdata/golden.json
+// of the commit being tagged. A schema change that makes it fail otherwise has
+// to keep that backup restorable, or ship its converter in the same PR.
 func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 	t.Parallel()
+	pinned := envExampleTag(t)
+	if fixtureTag := strings.TrimSpace(string(readFile(t, filepath.Join("testdata", "previous-release", "TAG")))); fixtureTag != pinned {
+		t.Fatalf("testdata/previous-release is the backup of %s, but .env.example pins URUNI_TAG=%s: "+
+			"copy internal/backup/testdata/golden.json of the tagged tree to testdata/previous-release/uruni.json and write %s to its TAG", fixtureTag, pinned, pinned)
+	}
+
 	f := newRebuildFixture(t)
 	raw := readFile(t, filepath.Join("testdata", "previous-release", "uruni.json"))
 	var zipBuf bytes.Buffer
@@ -830,36 +838,22 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The fixture stays what the last tag wrote: format 1. The step that reads it is
-	// the one under test (ADR-040: v1 -> v2 -> totals).
 	var peek struct {
 		FormatVersion int64 `json:"format_version"`
-		Members       []struct {
-			TierID *int64 `json:"tier_id"`
-		} `json:"members"`
 	}
 	if err := json.Unmarshal(raw, &peek); err != nil {
 		t.Fatal(err)
 	}
-	if peek.FormatVersion != 1 {
-		t.Fatalf("testdata/previous-release is format_version %d, want 1: it must stay the last release's file, refreshed only when URUNI_TAG moves", peek.FormatVersion)
-	}
-	tiered := 0
-	for _, m := range peek.Members {
-		if m.TierID != nil {
-			tiered++
-		}
+	if peek.FormatVersion < 1 || peek.FormatVersion > backup.FormatVersion {
+		t.Fatalf("testdata/previous-release is format_version %d, want 1..%d: a release's backup is never newer than this build", peek.FormatVersion, backup.FormatVersion)
 	}
 
 	parsed, err := backup.ParseUpload(f.zipPath)
 	if err != nil {
-		t.Fatalf("ParseUpload(previous release) = %v, want no error", err)
+		t.Fatalf("ParseUpload(previous release, format %d) = %v, want no error", peek.FormatVersion, err)
 	}
 	if parsed.Document.FormatVersion != backup.FormatVersion {
 		t.Errorf("parsed FormatVersion = %d, want %d: ParseUpload hands the importer the current shape", parsed.Document.FormatVersion, backup.FormatVersion)
-	}
-	if len(parsed.Document.MemberTiers) != tiered || tiered == 0 {
-		t.Errorf("upgraded member_tiers = %d, tiered members in the file = %d, want one row per tiered member (and at least one)", len(parsed.Document.MemberTiers), tiered)
 	}
 	var want int64
 	for _, ft := range parsed.Document.Totals.Funds {
@@ -881,16 +875,22 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 	if got != want || want == 0 {
 		t.Errorf("rebuilt total = %d, backup total = %d, want them equal and non-zero", got, want)
 	}
-	var rows int
-	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM member_tier WHERE correction = 0`).Scan(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if rows != tiered {
-		t.Errorf("rebuilt database holds %d backfilled member_tier rows, want %d", rows, tiered)
-	}
 	if !strings.Contains(f.out.String(), "backup says   "+formatRupiah(want)) || !strings.Contains(f.out.String(), "rebuilt says  "+formatRupiah(want)) {
 		t.Errorf("output does not show the proven totals:\n%s", f.out.String())
 	}
+}
+
+// envExampleTag is the URUNI_TAG that .env.example pins: the release the
+// operator runs, and so the release whose backup this build has to take.
+func envExampleTag(t *testing.T) string {
+	t.Helper()
+	for _, line := range strings.Split(string(readFile(t, filepath.Join("..", "..", ".env.example"))), "\n") {
+		if tag, ok := strings.CutPrefix(line, "URUNI_TAG="); ok && strings.TrimSpace(tag) != "" {
+			return strings.TrimSpace(tag)
+		}
+	}
+	t.Fatal(".env.example has no URUNI_TAG=<tag> line")
+	return ""
 }
 
 // TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase: the

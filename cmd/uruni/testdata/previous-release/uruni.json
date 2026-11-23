@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 3,
   "users": [
     {
       "id": 1,
@@ -13,6 +13,7 @@
       "id": 1,
       "name": "Test Fund",
       "currency": "IDR",
+      "time_zone": "Asia/Jakarta",
       "report_slug": "0000000000000000000fixture",
       "created_at": 1700000000
     }
@@ -47,7 +48,7 @@
       "id": 2,
       "fund_id": 1,
       "kind": "pass_through",
-      "name": "Kas Bidang",
+      "name": "Seragam",
       "created_at": 1700000000
     },
     {
@@ -62,7 +63,13 @@
     {
       "id": 1,
       "fund_id": 1,
-      "name": "Pelaksana",
+      "name": "Reguler",
+      "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "name": "Senior",
       "created_at": 1700000000
     }
   ],
@@ -72,7 +79,36 @@
       "tier_id": 1,
       "amount": 50000,
       "effective_from": "2026-01",
+      "correction": 0,
+      "deleted": false,
       "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "tier_id": 1,
+      "amount": 55000,
+      "effective_from": "2026-01",
+      "correction": 1,
+      "deleted": false,
+      "created_at": 1700000001
+    },
+    {
+      "id": 3,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 0,
+      "deleted": false,
+      "created_at": 1700000002
+    },
+    {
+      "id": 4,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 1,
+      "deleted": true,
+      "created_at": 1700000003
     }
   ],
   "members": [
@@ -80,7 +116,6 @@
       "id": 1,
       "fund_id": 1,
       "name": "Andi",
-      "tier_id": 1,
       "joined_on": "2026-01-01",
       "inactive_on": null,
       "created_at": 1700000000
@@ -89,10 +124,38 @@
       "id": 2,
       "fund_id": 1,
       "name": "Budi",
-      "tier_id": null,
       "joined_on": "2026-01-01",
       "inactive_on": "2026-06-01",
       "created_at": 1700000000
+    }
+  ],
+  "member_tiers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 2,
+      "effective_from": "2026-01",
+      "correction": 0,
+      "created_at": 1700000010
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 1,
+      "effective_from": "2026-01",
+      "correction": 1,
+      "created_at": 1700000011
+    },
+    {
+      "id": 3,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 2,
+      "effective_from": "2026-04",
+      "correction": 0,
+      "created_at": 1700000012
     }
   ],
   "transfers": [
@@ -119,6 +182,28 @@
       "corrects_transaction_id": null,
       "reason": "roll",
       "created_at": 1700000320
+    }
+  ],
+  "dues_payments": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "created_at": 1700000100
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "created_at": 1700000110
+    }
+  ],
+  "dues_waivers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "member_id": 1,
+      "dues_period": "2026-09",
+      "note": "Rumah kebakaran",
+      "created_at": 1700000120
     }
   ],
   "reimbursements": [
@@ -148,6 +233,7 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000000
@@ -165,12 +251,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000001
     },
     {
-      "id": 13,
+      "id": 15,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -182,6 +269,7 @@
       "dues_period": null,
       "reimbursement_id": 1,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000401
@@ -199,12 +287,13 @@
       "dues_period": "2026-01",
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": 1,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000100
     },
     {
-      "id": 4,
+      "id": 6,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -216,12 +305,49 @@
       "dues_period": "2026-01",
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": 3,
       "note": null,
       "created_at": 1700000101
     },
     {
+      "id": 4,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 50000,
+      "occurred_on": "2026-01-12",
+      "kind": "dues",
+      "member_id": 1,
+      "dues_period": "2026-02",
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "dues_payment_id": 2,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000110
+    },
+    {
       "id": 5,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 50000,
+      "occurred_on": "2026-01-12",
+      "kind": "dues",
+      "member_id": 1,
+      "dues_period": "2026-03",
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "dues_payment_id": 2,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000111
+    },
+    {
+      "id": 7,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 3,
@@ -233,12 +359,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000200
     },
     {
-      "id": 6,
+      "id": 8,
       "fund_id": 1,
       "account_id": 2,
       "purpose_id": 2,
@@ -250,12 +377,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": null,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000201
     },
     {
-      "id": 7,
+      "id": 9,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -267,12 +395,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 1,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000301
     },
     {
-      "id": 8,
+      "id": 10,
       "fund_id": 1,
       "account_id": 2,
       "purpose_id": 1,
@@ -284,12 +413,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 1,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000302
     },
     {
-      "id": 9,
+      "id": 11,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -301,12 +431,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 2,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000311
     },
     {
-      "id": 10,
+      "id": 12,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 3,
@@ -318,12 +449,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 2,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000312
     },
     {
-      "id": 11,
+      "id": 13,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 3,
@@ -335,12 +467,13 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 3,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000321
     },
     {
-      "id": 12,
+      "id": 14,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -352,9 +485,46 @@
       "dues_period": null,
       "reimbursement_id": null,
       "transfer_id": 3,
+      "dues_payment_id": null,
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000322
+    },
+    {
+      "id": 16,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "normal",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "dues_payment_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000402
+    },
+    {
+      "id": 17,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "adjustment",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "dues_payment_id": null,
+      "reverses_transaction_id": 16,
+      "note": null,
+      "created_at": 1700000403
     }
   ],
   "receipts": [
@@ -423,13 +593,13 @@
     "funds": [
       {
         "fund_id": 1,
-        "balance": 1585000
+        "balance": 1685000
       }
     ],
     "accounts": [
       {
         "account_id": 1,
-        "balance": 410000
+        "balance": 510000
       },
       {
         "account_id": 2,
@@ -439,7 +609,7 @@
     "purposes": [
       {
         "purpose_id": 1,
-        "balance": 1470000
+        "balance": 1570000
       },
       {
         "purpose_id": 2,
