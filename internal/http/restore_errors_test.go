@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kerti/uruni/internal/backup"
@@ -298,52 +299,57 @@ func TestRestoreInspectRefusesADocumentPastItsCap(t *testing.T) {
 }
 
 // An inspected upload nobody confirms is removed by its own timer (#531),
-// without waiting for a later inspect or confirm to notice it.
+// without waiting for a later inspect or confirm to notice it. The bubble's
+// fake clock runs the real TTL and the real time.AfterFunc sweep.
 func TestAnAbandonedRestoreStageIsSweptOnItsTimer(t *testing.T) {
 	t.Parallel()
-	path := createRestoreStagingTempOrFatal(t, t.TempDir())
+	synctest.Test(t, func(t *testing.T) {
+		path := createRestoreStagingTempOrFatal(t, t.TempDir())
 
-	s := newRestoreStage()
-	s.ttl = 20 * time.Millisecond
-	token, err := s.stage(backup.ParsedUpload{StagingPath: path})
-	if err != nil {
-		t.Fatalf("stage() = %v, want no error", err)
-	}
+		s := newRestoreStage()
+		token, err := s.stage(backup.ParsedUpload{StagingPath: path})
+		if err != nil {
+			t.Fatalf("stage() = %v, want no error", err)
+		}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			break
+		time.Sleep(restoreStageTTL - time.Second)
+		synctest.Wait()
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("stat(staged file) before its TTL = %v, want it still there", err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("the abandoned stage's file is still on disk 5s after its 20ms lifetime")
+
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat(staged file) after its TTL = %v, want it removed by the sweep", err)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if _, ok := s.take(token); ok {
-		t.Error("take() after the sweep = ok, want the stage gone")
-	}
+		if _, ok := s.take(token); ok {
+			t.Error("take() after the sweep = ok, want the stage gone")
+		}
+	})
 }
 
 // A stage confirm has taken belongs to confirm; its timer firing later must
 // not remove the file confirm is still reading.
 func TestTheSweepLeavesATakenStageAlone(t *testing.T) {
 	t.Parallel()
-	path := createRestoreStagingTempOrFatal(t, t.TempDir())
+	synctest.Test(t, func(t *testing.T) {
+		path := createRestoreStagingTempOrFatal(t, t.TempDir())
 
-	s := newRestoreStage()
-	s.ttl = 20 * time.Millisecond
-	token, err := s.stage(backup.ParsedUpload{StagingPath: path})
-	if err != nil {
-		t.Fatalf("stage() = %v, want no error", err)
-	}
-	if _, ok := s.take(token); !ok {
-		t.Fatal("take() = not ok, want the stage")
-	}
-	// The stopped timer is one guard; expire's token check is the other.
-	s.expire(token)
-	time.Sleep(60 * time.Millisecond)
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("stat(taken file) = %v, want it untouched", err)
-	}
+		s := newRestoreStage()
+		token, err := s.stage(backup.ParsedUpload{StagingPath: path})
+		if err != nil {
+			t.Fatalf("stage() = %v, want no error", err)
+		}
+		if _, ok := s.take(token); !ok {
+			t.Fatal("take() = not ok, want the stage")
+		}
+		// The stopped timer is one guard; expire's token check is the other.
+		s.expire(token)
+		time.Sleep(restoreStageTTL + time.Second)
+		synctest.Wait()
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("stat(taken file) = %v, want it untouched", err)
+		}
+	})
 }
