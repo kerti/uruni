@@ -268,9 +268,9 @@ type closeIncidentalResponse struct {
 // Ledger.CloseIncidentalAndRoll. A second close is
 // ErrIncidentalAlreadyClosed, a named 409.
 //
-// The response is built from a fresh read after the write, as
-// settleReimbursement does: CloseIncidentalAndRoll returns only the rolled
-// amount, so the closed row (closed_on set) is re-fetched through a.queries.
+// The response is the closed row CloseIncidentalAndRoll returns from inside
+// its own transaction, never a read after the commit: once the roll has
+// posted, a failed re-read would answer 500 for a close that happened (#873).
 func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {
@@ -287,20 +287,12 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rolled, err := a.ledger.CloseIncidentalAndRoll(r.Context(), ledger.CloseIncidentalAndRollParams{
+	closed, rolled, err := a.ledger.CloseIncidentalAndRoll(r.Context(), ledger.CloseIncidentalAndRollParams{
 		FundID:    fund.ID,
 		PurposeID: purposeID,
 		AccountID: req.AccountID,
 		ClosedOn:  req.ClosedOn,
 		Note:      req.Note,
-	})
-	if err != nil {
-		writeError(w, a.log(r), err)
-		return
-	}
-
-	closed, err := a.queries.GetIncidental(r.Context(), store.GetIncidentalParams{
-		PurposeID: purposeID, FundID: fund.ID,
 	})
 	if err != nil {
 		writeError(w, a.log(r), err)

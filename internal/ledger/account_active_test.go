@@ -242,7 +242,7 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 			return err
 		}},
 		{"close an envelope holding a leftover", nil, func(w retiredWorld) error {
-			_, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+			_, _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 				FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.bankID, ClosedOn: "2026-09-10",
 			})
 			return err
@@ -257,7 +257,7 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 				t.Fatalf("overspending the envelope = %v, want no error", err)
 			}
 		}, func(w retiredWorld) error {
-			_, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+			_, _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 				FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.bankID, ClosedOn: "2026-09-10",
 			})
 			return err
@@ -305,7 +305,7 @@ func TestPostingsStillAcceptActiveLocationsBesideARetiredOne(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PostTransferBetweenAccounts(active to active) = %v, want no error", err)
 	}
-	if _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.cashID, ClosedOn: "2026-09-10",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll(active cash) = %v, want no error", err)
@@ -411,7 +411,7 @@ func TestClosingAnEnvelopeWithNothingToRollIgnoresARetiredAccount(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("spending the envelope = %v, want no error", err)
 	}
-	rolled, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.bankID, ClosedOn: "2026-09-10",
 	})
 	if err != nil {

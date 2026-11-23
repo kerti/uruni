@@ -72,7 +72,7 @@ func newEnvelopeScenario(t *testing.T) envelopeScenario {
 			t.Fatalf("OpenIncidental(%s) = %v", occasion, err)
 		}
 		give(e.PurposeID, ani, gift, opened)
-		if _, err := f.l.CloseIncidentalAndRoll(ctx, ledger.CloseIncidentalAndRollParams{
+		if _, _, err := f.l.CloseIncidentalAndRoll(ctx, ledger.CloseIncidentalAndRollParams{
 			FundID: f.fund.ID, PurposeID: e.PurposeID, AccountID: f.cashID, ClosedOn: closed,
 		}); err != nil {
 			t.Fatalf("CloseIncidentalAndRoll(%s) = %v", occasion, err)

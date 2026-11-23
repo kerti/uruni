@@ -107,7 +107,7 @@ var datePaths = []datePath{
 	}},
 	{"CloseIncidentalAndRoll closed_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		env := openTestIncidental(t, l, f.fundID, "Kurban", "2026-01-02")
-		_, err := l.at(now).CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
+		_, _, err := l.at(now).CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
 			FundID: f.fundID, PurposeID: env.PurposeID, AccountID: f.cashID, ClosedOn: date,
 		})
 		return err

@@ -367,7 +367,7 @@ func TestSetIncidentalParticipationCorrectsTheTarget(t *testing.T) {
 		t.Errorf("transactions = %d after raising the target, want %d - a target posts nothing", after, rowsBefore)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

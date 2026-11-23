@@ -406,7 +406,7 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 		other := openTestIncidental(t, w.l, w.f.fundID, "Arisan", "2026-08-01")
 		closeEnvelope := func(id int64) {
 			t.Helper()
-			if _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{FundID: w.f.fundID, PurposeID: id, AccountID: w.f.cashID, ClosedOn: "2026-08-20"}); err != nil {
+			if _, _, err := w.l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{FundID: w.f.fundID, PurposeID: id, AccountID: w.f.cashID, ClosedOn: "2026-08-20"}); err != nil {
 				t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
 			}
 		}

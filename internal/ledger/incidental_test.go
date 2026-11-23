@@ -329,7 +329,7 @@ func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
 	ctx := context.Background()
 
 	envelope := openTestIncidental(t, l, f.fundID, "Halal bihalal RT", "2026-08-01")
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -449,7 +449,7 @@ func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 		t.Fatalf("PurposeBalance(main) before = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	returned, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	})
 	if err != nil {
@@ -490,6 +490,11 @@ func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 	if closed.ClosedOn == nil || *closed.ClosedOn != "2026-08-20" {
 		t.Errorf("ClosedOn = %v, want \"2026-08-20\" - set in the same call that posted the roll", closed.ClosedOn)
 	}
+	// The returned envelope is the stored one, closed_on included (#873): the
+	// close route answers with it and reads nothing after the commit.
+	if !reflect.DeepEqual(returned, closed) {
+		t.Errorf("CloseIncidentalAndRoll() envelope = %+v, want the stored row %+v", returned, closed)
+	}
 }
 
 // A zero leftover closes the envelope and posts nothing: not an error, and
@@ -521,7 +526,7 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 		t.Fatalf("ListTransactionsByFund() before = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	returned, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	})
 	if err != nil {
@@ -545,6 +550,11 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 	}
 	if closed.ClosedOn == nil || *closed.ClosedOn != "2026-08-20" {
 		t.Errorf("ClosedOn = %v, want \"2026-08-20\"", closed.ClosedOn)
+	}
+	// The returned envelope is the stored one, closed_on included (#873): the
+	// close route answers with it and reads nothing after the commit.
+	if !reflect.DeepEqual(returned, closed) {
+		t.Errorf("CloseIncidentalAndRoll() envelope = %+v, want the stored row %+v", returned, closed)
 	}
 }
 
@@ -585,7 +595,7 @@ func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testin
 		t.Fatalf("PurposeBalance(main) before = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	returned, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	})
 	if err != nil {
@@ -626,6 +636,11 @@ func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testin
 	if closed.ClosedOn == nil || *closed.ClosedOn != "2026-08-20" {
 		t.Errorf("ClosedOn = %v, want \"2026-08-20\"", closed.ClosedOn)
 	}
+	// The returned envelope is the stored one, closed_on included (#873): the
+	// close route answers with it and reads nothing after the commit.
+	if !reflect.DeepEqual(returned, closed) {
+		t.Errorf("CloseIncidentalAndRoll() envelope = %+v, want the stored row %+v", returned, closed)
+	}
 }
 
 // A second call on an already-closed envelope is refused with the named
@@ -646,7 +661,7 @@ func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 		t.Fatalf("PostTransaction(in) = %v, want no error", err)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	}); err != nil {
 		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
@@ -657,7 +672,7 @@ func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 		t.Fatalf("ListTransactionsByFund() before second call = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-21",
 	})
 	if !errors.Is(err, ErrIncidentalAlreadyClosed) {
@@ -717,7 +732,7 @@ func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
 		t.Fatalf("ListTransactionsByFund() before = %v, want no error", err)
 	}
 
-	_, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, _, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: otherAccount, ClosedOn: "2026-08-20",
 	})
 	if err == nil {
@@ -752,7 +767,7 @@ func TestCloseIncidentalAndRollRejectsInvalidClosedOn(t *testing.T) {
 
 	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
 
-	_, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-02-30",
 	})
 	if !errors.Is(err, ErrInvalidArgument) {
@@ -825,7 +840,7 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
 	}
 
-	_, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, _, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-13",
 	})
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -861,7 +876,7 @@ func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
 	}
 
 	note := "Sisa dana digulung ke kas utama"
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID,
 		ClosedOn: "2026-08-20", Note: &note,
 	}); err != nil {
@@ -903,7 +918,7 @@ func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
 		t.Fatalf("PostTransaction(in) = %v, want no error", err)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -948,7 +963,7 @@ func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testin
 		t.Fatalf("PostTransaction(out) = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	})
 	if err != nil {
@@ -1055,7 +1070,7 @@ func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testi
 		t.Fatalf("PostTransaction(out) = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	})
 	if err != nil {
@@ -1204,7 +1219,7 @@ func TestReopenIncidentalClearsClosedOn(t *testing.T) {
 	ctx := context.Background()
 
 	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -1266,7 +1281,7 @@ func TestReopenIncidentalIsFundScoped(t *testing.T) {
 		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
 	}
 	otherAccount := createAccount(t, q, other.ID, "cash", "Other Fund's Cash")
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: other.ID, PurposeID: envelope.PurposeID, AccountID: otherAccount, ClosedOn: "2026-08-13",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll(fund 2) = %v, want no error", err)
@@ -1298,7 +1313,7 @@ func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance
 	}); err != nil {
 		t.Fatalf("PostTransaction(in) = %v, want no error", err)
 	}
-	if rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
@@ -1320,7 +1335,7 @@ func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance
 		t.Fatalf("PostTransaction(late in) = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-26",
 	})
 	if err != nil {
@@ -1356,7 +1371,7 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 	}); err != nil {
 		t.Fatalf("PostTransaction(in) = %v, want no error", err)
 	}
-	if rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
@@ -1377,7 +1392,7 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 		t.Fatalf("PostTransaction(late out) = %v, want no error", err)
 	}
 
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-26",
 	})
 	if err != nil {
@@ -1413,7 +1428,7 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PostTransaction(in) = %v, want no error", err)
 	}
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
@@ -1424,7 +1439,7 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
 		t.Fatalf("first ReopenIncidental() = %v, want no error", err)
 	}
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-11",
 	})
 	if err != nil {
@@ -1449,7 +1464,7 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PostTransaction(late in) = %v, want no error", err)
 	}
-	rolled, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-16",
 	})
 	if err != nil {
@@ -1487,7 +1502,7 @@ func TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed
 		t.Errorf("open Balance = %d, want 60000", detail.Balance)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

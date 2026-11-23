@@ -292,16 +292,24 @@ type CloseIncidentalAndRollParams struct {
 //
 // Every outcome leaves PurposeBalance(purposeID) at exactly zero, the
 // invariant ADR-031 makes testable in place of ADR-027's sign-dependent rule.
-func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (money.Amount, error) {
+//
+// On success it also returns the envelope as the close left it (closed_on
+// set), read inside the same transaction, so a caller answering with the
+// closed row needs no read after the commit that could fail once the money
+// has moved (#873).
+func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (store.Incidental, money.Amount, error) {
 	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
-		return 0, err
+		return store.Incidental{}, 0, err
 	}
 	if err := validateOccurredOn("closed_on", p.ClosedOn, window.entry()); err != nil {
-		return 0, err
+		return store.Incidental{}, 0, err
 	}
 
-	var rolled money.Amount
+	var (
+		closed store.Incidental
+		rolled money.Amount
+	)
 	reason := reasonRoll
 	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		envelope, err := q.GetIncidental(ctx, store.GetIncidentalParams{
@@ -385,17 +393,18 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 		}
 
 		closedOn := p.ClosedOn
-		if _, err := q.CloseIncidental(ctx, store.CloseIncidentalParams{
+		closed, err = q.CloseIncidental(ctx, store.CloseIncidentalParams{
 			ClosedOn: &closedOn, PurposeID: p.PurposeID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("closing incidental: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return store.Incidental{}, 0, err
 	}
-	return rolled, nil
+	return closed, rolled, nil
 }
 
 // IncidentalRecipient names one member an envelope is for (ADR-034), never

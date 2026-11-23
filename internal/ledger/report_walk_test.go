@@ -136,7 +136,7 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	}); err != nil {
 		t.Fatalf("PostPurposeMove() = %v, want no error", err)
 	}
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: fundID, PurposeID: sunatan.PurposeID, AccountID: cashID, ClosedOn: "2026-08-28",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

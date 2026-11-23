@@ -583,7 +583,7 @@ func TestReverseDuesPaymentRefusesAClosedEnvelope(t *testing.T) {
 		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

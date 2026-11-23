@@ -181,7 +181,7 @@ func faultyReportFixtureWithClosed(t *testing.T) (*Ledger, int64, int64) {
 		t.Fatalf("CreateReconciliation() = %v, want no error", err)
 	}
 	closed := openTestIncidental(t, l, s.f.fundID, "Closed Collection", "2026-09-02")
-	if _, err := l.CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
 		FundID: s.f.fundID, PurposeID: closed.PurposeID, AccountID: s.f.cashID, ClosedOn: "2026-09-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

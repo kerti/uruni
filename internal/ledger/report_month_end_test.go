@@ -44,7 +44,7 @@ func newMonthEndScenario(t *testing.T, l *Ledger) monthEndScenario {
 	}); err != nil {
 		t.Fatalf("PostTransaction(late contribution) = %v, want no error", err)
 	}
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: s.envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-09-05",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -283,7 +283,7 @@ func TestMonthlyReportLastDayBoundaries(t *testing.T) {
 	// already closed.
 	closedLastDay := openTestIncidental(t, l, f.fundID, "Closed last day", "2026-08-01")
 	contribute(closedLastDay.PurposeID, 10_000, "2026-08-05")
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: closedLastDay.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-31",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

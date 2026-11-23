@@ -30,7 +30,7 @@ func closedEnvelopeWithClaim(t *testing.T, l *Ledger, f fixture) (envelopePurpos
 	if err != nil {
 		t.Fatalf("CreateReimbursement() = %v, want no error", err)
 	}
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -65,7 +65,7 @@ func TestCloseIncidentalAndRollRefusesAnOutstandingClaimUntilSettledOrWaived(t *
 			closeParams := CloseIncidentalAndRollParams{
 				FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 			}
-			if _, err := l.CloseIncidentalAndRoll(ctx, closeParams); !errors.Is(err, ErrIncidentalHasOutstandingReimbursement) {
+			if _, _, err := l.CloseIncidentalAndRoll(ctx, closeParams); !errors.Is(err, ErrIncidentalHasOutstandingReimbursement) {
 				t.Fatalf("CloseIncidentalAndRoll() with an open claim = %v, want ErrIncidentalHasOutstandingReimbursement", err)
 			}
 			got, err := store.New(l.db).GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
@@ -91,7 +91,7 @@ func TestCloseIncidentalAndRollRefusesAnOutstandingClaimUntilSettledOrWaived(t *
 					t.Fatalf("UpdateReimbursement(waive) = %v, want no error", err)
 				}
 			}
-			if _, err := l.CloseIncidentalAndRoll(ctx, closeParams); err != nil {
+			if _, _, err := l.CloseIncidentalAndRoll(ctx, closeParams); err != nil {
 				t.Fatalf("CloseIncidentalAndRoll() once the claim is %s = %v, want no error", way, err)
 			}
 		})

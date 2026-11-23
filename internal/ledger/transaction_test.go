@@ -220,7 +220,7 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 			ctx := context.Background()
 
 			envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
-			if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+			if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 				FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 			}); err != nil {
 				t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -362,7 +362,7 @@ func TestPostTransactionRefusesANamedContributionToAClosedEnvelope(t *testing.T)
 	ctx := context.Background()
 
 	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

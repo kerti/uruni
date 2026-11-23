@@ -256,7 +256,7 @@ func newRichFund(t *testing.T) richFund {
 	post(f.cashID, r.envelope, "out", 20_000, false)
 	r.closedEnv = open("Arisan")
 	post(f.bankID, r.closedEnv, "in", 60_000, false)
-	if _, err := l.at(richNow).CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.at(richNow).CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: r.closedEnv, AccountID: f.bankID, ClosedOn: richOccurred,
 	}); err != nil {
 		t.Fatal(err)
