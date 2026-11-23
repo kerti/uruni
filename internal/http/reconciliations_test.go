@@ -531,8 +531,8 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 }
 
 // TestTakeReconciliationRejectsAnotherFundsAccount: a cross-fund account_id
-// trips reconciliation_line's composite foreign key, which mapLedgerError
-// routes through mapSQLiteError as a 400 (#103), not the 500 ADR-027's
+// trips reconciliation_line's composite foreign key, which writeError
+// answers as a 400 (#103), not the 500 ADR-027's
 // "domain bug" language suggests. No pre-check for what the schema refuses.
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	t.Parallel()

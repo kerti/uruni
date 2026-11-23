@@ -361,7 +361,7 @@ func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
 }
 
 // TestPostPurposeCorrectionRefusesANamedContribution: its own 409, distinct
-// from the dues one, the shape mapLedgerError uses for every
+// from the dues one, the shape writeError uses for every
 // PostPurposeCorrection refusal.
 func TestPostPurposeCorrectionRefusesANamedContribution(t *testing.T) {
 	t.Parallel()

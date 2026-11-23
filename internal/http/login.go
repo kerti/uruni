@@ -111,7 +111,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		} else {
 			held.release()
 		}
-		mapAuthError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

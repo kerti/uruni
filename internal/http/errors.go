@@ -95,13 +95,16 @@ func answeredClientGone(w http.ResponseWriter, logger *slog.Logger, err error) b
 	return true
 }
 
-// mapLedgerError answers an error from an internal/ledger call, per ADR-027's
-// sentinel taxonomy. Every ledger-calling route shares this one function.
+// writeError answers any error a handler cannot answer itself: one entry point
+// for errors from internal/ledger, internal/auth and direct store.Queries
+// calls alike (#875). The caller does not pick a mapper by the package its
+// error came from; the error types never overlap, so their order here is a
+// matter of precedence, not of guessing the source.
 //
-// A ledger.Error says its own wire code, message and class, so a new refusal
-// needs nothing here. What follows it are the failures that are not ledger
-// domain errors: a numeric overflow, a missing row, a raw driver error.
-func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
+// The order: the client gone, a ledger.Error (ADR-027: it says its own wire
+// code, message and class, so a new refusal needs nothing here), an auth
+// sentinel, a numeric overflow, a missing row, a SQLite result code, and a 500.
+func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	if answeredClientGone(w, logger, err) {
 		return
 	}
@@ -116,44 +119,36 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIFieldError(w, ledgerStatus(refusal.Class()), refusal.Code(), invalidFieldOf(err), refusal.Message())
 		return
 	}
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		// A ledger method that fetches the row it is about before writing
-		// (SettleReimbursement's GetReimbursement) wraps the driver's sql.ErrNoRows
-		// when the id names nothing. That is a 404 for the reason a ledger NotFound
-		// is: the id came from the path. Without this case it reaches the default
-		// and answers 500 for a wrong id (#69).
-		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
-	case errors.Is(err, money.ErrOverflow):
-		// err's message embeds the operands that overflowed - the amounts - which
-		// ADR-022 forbids logging. Other unrecognized errors reaching the default
-		// wrap an id, not an amount (ADR-027), so only this case withholds the message.
-		logger.Error("unhandled ledger error", "kind", "overflow")
-		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
-	default:
-		// A constraint the caller's input tripped, not a domain bug. ADR-027 sent
-		// every schema violation from the ledger to a 500, on the premise that the
-		// ids arrive from earlier Querier calls the domain made. UpdateReimbursement
-		// (#103) broke that: a PATCH body carries member_id and purpose_id from the
-		// client, so a FOREIGN KEY violation is a typo and a 500 would blame the
-		// server. Classification is mapSQLiteError's; only which errors reach it is
-		// new (ADR-027's Amendments).
-		var sqliteErr *sqlite.Error
-		if errors.As(err, &sqliteErr) {
-			mapSQLiteError(w, logger, err)
-			return
-		}
-		logger.Error("unhandled ledger error", "error", err)
-		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
-	}
-}
-
-// mapAuthError answers an error from an internal/auth call, per its sentinel
-// taxonomy, one switch per domain package like mapLedgerError.
-func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
-	if answeredClientGone(w, logger, err) {
+	if answeredAuthError(w, err) {
 		return
 	}
+	if errors.Is(err, money.ErrOverflow) {
+		// err's message embeds the operands that overflowed - the amounts - which
+		// ADR-022 forbids logging. Other unrecognized errors reaching the end wrap
+		// an id, not an amount (ADR-027), so only this case withholds the message.
+		// Checked for every route, not only ledger ones: wherever an overflow
+		// surfaces, its amounts stay out of the log.
+		logger.Error("unhandled error", "kind", "overflow")
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		// A direct-CRUD lookup by a path id, or a ledger method that fetches the row
+		// it is about before writing (SettleReimbursement's GetReimbursement) and
+		// wraps the driver's sql.ErrNoRows: a 404 either way, since the id came from
+		// the path. Without this case it answered 500 for a wrong id (#69).
+		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+		return
+	}
+	if answeredSQLiteError(w, err) {
+		return
+	}
+	logger.Error("unhandled error", "error", err)
+	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+}
+
+// answeredAuthError answers internal/auth's sentinels, or reports false.
+func answeredAuthError(w http.ResponseWriter, err error) bool {
 	switch {
 	case errors.Is(err, auth.ErrPasswordTooCommon):
 		// Before ErrInvalidArgument, which it wraps: the SPA has its own sentence
@@ -184,46 +179,38 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		w.Header().Set("Retry-After", "1")
 		writeAPIError(w, http.StatusServiceUnavailable, "server_busy", "The server is busy. Try again in a moment.")
 	default:
-		logger.Error("unhandled auth error", "error", err)
-		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return false
 	}
+	return true
 }
 
-// mapSQLiteError answers an error from a direct-CRUD route, one calling
-// store.Queries rather than internal/ledger, so none of ADR-027's sentinels
-// apply. It reads the driver's result code.
+// answeredSQLiteError answers a constraint the caller's input tripped, read
+// from the driver's result code, or reports false. It serves direct-CRUD
+// routes (ADR-027 permits them) and ledger methods alike: UpdateReimbursement
+// (#103) takes member_id and purpose_id from a PATCH body, so a FOREIGN KEY
+// violation there is a typo, not the server's fault (ADR-027's Amendments).
 //
 // errors.As against *sqlite.Error and Code() against the modernc.org/sqlite/lib
 // constants, never a string match: the message is not stable across driver
 // releases, the extended result code is.
-func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
-	if answeredClientGone(w, logger, err) {
-		return
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
-		return
-	}
-
+func answeredSQLiteError(w http.ResponseWriter, err error) bool {
 	var sqliteErr *sqlite.Error
-	if errors.As(err, &sqliteErr) {
-		switch sqliteErr.Code() {
-		case sqlite3.SQLITE_CONSTRAINT_CHECK:
-			writeAPIError(w, http.StatusBadRequest, "check_violation", "The request violates a data constraint.")
-			return
-		case sqlite3.SQLITE_CONSTRAINT_UNIQUE:
-			writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
-			return
-		case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
-			// A reference to a row that does not exist, e.g. a member's tier_id naming no
-			// dues_tier. #63's foreign_keys=ON (internal/db) makes this reachable;
-			// without it SQLite would accept the row. 400, not 404: the id is a field on
-			// the request body, not a path segment naming the resource.
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references a record that does not exist.")
-			return
-		}
+	if !errors.As(err, &sqliteErr) {
+		return false
 	}
-
-	logger.Error("unhandled sqlite error", "error", err)
-	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+	switch sqliteErr.Code() {
+	case sqlite3.SQLITE_CONSTRAINT_CHECK:
+		writeAPIError(w, http.StatusBadRequest, "check_violation", "The request violates a data constraint.")
+	case sqlite3.SQLITE_CONSTRAINT_UNIQUE:
+		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
+	case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+		// A reference to a row that does not exist, e.g. a member's tier_id naming no
+		// dues_tier. #63's foreign_keys=ON (internal/db) makes this reachable;
+		// without it SQLite would accept the row. 400, not 404: the id is a field on
+		// the request body, not a path segment naming the resource.
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references a record that does not exist.")
+	default:
+		return false
+	}
+	return true
 }

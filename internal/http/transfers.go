@@ -75,7 +75,7 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 		Idempotency:   idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

@@ -8,7 +8,7 @@ import (
 
 // These tests cover Register's database-failure arms, which a happy-path test
 // never reaches. Each must answer a plain wrapped error, never a sentinel of
-// this package: mapAuthError routes ErrInvalidArgument to 400 and
+// this package: writeError routes ErrInvalidArgument to 400 and
 // ErrAlreadyRegistered to 409, so a database fault wearing either would tell
 // the treasurer her input was wrong when the instance is broken.
 

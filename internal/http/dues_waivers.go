@@ -55,7 +55,7 @@ func (a *api) createDuesWaivers(w http.ResponseWriter, r *http.Request) {
 		FundID: member.FundID, MemberID: member.ID, Periods: req.Periods, Note: req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (a *api) deleteDuesWaiver(w http.ResponseWriter, r *http.Request) {
 		FundID: member.FundID, MemberID: member.ID, Period: chi.URLParam(r, "period"),
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

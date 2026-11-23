@@ -14,7 +14,7 @@ import (
 // identically whether email names no account or the password does not match
 // (#115). Never wrap a more specific cause into it or return anything else on
 // a failed login: a second error value would be the account-existence oracle
-// this exists to prevent, since mapAuthError (internal/http/errors.go) turns
+// this exists to prevent, since writeError (internal/http/errors.go) turns
 // each error into its own response.
 var ErrInvalidCredentials = errors.New("auth: invalid credentials")
 
@@ -42,7 +42,7 @@ func init() {
 //
 // It answers ErrInvalidCredentials - one sentinel, no other error naming a
 // login failure - whether email matches no account or matches one whose
-// password does not verify. The cases must be indistinguishable: mapAuthError
+// password does not verify. The cases must be indistinguishable: writeError
 // turns this into POST /api/login's 401, and a response varying by cause (a
 // code, a body, or even the amount of work before answering) would let a
 // caller learn which addresses have an account here. #116's public
@@ -84,7 +84,7 @@ func (a *Auth) Authenticate(ctx context.Context, email, password string) (store.
 	if err != nil {
 		// A stored hash that doesn't parse is a corrupted row (see verifyPassword,
 		// ErrMalformedHash), not a wrong password: a plain error reaching
-		// mapAuthError's default (500), not the 401 a bad guess gets.
+		// writeError's default (500), not the 401 a bad guess gets.
 		return store.User{}, fmt.Errorf("verifying password: %w", err)
 	}
 	if !ok {

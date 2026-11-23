@@ -405,7 +405,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reservation.release()
 		}
-		mapAuthError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	a.loginLimiter.reset(ip)

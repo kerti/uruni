@@ -47,7 +47,7 @@ type changePasswordRequest struct {
 func (a *api) getUser(w http.ResponseWriter, r *http.Request) {
 	user, err := a.queries.GetUserByID(r.Context(), a.sessionManager.GetInt64(r.Context(), sessionKeyUserID))
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserResponse(user))
@@ -132,7 +132,7 @@ func (a *api) credentialChange(w http.ResponseWriter, r *http.Request, what stri
 		} else {
 			reservation.release()
 		}
-		mapAuthError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return store.User{}, false
 	}
 	a.loginLimiter.reset(network)

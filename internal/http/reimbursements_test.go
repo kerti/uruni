@@ -655,7 +655,7 @@ func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberI
 
 // TestPostReimbursementsRejectsBadInput: a non-positive amount is the
 // ledger's to refuse (invalid_argument, #473); a calendar-invalid date and a
-// member_id naming no row come back from the schema through mapSQLiteError.
+// member_id naming no row come back from the schema through writeError.
 func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -693,7 +693,7 @@ func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 	}
 }
 
-// TestPostSettlementOnAnUnknownClaimIs404 reaches mapLedgerError's
+// TestPostSettlementOnAnUnknownClaimIs404 reaches writeError's
 // sql.ErrNoRows arm: SettleReimbursement fetches the claim first, and an id
 // naming nothing is a client mistake, not a server failure.
 func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
@@ -1042,7 +1042,7 @@ func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 	}
 }
 
-// TestPatchReimbursementUnknownMemberIs400 is why mapLedgerError classifies
+// TestPatchReimbursementUnknownMemberIs400 is why writeError classifies
 // SQLite errors at all: the id comes from the request body, so a foreign-key
 // violation is the caller's typo, and a 500 would blame the wrong party.
 func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {

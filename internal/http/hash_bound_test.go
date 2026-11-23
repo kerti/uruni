@@ -394,11 +394,11 @@ func TestBusyHasherOnRegisterAnswers503AndIsNotCounted(t *testing.T) {
 	assertAPIError(t, postRegisterFrom(r, "treasurer@example.org", "correct-horse-battery", ip), http.StatusTooManyRequests, "too_many_requests")
 }
 
-// TestMapAuthErrorAnswersErrBusyWith503 pins the mapping on its own.
-func TestMapAuthErrorAnswersErrBusyWith503(t *testing.T) {
+// TestWriteErrorAuthAnswersErrBusyWith503 pins the mapping on its own.
+func TestWriteErrorAuthAnswersErrBusyWith503(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
-	mapAuthError(rec, testLogger(), fmt.Errorf("verifying: %w", auth.ErrBusy))
+	writeError(rec, testLogger(), fmt.Errorf("verifying: %w", auth.ErrBusy))
 	assertAPIError(t, rec, http.StatusServiceUnavailable, "server_busy")
 }
 

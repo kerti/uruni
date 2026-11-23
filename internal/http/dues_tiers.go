@@ -49,7 +49,7 @@ func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 
 	tier, err := a.ledger.CreateDuesTier(r.Context(), ledger.CreateDuesTierParams{FundID: fund.ID, Name: req.Name})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.RenameDuesTier(r.Context(), ledger.RenameDuesTierParams{FundID: tier.FundID, TierID: tier.ID, Name: req.Name})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -92,12 +92,12 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 
 	tiers, err := a.queries.ListDuesTiersByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	rates, err := a.queries.ListDuesRatesForPricing(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteDuesTier(r.Context(), tier.FundID, tier.ID); err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

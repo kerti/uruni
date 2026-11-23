@@ -49,7 +49,7 @@ func toDuesStatusResponse(s ledger.MemberDuesStatus, arrearsMonths int) duesStat
 // getDuesStatus is GET /api/dues-status?period=YYYY-MM: wraps
 // DuesStatusForPeriod. period is passed through unvalidated: a missing or
 // malformed value reaches validateDuesPeriod and returns as
-// ErrInvalidArgument through mapLedgerError, the single source of truth
+// ErrInvalidArgument through writeError, the single source of truth
 // (ADR-027).
 //
 // Each row's member.arrears_months is the Anggota roster's number, from the
@@ -69,7 +69,7 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 
 	statuses, err := a.ledger.DuesStatusForPeriod(r.Context(), fund.ID, r.URL.Query().Get("period"))
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	arrears, err := a.ledger.ArrearsMonthsForMembers(r.Context(), fund.ID, members, ledger.CurrentDuesPeriod(a.now(), loc))
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (a *api) getDuesStatusGrid(w http.ResponseWriter, r *http.Request) {
 
 	grid, err := a.ledger.DuesGrid(r.Context(), fund.ID, "")
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -157,12 +157,12 @@ func toOutstandingDuesResponse(p ledger.OutstandingDuesPeriod) outstandingDuesRe
 // OutstandingDuesForMember. through is the optional ?through=YYYY-MM, passed
 // through unvalidated as getDuesStatus does period: missing means the
 // server's current month (OutstandingDuesForMember decides), malformed
-// returns ErrInvalidArgument through mapLedgerError.
+// returns ErrInvalidArgument through writeError.
 //
 // {id} is parsed here, not through resolveMember: that GetMember lookup takes
 // no fund_id, so it cannot guard fund scope. GetMemberForFund inside
 // OutstandingDuesForMember does: another fund's member id reaches
-// sql.ErrNoRows, which mapLedgerError turns into 404 (ADR-029's
+// sql.ErrNoRows, which writeError turns into 404 (ADR-029's
 // GetTransactionForFund shape, for members).
 func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 	memberID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -178,7 +178,7 @@ func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 
 	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"))
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

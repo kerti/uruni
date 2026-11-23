@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,7 +60,7 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) errorBody {
 	return env.Error
 }
 
-func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
+func TestWriteErrorLedgerMapsSentinelsToStatusAndCode(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
@@ -89,7 +90,7 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			mapLedgerError(rec, testLogger(), tc.err)
+			writeError(rec, testLogger(), tc.err)
 
 			if rec.Code != tc.status {
 				t.Errorf("status = %d, want %d", rec.Code, tc.status)
@@ -120,7 +121,7 @@ func TestLedgerConstraintRefusalsKeepTheirWireMessages(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.err.Error(), func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			mapLedgerError(rec, testLogger(), fmt.Errorf("deleting account: %w", tc.err))
+			writeError(rec, testLogger(), fmt.Errorf("deleting account: %w", tc.err))
 			if got := decodeError(t, rec); got.Message != tc.message {
 				t.Errorf("message = %q, want %q", got.Message, tc.message)
 			}
@@ -128,11 +129,11 @@ func TestLedgerConstraintRefusalsKeepTheirWireMessages(t *testing.T) {
 	}
 }
 
-// TestMapAuthErrorMapsSentinelsToStatusAndCode is mapLedgerError's twin for
-// internal/auth. The unrecognized arm matters most: a database fault out of
+// TestWriteErrorAuthMapsSentinelsToStatusAndCode is the auth half of
+// writeError. The unrecognized arm matters most: a database fault out of
 // Register must read 500, never the 409 telling the treasurer an account
 // exists when none does.
-func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
+func TestWriteErrorAuthMapsSentinelsToStatusAndCode(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
@@ -149,7 +150,7 @@ func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			mapAuthError(rec, testLogger(), tc.err)
+			writeError(rec, testLogger(), tc.err)
 
 			if rec.Code != tc.status {
 				t.Errorf("status = %d, want %d", rec.Code, tc.status)
@@ -161,13 +162,13 @@ func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	}
 }
 
-// TestMapLedgerErrorMatchesAWrappedSentinel: %w-wrapped sentinels still match;
+// TestWriteErrorLedgerMatchesAWrappedSentinel: %w-wrapped sentinels still match;
 // real callers return every ADR-027 sentinel wrapped with context.
-func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
+func TestWriteErrorLedgerMatchesAWrappedSentinel(t *testing.T) {
 	t.Parallel()
 	wrapped := errors.New("posting transfer leg: " + ledger.ErrInvalidArgument.Error())
 	rec := httptest.NewRecorder()
-	mapLedgerError(rec, testLogger(), wrapped)
+	writeError(rec, testLogger(), wrapped)
 	// A plain errors.New wrapping only the text does not satisfy errors.Is: this
 	// asserts the unrecognized path, guarding against a mapper that string-matches.
 	if rec.Code != 500 {
@@ -176,13 +177,13 @@ func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
 
 	fwrapped := fmt.Errorf("checking argument shape: %w", ledger.ErrInvalidArgument)
 	rec2 := httptest.NewRecorder()
-	mapLedgerError(rec2, testLogger(), fwrapped)
+	writeError(rec2, testLogger(), fwrapped)
 	if rec2.Code != 400 {
 		t.Fatalf("status = %d, want 400 for a %%w-wrapped ErrInvalidArgument", rec2.Code)
 	}
 }
 
-func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
+func TestWriteErrorSQLiteMapsAGenuineUniqueViolation(t *testing.T) {
 	t.Parallel()
 	q := store.New(testStoreDB(t))
 	ctx := context.Background()
@@ -202,7 +203,7 @@ func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	mapSQLiteError(rec, testLogger(), err)
+	writeError(rec, testLogger(), err)
 	if rec.Code != 409 {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
@@ -212,7 +213,7 @@ func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
 	}
 }
 
-func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
+func TestWriteErrorSQLiteMapsAGenuineCheckViolation(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
@@ -234,7 +235,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	mapSQLiteError(rec, testLogger(), err)
+	writeError(rec, testLogger(), err)
 	if rec.Code != 400 {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
@@ -244,7 +245,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 	}
 }
 
-func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
+func TestWriteErrorSQLiteMapsAGenuineForeignKeyViolation(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
@@ -274,7 +275,7 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	mapSQLiteError(rec, testLogger(), err)
+	writeError(rec, testLogger(), err)
 	if rec.Code != 400 {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
@@ -284,10 +285,10 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	}
 }
 
-func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
+func TestWriteErrorSQLiteMapsNoRowsToNotFound(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
-	mapSQLiteError(rec, testLogger(), sql.ErrNoRows)
+	writeError(rec, testLogger(), sql.ErrNoRows)
 	if rec.Code != 404 {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -297,10 +298,10 @@ func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
 	}
 }
 
-func TestMapSQLiteErrorMapsAnUnrecognizedErrorTo500(t *testing.T) {
+func TestWriteErrorSQLiteMapsAnUnrecognizedErrorTo500(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
-	mapSQLiteError(rec, testLogger(), errors.New("disk full or some other unmapped failure"))
+	writeError(rec, testLogger(), errors.New("disk full or some other unmapped failure"))
 	if rec.Code != 500 {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
@@ -312,34 +313,24 @@ func TestMapSQLiteErrorMapsAnUnrecognizedErrorTo500(t *testing.T) {
 
 // #667: an error that is only the request's context being canceled is the
 // client going away, not a server fault - 499 and an INFO line, never a 500
-// and an ERROR, from every general fallback. A deadline stays the server's.
-func TestMapErrorsAnswerACanceledRequestWith499AndNoErrorLine(t *testing.T) {
+// and an ERROR, whatever produced it. A deadline stays the server's.
+func TestWriteErrorAnswerACanceledRequestWith499AndNoErrorLine(t *testing.T) {
 	t.Parallel()
 	canceled := fmt.Errorf("listing rates: %w", context.Canceled)
-	mappers := map[string]func(http.ResponseWriter, *slog.Logger, error){
-		"mapLedgerError": mapLedgerError,
-		"mapAuthError":   mapAuthError,
-		"mapSQLiteError": mapSQLiteError,
+	var logs bytes.Buffer
+	rec := httptest.NewRecorder()
+	writeError(rec, slog.New(slog.NewTextHandler(&logs, nil)), canceled)
+	if rec.Code != statusClientClosedRequest {
+		t.Errorf("status = %d, want %d", rec.Code, statusClientClosedRequest)
 	}
-	for name, mapErr := range mappers {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			var logs bytes.Buffer
-			rec := httptest.NewRecorder()
-			mapErr(rec, slog.New(slog.NewTextHandler(&logs, nil)), canceled)
-			if rec.Code != statusClientClosedRequest {
-				t.Errorf("status = %d, want %d", rec.Code, statusClientClosedRequest)
-			}
-			if strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "level=INFO") {
-				t.Errorf("log = %q, want one INFO line and no ERROR", logs.String())
-			}
-		})
+	if strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "level=INFO") {
+		t.Errorf("log = %q, want one INFO line and no ERROR", logs.String())
 	}
 
 	t.Run("a deadline is still a 500", func(t *testing.T) {
 		t.Parallel()
 		rec := httptest.NewRecorder()
-		mapSQLiteError(rec, testLogger(), fmt.Errorf("listing rates: %w", context.DeadlineExceeded))
+		writeError(rec, testLogger(), fmt.Errorf("listing rates: %w", context.DeadlineExceeded))
 		if rec.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want 500", rec.Code)
 		}
@@ -427,5 +418,41 @@ func TestEveryLedgerErrorKeepsItsWireStatusAndCode(t *testing.T) {
 		if got := (answer{ledgerStatus(e.Class()), e.Code()}); got != w {
 			t.Errorf("%q answers %d %s, want %d %s", e.Error(), got.status, got.code, w.status, w.code)
 		}
+	}
+}
+
+// TestWriteErrorWithholdsAnOverflowsAmounts: money.ErrOverflow's message
+// carries the operands, which ADR-022 keeps out of the log. Before #875 only
+// the ledger mapper withheld them; now there is one mapper, so an overflow
+// reaching it from any route shape - a ledger call, a direct store read, one
+// wrapped around a driver error - logs its kind and never its amounts.
+func TestWriteErrorWithholdsAnOverflowsAmounts(t *testing.T) {
+	t.Parallel()
+	const operand = 9_000_000_000_000_000 // well clear of any id in the wrappers
+	_, overflow := money.Amount(math.MaxInt64 - operand + 1).Add(operand)
+	if !errors.Is(overflow, money.ErrOverflow) {
+		t.Fatalf("Add did not overflow: %v", overflow)
+	}
+	shapes := map[string]error{
+		"bare":                overflow,
+		"wrapped by a ledger": fmt.Errorf("posting transaction: %w", overflow),
+		"wrapped by a query":  fmt.Errorf("summing account 7: %w", overflow),
+	}
+	for name, err := range shapes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var logs bytes.Buffer
+			rec := httptest.NewRecorder()
+			writeError(rec, slog.New(slog.NewTextHandler(&logs, nil)), err)
+			if rec.Code != http.StatusInternalServerError {
+				t.Errorf("status = %d, want 500", rec.Code)
+			}
+			if !strings.Contains(logs.String(), "kind=overflow") {
+				t.Errorf("log = %q, want kind=overflow", logs.String())
+			}
+			if strings.Contains(logs.String(), fmt.Sprint(operand)) || strings.Contains(rec.Body.String(), fmt.Sprint(operand)) {
+				t.Errorf("an operand reached the log or the body: log %q, body %q", logs.String(), rec.Body.String())
+			}
+		})
 	}
 }

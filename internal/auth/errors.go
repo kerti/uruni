@@ -29,7 +29,7 @@ func (e *FieldError) InvalidField() string { return e.Field }
 // ErrPasswordTooCommon is returned wherever a new password enters (Register,
 // SetLogin, the account change) when it is on the embedded common-passwords
 // list (#528). It wraps ErrInvalidArgument, so a caller that only cares that the
-// input was refused still matches that; mapAuthError checks this one first to
+// input was refused still matches that; writeError checks this one first to
 // give it its own wire code.
 var ErrPasswordTooCommon = fmt.Errorf("%w: password is too common", ErrInvalidArgument)
 
@@ -52,7 +52,7 @@ var ErrBusy = errors.New("auth: password hashing is busy")
 // ErrWrongCurrentPassword is returned by ChangeEmail and ChangePassword when
 // the current password they were given does not verify. Its own sentinel, not
 // ErrInvalidCredentials: that one is Authenticate's single no-oracle answer for
-// a login, and mapAuthError turns it into the login's 401. Here the caller
+// a login, and writeError turns it into the login's 401. Here the caller
 // already holds a session, so naming the failure leaks nothing, and the SPA
 // has its own sentence for it.
 var ErrWrongCurrentPassword = errors.New("auth: wrong current password")

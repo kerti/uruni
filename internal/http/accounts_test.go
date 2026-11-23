@@ -650,7 +650,7 @@ func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
 }
 
 // Deliberately not covered, following TestGetBalancesOnADeadDatabaseIs500: the
-// mapSQLiteError/mapLedgerError branches in listAccounts and createAccount's
+// writeError branches in listAccounts and createAccount's
 // resolveFund call fire only when a store read fails, and #116's session gate
 // reads the store first, so on a closed database the gate answers the same 500
 // and the handler never runs. They stay as defensive code rather than gain an
@@ -682,7 +682,7 @@ func TestPatchAccountChangesTheKind(t *testing.T) {
 }
 
 // The set of kinds is the schema's CHECK to police (ADR-027): 400 through
-// mapSQLiteError.
+// writeError.
 func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
