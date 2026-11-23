@@ -59,7 +59,7 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, auth.ErrInvalidArgument) && !errors.Is(err, auth.ErrAlreadyRegistered) {
 			reservation.release()
 		}
-		mapAuthError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

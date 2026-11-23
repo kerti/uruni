@@ -199,13 +199,13 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 		Idempotency: idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
 	detail, err := a.ledger.GetReconciliationDetail(r.Context(), fund.ID, rec.ID)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -264,7 +264,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListReconciliationsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -299,7 +299,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 // such row yet" route uses (GET /api/fund before setup, GET
 // /api/incidentals/{id} on an unknown id), not an empty 200, which would make
 // the caller tell "no snapshot yet" from "no lines" by shape. LatestReconciliation's
-// sql.ErrNoRows already gives 404 through mapSQLiteError.
+// sql.ErrNoRows already gives 404 through writeError.
 func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -308,7 +308,7 @@ func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	rec, err := a.queries.LatestReconciliation(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -316,7 +316,7 @@ func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 		FundID: fund.ID, AfterID: rec.ThroughTransactionID, ReconciliationID: rec.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -341,7 +341,7 @@ func (a *api) getReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	detail, err := a.ledger.GetReconciliationDetail(r.Context(), fund.ID, id)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -369,7 +369,7 @@ func (a *api) listOpenReconciliationLines(w http.ResponseWriter, r *http.Request
 
 	lines, err := a.queries.ListOpenReconciliationLinesByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

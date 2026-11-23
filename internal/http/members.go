@@ -95,7 +95,7 @@ func toMemberListResponse(m store.ListMembersPageRow, arrearsMonths int) memberR
 // createMember is POST /api/members: Ledger.CreateMember writes the member and,
 // when a tier is given, its first member_tier row (ADR-040). Validation is
 // JSON-shape only: an empty name or a tier_id naming no dues_tier reaches
-// SQLite's CHECK/FOREIGN KEY and comes back through mapLedgerError (#65).
+// SQLite's CHECK/FOREIGN KEY and comes back through writeError (#65).
 func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	var req memberRequest
 	if !decodeJSON(w, r, &req) {
@@ -124,7 +124,7 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 		JoinedOn: joinedOn,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -193,7 +193,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListMembersPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	arrears, err := a.ledger.ArrearsMonthsForMembers(r.Context(), fund.ID, page, params.CurrentPeriod)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -246,7 +246,7 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
+		writeError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Member{}, false
 	}
 	return member, true
@@ -363,7 +363,7 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.UpdateMember(r.Context(), params)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -381,7 +381,7 @@ func (a *api) deleteMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteMember(r.Context(), ledger.DeleteMemberParams{FundID: member.FundID, MemberID: member.ID}); err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

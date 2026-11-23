@@ -575,7 +575,7 @@ func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
 // TestDeleteMemberWithTransactionsReturns409 is #81's other must-have: a
 // member with money posted against them refuses the delete with a clean 409,
 // not a 500 or a cascade orphaning the transaction. It rides the composite
-// foreign key's refusal through mapSQLiteError, with no hand-rolled check.
+// foreign key's refusal through writeError, with no hand-rolled check.
 func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)

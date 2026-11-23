@@ -51,7 +51,7 @@ func TestErrorCodesMatchTheWebList(t *testing.T) {
 			if !ok || (fn.Name != "writeAPIError" && fn.Name != "writeAPIFieldError") || len(call.Args) < 3 {
 				return true
 			}
-			// writeAPIError's own body forwards its parameter, and mapLedgerError sends
+			// writeAPIError's own body forwards its parameter, and writeError sends
 			// a ledger.Error's Code(); neither is a literal, and the second is listed
 			// above from ledger.Errors().
 			if name == "errors.go" {

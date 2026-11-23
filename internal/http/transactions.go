@@ -462,7 +462,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 		Idempotency:  idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -629,7 +629,7 @@ func (a *api) transactionSummary(w http.ResponseWriter, r *http.Request) {
 		Direction: ledger.Direction(filters.direction),
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	resp := transactionSummaryResponse{
@@ -737,7 +737,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListTransactionsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	today, err := ledger.FundToday(fund, a.now())
@@ -772,7 +772,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if len(paymentIDs) > 0 {
 		groupRows, err := a.queries.ListDuesGroupRows(r.Context(), store.ListDuesGroupRowsParams{FundID: fund.ID, PaymentIds: paymentIDs})
 		if err != nil {
-			mapSQLiteError(w, a.log(r), err)
+			writeError(w, a.log(r), err)
 			return
 		}
 		for _, g := range groupRows {
@@ -797,7 +797,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -851,7 +851,7 @@ type reverseTransactionRequest struct {
 
 // reverseTransaction is POST /api/transactions/{id}/reversal: wraps
 // Ledger.ReverseTransaction; every refusal is the ledger's own named error
-// (ADR-042), reaching the client through mapLedgerError. Once-only by the
+// (ADR-042), reaching the client through writeError. Once-only by the
 // schema, so no idempotency key (ADR-043). The response is the posted reversal
 // row as transactionResponse. Naming a dues row reverses its whole payment
 // (ADR-048), one reversal row per month still standing, in one transaction; the
@@ -880,7 +880,7 @@ func (a *api) reverseTransaction(w http.ResponseWriter, r *http.Request) {
 		Note:          req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

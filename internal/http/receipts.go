@@ -82,7 +82,7 @@ func (a *api) resolveTransactionForReceipt(w http.ResponseWriter, r *http.Reques
 
 	txn, err := a.queries.GetTransactionForFund(r.Context(), store.GetTransactionForFundParams{FundID: fund.ID, ID: id})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
+		writeError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Transaction{}, false
 	}
 	return txn, true
@@ -104,7 +104,7 @@ func (a *api) resolveReimbursementForReceipt(w http.ResponseWriter, r *http.Requ
 
 	claim, err := a.queries.GetReimbursement(r.Context(), store.GetReimbursementParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return store.Reimbursement{}, false
 	}
 	return claim, true
@@ -128,7 +128,7 @@ func (a *api) resolveReceipt(w http.ResponseWriter, r *http.Request) (store.Rece
 
 	receipt, err := a.queries.GetReceiptForFund(r.Context(), store.GetReceiptForFundParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return store.Receipt{}, false
 	}
 	return receipt, true
@@ -186,7 +186,7 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		// accepts from a delete (reachable through its id until then), this one never
 		// had an id, so best-effort cleanup here is the only chance to remove it.
 		_ = os.Remove(filepath.Join(a.uploadsDir, filename))
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -357,7 +357,7 @@ func (a *api) deleteReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteReceipt(r.Context(), ledger.DeleteReceiptParams{FundID: receipt.FundID, ReceiptID: receipt.ID}); err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

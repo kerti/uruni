@@ -30,7 +30,7 @@ type purposeMoveRequest struct {
 // reconciliation figure moves; only what the money is for.
 //
 // Nothing is validated here (ADR-027): every refusal is PostPurposeMove's
-// named error, through mapLedgerError. It answers with POST /api/transfers'
+// named error, through writeError. It answers with POST /api/transfers'
 // transferResponse; the two legs are ordinary rows readable through GET
 // /api/transactions.
 //
@@ -58,7 +58,7 @@ func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 		Idempotency:   idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

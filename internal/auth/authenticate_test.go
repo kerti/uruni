@@ -86,7 +86,7 @@ func TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel(t 
 
 // TestAuthenticateSurfacesADatabaseFailureAsAPlainError: a lookup failing for
 // an infrastructure reason (the database closed underneath) must not read as
-// ErrInvalidCredentials, which mapAuthError would answer as "wrong password"
+// ErrInvalidCredentials, which writeError would answer as "wrong password"
 // instead of a 500.
 func TestAuthenticateSurfacesADatabaseFailureAsAPlainError(t *testing.T) {
 	t.Parallel()

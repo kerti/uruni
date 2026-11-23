@@ -136,7 +136,7 @@ func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
 
 // TestPostIncidentalsRejectsWhatTheLedgerRefuses: the handler validates
 // nothing itself; an empty occasion, non-positive target and invalid
-// opened_on come back as ErrInvalidArgument through mapLedgerError.
+// opened_on come back as ErrInvalidArgument through writeError.
 func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

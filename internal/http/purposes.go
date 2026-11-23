@@ -65,7 +65,7 @@ func (a *api) listPurposes(w http.ResponseWriter, r *http.Request) {
 		purposes, err = a.queries.ListPurposesByFund(r.Context(), fund.ID)
 	}
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 
 	purpose, err := a.ledger.CreatePassThroughPurpose(r.Context(), ledger.CreatePassThroughPurposeParams{FundID: fund.ID, Name: req.Name})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -127,13 +127,13 @@ func (a *api) resolveRenameablePurpose(w http.ResponseWriter, r *http.Request) (
 
 	purpose, err := a.queries.GetPurposeForFund(r.Context(), store.GetPurposeForFundParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
+		writeError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Purpose{}, false
 	}
 	if purpose.Kind == string(ledger.PurposeKindMain) {
 		// Ahead of decoding the body, so Kas Utama answers 409 whatever it holds;
 		// the wire answer is the ledger's own refusal.
-		mapLedgerError(w, a.log(r), ledger.ErrPurposeNotRenameable)
+		writeError(w, a.log(r), ledger.ErrPurposeNotRenameable)
 		return store.Purpose{}, false
 	}
 	return purpose, true
@@ -175,15 +175,11 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if purpose.Kind == string(ledger.PurposeKindIncidental) {
-		fund, ok := a.resolveFund(w, r)
-		if !ok {
-			return
-		}
 		renamed, err := a.ledger.RenameIncidental(r.Context(), ledger.RenameIncidentalParams{
-			FundID: fund.ID, PurposeID: purpose.ID, Occasion: *req.Name,
+			FundID: purpose.FundID, PurposeID: purpose.ID, Occasion: *req.Name,
 		})
 		if err != nil {
-			mapLedgerError(w, a.log(r), err)
+			writeError(w, a.log(r), err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toPurposeResponse(store.Purpose{
@@ -195,7 +191,7 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.RenamePurpose(r.Context(), ledger.RenamePurposeParams{FundID: purpose.FundID, PurposeID: purpose.ID, Name: *req.Name})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

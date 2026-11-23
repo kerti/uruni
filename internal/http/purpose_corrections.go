@@ -29,7 +29,7 @@ type purposeCorrectionRequest struct {
 // Nothing is validated here (ADR-027): every refusal (the four ineligible
 // kinds, a reversal, both closed-incidental directions, the no-op,
 // another fund's transaction id) is PostPurposeCorrection's named error,
-// reaching the client through mapLedgerError with the ledger's message.
+// reaching the client through writeError with the ledger's message.
 //
 // The response is the posted transfer row, the transferResponse of POST
 // /api/transfers: a correction's two legs are ordinary transaction rows
@@ -63,7 +63,7 @@ func (a *api) postPurposeCorrection(w http.ResponseWriter, r *http.Request) {
 		Idempotency:   idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

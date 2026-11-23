@@ -97,7 +97,7 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 		Accounts: accounts,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -164,7 +164,7 @@ func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.UpdateFund(r.Context(), ledger.UpdateFundParams{FundID: fund.ID, Name: req.Name, TimeZone: req.TimeZone})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -181,7 +181,7 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := a.ledger.ReplaceReportSlug(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	a.securityEvent(r, slog.LevelInfo, "report_link_rotated")
@@ -212,12 +212,12 @@ func (a *api) getReportMonths(w http.ResponseWriter, r *http.Request) {
 	}
 	months, err := a.ledger.ReportMonths(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	first, today, err := a.ledger.ReportDays(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 	// Never empty: an empty fund still offers the current month.
@@ -245,7 +245,7 @@ func (a *api) fundLocation(w http.ResponseWriter, r *http.Request, fund store.Fu
 func (a *api) resolveFund(w http.ResponseWriter, r *http.Request) (store.Fund, bool) {
 	funds, err := a.queries.ListFunds(r.Context())
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return store.Fund{}, false
 	}
 	if len(funds) == 0 {

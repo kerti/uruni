@@ -1033,7 +1033,7 @@ func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
 }
 
 // An unknown member id, including another fund's (GetMemberForFund makes them
-// indistinguishable), answers sql.ErrNoRows, which mapLedgerError turns into
+// indistinguishable), answers sql.ErrNoRows, which writeError turns into
 // 404; this proves the ledger method does not swallow it.
 func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	t.Parallel()

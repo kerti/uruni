@@ -83,7 +83,7 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		Idempotency: idem,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -208,7 +208,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListDuesPaymentsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 	}
 	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 

@@ -81,7 +81,7 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
+		writeError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.DuesTier{}, false
 	}
 	return tier, true
@@ -109,7 +109,7 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 		EffectiveFrom: req.EffectiveFrom,
 	})
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.CorrectDuesRate(r.Context(), fundID, rateID, money.FromDB(*req.Amount))
 	if err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
@@ -185,7 +185,7 @@ func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteDuesRate(r.Context(), fundID, rateID); err != nil {
-		mapLedgerError(w, a.log(r), err)
+		writeError(w, a.log(r), err)
 		return
 	}
 
