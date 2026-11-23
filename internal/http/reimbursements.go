@@ -131,10 +131,6 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toReimbursementResponse(claim, 0))
 }
 
-// reimbursementsPageSize is GET /api/reimbursements's fixed page size (#226,
-// ADR-032): 25 a page, as GET /api/transactions.
-const reimbursementsPageSize = 25
-
 // reimbursementsPageResponse is GET /api/reimbursements's envelope (#226),
 // the {rows, next_cursor} shape of transactionsPageResponse.
 type reimbursementsPageResponse struct {
@@ -176,20 +172,19 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 
 	params := store.ListReimbursementsPageParams{
 		FundID:    fund.ID,
-		PageLimit: reimbursementsPageSize + 1,
+		PageLimit: pageLimit,
 	}
 	if outstandingOnly {
 		params.OutstandingOnly = 1
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		incurredOn, id, ok := decodeDateCursor(cursor)
-		if !ok {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
-			return
-		}
-		params.CursorIncurredOn = incurredOn
-		params.CursorID = &id
+	cursorKey, cursorID, ok := readCursor(w, r, decodeDateCursor)
+	if !ok {
+		return
+	}
+	if cursorID != nil {
+		params.CursorIncurredOn = cursorKey
+		params.CursorID = cursorID
 	}
 
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
@@ -202,13 +197,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nextCursor *string
-	if len(rows) > reimbursementsPageSize {
-		rows = rows[:reimbursementsPageSize]
-		last := rows[len(rows)-1]
-		encoded := encodeCursor(last.IncurredOn, last.ID)
-		nextCursor = &encoded
-	}
+	rows, nextCursor := trimPage(rows, func(r store.ListReimbursementsPageRow) (string, int64) { return r.IncurredOn, r.ID })
 
 	// One batched, fund-scoped receipt lookup for the page (#154), as in
 	// listTransactions.

@@ -104,7 +104,7 @@ func TestListAccountFilterShowsAPindahLokasiFromEitherLegOnce(t *testing.T) {
 // either side.
 func TestListAccountFilterNeverShowsAPairTwiceAcrossPages(t *testing.T) {
 	t.Parallel()
-	for after := transactionsPageSize - 2; after <= transactionsPageSize+1; after++ {
+	for after := pageSize - 2; after <= pageSize+1; after++ {
 		t.Run(fmt.Sprintf("%d rows listed before the pair", after), func(t *testing.T) {
 			t.Parallel()
 			w := newLokasiWorld(t)

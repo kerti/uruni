@@ -678,7 +678,7 @@ func decodeMembersPage(t *testing.T, rec *httptest.ResponseRecorder) membersPage
 	return page
 }
 
-// A roster bigger than one page (membersPageSize=25) is walked to the end via
+// A roster bigger than one page (pageSize=25) is walked to the end via
 // next_cursor with no member skipped or duplicated (#233, ADR-032's keyset
 // contract). Names are zero-padded so lexicographic order matches creation
 // order; the test collects every id into a set regardless of page order.
@@ -689,7 +689,7 @@ func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
-	const total = 30 // > membersPageSize (25), so at least two pages are forced
+	const total = 30 // > pageSize (25), so at least two pages are forced
 	created := make(map[int64]bool, total)
 	for i := 0; i < total; i++ {
 		rec := postMember(t, r, memberRequest{Name: fmt.Sprintf("Member %02d", i)})
@@ -712,8 +712,8 @@ func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 			t.Fatalf("paged %d times without reaching the end - next_cursor never went nil", pages)
 		}
 		page := decodeMembersPage(t, getMembers(t, r, "cursor="+cursor))
-		if len(page.Members) > membersPageSize {
-			t.Fatalf("page %d returned %d members, want at most %d", pages, len(page.Members), membersPageSize)
+		if len(page.Members) > pageSize {
+			t.Fatalf("page %d returned %d members, want at most %d", pages, len(page.Members), pageSize)
 		}
 		for _, m := range page.Members {
 			if seen[m.ID] {
@@ -737,7 +737,7 @@ func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 	}
 	// The second page must exist, or the skip/duplicate assertions are vacuous.
 	if pages < 2 {
-		t.Fatalf("paged only %d time(s) for %d members and a page size of %d, want at least 2 pages", pages, total, membersPageSize)
+		t.Fatalf("paged only %d time(s) for %d members and a page size of %d, want at least 2 pages", pages, total, pageSize)
 	}
 }
 
@@ -967,7 +967,7 @@ func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) 
 }
 
 // The page-boundary case the 30-member test cannot reach: a roster of exactly
-// membersPageSize. The handler peeks one extra row to decide whether a next
+// pageSize. The handler peeks one extra row to decide whether a next
 // page exists, so exactly 25 return as one full page with next_cursor nil,
 // never a cursor to an empty page and a "muat lebih banyak" that loads nothing.
 func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
@@ -977,7 +977,7 @@ func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
-	for i := 0; i < membersPageSize; i++ {
+	for i := 0; i < pageSize; i++ {
 		rec := postMember(t, r, memberRequest{Name: fmt.Sprintf("Member %02d", i)})
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("POST /api/members #%d = %d, want %d (body: %s)", i, rec.Code, http.StatusCreated, rec.Body.String())
@@ -985,11 +985,11 @@ func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
 	}
 
 	page := decodeMembersPage(t, getMembers(t, r, ""))
-	if len(page.Members) != membersPageSize {
-		t.Errorf("GET /api/members returned %d members, want %d", len(page.Members), membersPageSize)
+	if len(page.Members) != pageSize {
+		t.Errorf("GET /api/members returned %d members, want %d", len(page.Members), pageSize)
 	}
 	if page.NextCursor != nil {
 		t.Errorf("GET /api/members next_cursor = %q, want nil - a roster of exactly %d is one full page, not two",
-			*page.NextCursor, membersPageSize)
+			*page.NextCursor, pageSize)
 	}
 }

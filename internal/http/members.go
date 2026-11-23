@@ -131,10 +131,6 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toMemberResponse(member))
 }
 
-// membersPageSize is GET /api/members's fixed page size (#233, ADR-032): 25 a
-// page, no client-supplied limit, like transactionsPageSize.
-const membersPageSize = 25
-
 // membersPageResponse is GET /api/members's envelope (#233): always this
 // shape, no unpaginated form, the {"members": [...], "next_cursor": ...} idiom
 // of transactionsPageResponse.
@@ -150,7 +146,7 @@ type membersPageResponse struct {
 //
 // Arrears is the one derived invariant on the row (CLAUDE.md rule 2), so it
 // alone goes through a.ledger: ArrearsMonthsForMembers, once for the page
-// returned (at most membersPageSize+1, trimmed first), a fixed number of reads
+// returned (at most pageSize+1, trimmed first), a fixed number of reads
 // however many members it holds or how long they have been members (#532), and
 // never client-side.
 //
@@ -174,17 +170,16 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	params := store.ListMembersPageParams{
 		FundID:        fund.ID,
 		CurrentPeriod: ledger.CurrentDuesPeriod(a.now(), loc),
-		PageLimit:     membersPageSize + 1,
+		PageLimit:     pageLimit,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		name, id, ok := decodeNameCursor(cursor)
-		if !ok {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
-			return
-		}
-		params.CursorName = name
-		params.CursorID = &id
+	cursorKey, cursorID, ok := readCursor(w, r, decodeNameCursor)
+	if !ok {
+		return
+	}
+	if cursorID != nil {
+		params.CursorName = cursorKey
+		params.CursorID = cursorID
 	}
 
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
@@ -197,13 +192,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nextCursor *string
-	if len(rows) > membersPageSize {
-		rows = rows[:membersPageSize]
-		last := rows[len(rows)-1]
-		encoded := encodeCursor(last.Name, last.ID)
-		nextCursor = &encoded
-	}
+	rows, nextCursor := trimPage(rows, func(r store.ListMembersPageRow) (string, int64) { return r.Name, r.ID })
 
 	page := make([]store.Member, len(rows))
 	for i, m := range rows {

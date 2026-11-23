@@ -213,10 +213,6 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toReconciliationDetailResponse(detail))
 }
 
-// reconciliationsPageSize is GET /api/reconciliations's fixed page size
-// (#227, ADR-032): 25 a page, as the other lists.
-const reconciliationsPageSize = 25
-
 // reconciliationListItemResponse is one row of GET /api/reconciliations's
 // page: the snapshot plus open_difference_amount, the sum of
 // ABS(remainder_amount) across its lines (see ListReconciliationsPage). Cek
@@ -249,17 +245,16 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 
 	params := store.ListReconciliationsPageParams{
 		FundID:    fund.ID,
-		PageLimit: reconciliationsPageSize + 1,
+		PageLimit: pageLimit,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		performedAt, id, ok := decodeInt64Cursor(cursor)
-		if !ok {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
-			return
-		}
-		params.CursorPerformedAt = performedAt
-		params.CursorID = &id
+	cursorKey, cursorID, ok := readCursor(w, r, decodeInt64Cursor)
+	if !ok {
+		return
+	}
+	if cursorID != nil {
+		params.CursorPerformedAt = cursorKey
+		params.CursorID = cursorID
 	}
 
 	rows, err := a.queries.ListReconciliationsPage(r.Context(), params)
@@ -268,13 +263,9 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nextCursor *string
-	if len(rows) > reconciliationsPageSize {
-		rows = rows[:reconciliationsPageSize]
-		last := rows[len(rows)-1]
-		encoded := encodeCursor(strconv.FormatInt(last.PerformedAt, 10), last.ID)
-		nextCursor = &encoded
-	}
+	rows, nextCursor := trimPage(rows, func(r store.ListReconciliationsPageRow) (string, int64) {
+		return strconv.FormatInt(r.PerformedAt, 10), r.ID
+	})
 
 	resp := make([]reconciliationListItemResponse, 0, len(rows))
 	for _, rec := range rows {

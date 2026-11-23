@@ -160,10 +160,6 @@ func toDuesPaymentHistoryResponse(row store.ListDuesPaymentsPageRow) duesPayment
 	}
 }
 
-// duesPaymentsPageSize is GET /api/dues-payments's fixed page size (#228,
-// ADR-032): 25 a page, like every paged list here.
-const duesPaymentsPageSize = 25
-
 // duesPaymentsPageResponse is GET /api/dues-payments's envelope, the
 // {rows, next_cursor} shape of the other paged lists.
 type duesPaymentsPageResponse struct {
@@ -189,17 +185,16 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 
 	params := store.ListDuesPaymentsPageParams{
 		FundID:    fund.ID,
-		PageLimit: duesPaymentsPageSize + 1,
+		PageLimit: pageLimit,
 	}
 
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		occurredOn, id, ok := decodeDateCursor(cursor)
-		if !ok {
-			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
-			return
-		}
-		params.CursorOccurredOn = occurredOn
-		params.CursorID = &id
+	cursorKey, cursorID, ok := readCursor(w, r, decodeDateCursor)
+	if !ok {
+		return
+	}
+	if cursorID != nil {
+		params.CursorOccurredOn = cursorKey
+		params.CursorID = cursorID
 	}
 
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
@@ -212,13 +207,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nextCursor *string
-	if len(rows) > duesPaymentsPageSize {
-		rows = rows[:duesPaymentsPageSize]
-		last := rows[len(rows)-1]
-		encoded := encodeCursor(last.OccurredOn, last.ID)
-		nextCursor = &encoded
-	}
+	rows, nextCursor := trimPage(rows, func(r store.ListDuesPaymentsPageRow) (string, int64) { return r.OccurredOn, r.ID })
 
 	// One batched, fund-scoped receipt lookup for the page, never a query per
 	// row (see receiptIDsForTransactions). A dues row is one ledger row.

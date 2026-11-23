@@ -396,8 +396,8 @@ func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing
 			t.Fatalf("GET /api/reimbursements%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusOK, rec.Body.String())
 		}
 		page := decodeReimbursementsPage(t, rec)
-		if pages < 2 && len(page.Reimbursements) != reimbursementsPageSize {
-			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reimbursements), reimbursementsPageSize)
+		if pages < 2 && len(page.Reimbursements) != pageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reimbursements), pageSize)
 		}
 		for _, row := range page.Reimbursements {
 			seen[row.ID]++
@@ -439,8 +439,8 @@ func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *tes
 	seeded := seedReimbursements(t, sqlDB, setup.Fund.ID, memberID, setup.MainPurposeID, 30, "2026-01-01")
 
 	page1 := decodeReimbursementsPage(t, getReimbursements(t, r, ""))
-	if len(page1.Reimbursements) != reimbursementsPageSize {
-		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reimbursements), reimbursementsPageSize)
+	if len(page1.Reimbursements) != pageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reimbursements), pageSize)
 	}
 	if page1.NextCursor == nil {
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")

@@ -117,8 +117,8 @@ func TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 			rawQuery = "?cursor=" + url.QueryEscape(cursor)
 		}
 		page := decodeDuesPaymentsPage(t, getDuesPayments(t, r, rawQuery))
-		if pages < 2 && len(page.DuesPayments) != duesPaymentsPageSize {
-			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.DuesPayments), duesPaymentsPageSize)
+		if pages < 2 && len(page.DuesPayments) != pageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.DuesPayments), pageSize)
 		}
 		for _, row := range page.DuesPayments {
 			seen[row.ID]++
@@ -310,8 +310,8 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 	}
 
 	page1 := decodeDuesPaymentsPage(t, getDuesPayments(t, r, ""))
-	if len(page1.DuesPayments) != duesPaymentsPageSize {
-		t.Fatalf("page 1 = %d rows, want %d", len(page1.DuesPayments), duesPaymentsPageSize)
+	if len(page1.DuesPayments) != pageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.DuesPayments), pageSize)
 	}
 	if last := page1.DuesPayments[len(page1.DuesPayments)-1]; last.ID != reversal.ID {
 		t.Fatalf("page 1's last row = id %d, want the reversal %d (it sits above its original)", last.ID, reversal.ID)

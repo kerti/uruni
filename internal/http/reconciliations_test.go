@@ -857,8 +857,8 @@ func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testin
 			t.Fatalf("GET /api/reconciliations%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusOK, rec.Body.String())
 		}
 		page := decodeReconciliationsPage(t, rec)
-		if pages < 2 && len(page.Reconciliations) != reconciliationsPageSize {
-			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reconciliations), reconciliationsPageSize)
+		if pages < 2 && len(page.Reconciliations) != pageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reconciliations), pageSize)
 		}
 		for _, row := range page.Reconciliations {
 			seen[row.ID]++
@@ -900,8 +900,8 @@ func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *te
 	seeded := seedReconciliations(t, sqlDB, setup.Fund.ID, 30, 1000)
 
 	page1 := decodeReconciliationsPage(t, getReconciliations(t, r))
-	if len(page1.Reconciliations) != reconciliationsPageSize {
-		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reconciliations), reconciliationsPageSize)
+	if len(page1.Reconciliations) != pageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reconciliations), pageSize)
 	}
 	if page1.NextCursor == nil {
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
