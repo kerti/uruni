@@ -475,7 +475,7 @@ func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
 	envelope := openTestIncidental(t, l, f.fundID, "Test Collection", "2026-09-01")
 	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "in", 100_000, "2026-09-05", nil)
 	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "out", 30_000, "2026-09-10", nil)
-	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	_, rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-09-25",
 	})
 	if err != nil {
@@ -871,7 +871,7 @@ func TestMonthlyReportEnvelopesOpenClosedThisMonthAndNotClosedEarlier(t *testing
 		purposeID int64
 		on        string
 	}{{closedNow.PurposeID, "2026-09-10"}, {closedEarlier.PurposeID, "2026-08-20"}} {
-		if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 			FundID: f.fundID, PurposeID: c.purposeID, AccountID: f.cashID, ClosedOn: c.on,
 		}); err != nil {
 			t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)

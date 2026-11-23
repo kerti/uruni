@@ -283,7 +283,7 @@ func TestRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	inEnvelope := post("in", 20_000, "2026-07-06", envelope.PurposeID)
-	if _, err := f.l.CloseIncidentalAndRoll(ctx, ledger.CloseIncidentalAndRollParams{
+	if _, _, err := f.l.CloseIncidentalAndRoll(ctx, ledger.CloseIncidentalAndRollParams{
 		FundID: f.fund.ID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-07-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v", err)

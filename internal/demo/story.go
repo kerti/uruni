@@ -556,7 +556,7 @@ func (s *story) farewellForErna() {
 	})
 	s.at(-8, 20, "closing the farewell envelope", func(st *step) error {
 		note := "Sisa amplop masuk Kas Utama"
-		_, err := st.l.CloseIncidentalAndRoll(st.ctx, ledger.CloseIncidentalAndRollParams{
+		_, _, err := st.l.CloseIncidentalAndRoll(st.ctx, ledger.CloseIncidentalAndRollParams{
 			FundID: w.fundID, PurposeID: envelope, AccountID: w.cashID, ClosedOn: st.date, Note: &note,
 		})
 		return err
@@ -611,7 +611,7 @@ func (s *story) visitToArga() {
 	})
 	s.at(-2, 9, "closing the visit envelope", func(st *step) error {
 		note := "Sisa amplop masuk Kas Utama"
-		_, err := st.l.CloseIncidentalAndRoll(st.ctx, ledger.CloseIncidentalAndRollParams{
+		_, _, err := st.l.CloseIncidentalAndRoll(st.ctx, ledger.CloseIncidentalAndRollParams{
 			FundID: w.fundID, PurposeID: envelope, AccountID: w.cashID, ClosedOn: st.date, Note: &note,
 		})
 		return err

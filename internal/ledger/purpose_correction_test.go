@@ -585,7 +585,7 @@ func TestPostPurposeCorrectionRejectsClosedTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenIncidental() = %v, want no error", err)
 	}
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: closedEnvelope.PurposeID,
 		AccountID: f.cashID, ClosedOn: "2026-09-02",
 	}); err != nil {
@@ -632,7 +632,7 @@ func TestPostPurposeCorrectionRejectsClosedSource(t *testing.T) {
 		t.Fatalf("PostTransaction() = %v, want no error", err)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: f.fundID, PurposeID: envelope.PurposeID,
 		AccountID: f.cashID, ClosedOn: "2026-09-10",
 	}); err != nil {

@@ -400,7 +400,7 @@ func TestPostPurposeMoveRefusals(t *testing.T) {
 
 func closeEnvelope(t *testing.T, l *Ledger, w moveWorld, purposeID int64) {
 	t.Helper()
-	if _, err := l.CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
 		FundID: w.fundID, PurposeID: purposeID, AccountID: w.cashID, ClosedOn: "2026-09-05",
 	}); err != nil {
 		t.Fatalf("closing the envelope = %v, want no error", err)
@@ -521,7 +521,7 @@ func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("PostTransaction() = %v, want no error", err)
 			}
-			if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+			if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 				FundID: f.fundID, PurposeID: env.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
 			}); err != nil {
 				t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
@@ -649,7 +649,7 @@ func TestPurposeMoveCountsAsCollectedNeverDisbursed(t *testing.T) {
 		t.Errorf("envelope balance = %d, want 250000 (collected minus disbursed)", got)
 	}
 
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+	if _, _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
 		FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.cashID, ClosedOn: "2026-09-20",
 	}); err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
