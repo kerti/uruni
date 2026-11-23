@@ -420,7 +420,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// must remove it once backup.Restore has read it, on success and failure
 	// alike: nothing could still confirm with this token.
 	restoreErr := backup.Restore(r.Context(), backup.RestoreParams{
-		DB: a.sqlDB, UploadsDir: a.uploadsDir, BackupDir: a.backupDir, Parsed: parsed, Now: time.Now(),
+		DB: a.sqlDB, UploadsDir: a.uploadsDir, BackupDir: a.backupDir, Parsed: parsed, Now: a.now(),
 	})
 	if err := os.Remove(parsed.StagingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		a.log(r).Error("removing restore staging file after confirm", "error", err)
