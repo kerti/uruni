@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copy } from '@/copy/id'
 import Reconciliations from '@/screens/History/Reconciliations'
 import type { ReconciliationDetail, ReconciliationListItem } from '@/lib/reconciliations'
-import type { Account } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
 
 afterEach(() => {
   vi.unstubAllGlobals()

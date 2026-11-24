@@ -11,11 +11,10 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { todayISODate, dateBounds } from '@/lib/dates'
 import { openIncidental } from '@/lib/incidentals'
-import { listAllMembers } from '@/lib/setup'
+import { type Member, listAllMembers } from '@/lib/members'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Incidental } from '@/lib/incidentals'
-import type { Member } from '@/lib/setup'
 
 const openText = copy.incidentals.open
 const descriptionId = 'open-incidental-description'

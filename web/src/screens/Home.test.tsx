@@ -13,7 +13,7 @@ import { formatIDR } from '@/lib/money'
 import type { Balances } from '@/lib/balances'
 import type { Incidental } from '@/lib/incidentals'
 import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
-import type { Transaction } from '@/lib/setup'
+import type { Transaction } from '@/lib/transactions'
 
 // The recent-activity list keeps its entry-detail dialog in the URL, so Home
 // needs a router around it.

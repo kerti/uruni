@@ -13,7 +13,9 @@ import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
 import type { ReceiptUploadResult } from '@/lib/receipts'
 import type { Reimbursement } from '@/lib/reimbursements'
-import type { Account, Member, Transaction } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Member } from '@/lib/members'
+import type { Transaction } from '@/lib/transactions'
 import type { Transfer } from '@/lib/transfers'
 
 const text = copy.record

@@ -14,11 +14,11 @@ import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { saveBlob } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
-import { fetchReportPdf, getReportMonths, replaceReportSlug, type ReportGroup, type ReportSpan } from '@/lib/setup'
+import { type ReportGroup, type ReportSpan, fetchReportPdf, getReportMonths } from '@/lib/report'
+import { type Fund, replaceReportSlug } from '@/lib/fund'
 import { currentPeriod } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
-import type { Fund } from '@/lib/setup'
 import { card } from '@/components/cardClasses'
 
 const text = copy.settings.report

@@ -8,7 +8,8 @@ import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/sele
 import { formatIDR } from '@/lib/money'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Purpose } from '@/lib/purposes'
-import type { Account, Member } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Member } from '@/lib/members'
 
 const text = copy.dues.payment
 

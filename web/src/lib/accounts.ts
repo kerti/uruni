@@ -1,12 +1,21 @@
-// Typed call over apiFetch for GET /api/accounts. The Account shape is
-// lib/setup.ts's (the setup wizard reads the same rows), re-exported here so
-// the two modules can't drift apart on one wire shape.
+// Typed calls over apiFetch for /api/accounts, and the Account row shape every
+// route that answers a location uses (POST /api/setup's reply included).
 
 import { apiFetch } from '@/lib/api'
-import type { Account } from '@/lib/setup'
 import type { AccountKind } from '@/lib/enums'
 
-export type { Account }
+/** An account (location) row - cash or bank - as every route here returns it. */
+export interface Account {
+  id: number
+  kind: AccountKind
+  name: string
+  inactive_on: string | null
+  /** The date of the location's opening entry; null when it has none. Only
+   * GET /api/accounts carries it (the entry forms' warning, #637); the other
+   * routes that answer an account leave it out, as do older fixtures. */
+  opening_on?: string | null
+  created_at: number
+}
 
 /**
  * GET /api/accounts - every location the fund has, active and retired alike

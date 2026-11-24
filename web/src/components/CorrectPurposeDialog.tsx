@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import TransactionSummary from '@/components/TransactionSummary'
 import { copy } from '@/copy/id'
-import { correctPurpose } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Purpose } from '@/lib/purposes'
-import type { Transaction } from '@/lib/setup'
+import { type Transaction, correctPurpose } from '@/lib/transactions'
 
 const text = copy.purposeCorrection
 

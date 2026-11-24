@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Members from '@/screens/Members'
 import { copy } from '@/copy/id'
 import { openSelect } from '@/test/select'
-import type { DuesTier, DuesTierWithRates, Member } from '@/lib/setup'
+import type { DuesTier, DuesTierWithRates } from '@/lib/duesTiers'
+import type { Member } from '@/lib/members'
 import { cardName } from '@/test/card'
 
 // Roster.tsx reads and writes `?q=`/`?edit=` through useSearchParams (ADR-032),

@@ -7,7 +7,7 @@ import { ToastProvider } from '@/components/toast/ToastProvider'
 import Locations from '@/screens/Settings/Locations'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
-import type { Account } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
 import { cardName } from '@/test/card'
 
 const text = copy.settings.locations

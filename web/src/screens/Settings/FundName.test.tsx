@@ -8,7 +8,7 @@ import FundName from '@/screens/Settings/FundName'
 import { chooseZoneOption } from '@/test/timeZone'
 import { copy } from '@/copy/id'
 import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
-import type { Fund } from '@/lib/setup'
+import type { Fund } from '@/lib/fund'
 import { cardName } from '@/test/card'
 
 const text = copy.settings.fund

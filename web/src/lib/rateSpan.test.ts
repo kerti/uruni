@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { rateInForce, rateSpan } from '@/lib/rateSpan'
-import type { DuesRate } from '@/lib/setup'
+import type { DuesRate } from '@/lib/duesTiers'
 
 function rate(id: number, effectiveFrom: string): DuesRate {
   return { id, tier_id: 1, amount: 50_000, effective_from: effectiveFrom, created_at: 1 }

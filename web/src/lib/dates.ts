@@ -14,7 +14,7 @@
  * bare 'YYYY-MM'.
  *
  * **The fund's zone.** "Today" and "this month" are read in the fund's zone (WIB,
- * WITA or WIT), which `lib/setup.ts` hands to `setFundTimeZone` inside the functions
+ * WITA or WIT), which `lib/fund.ts` hands to `setFundTimeZone` inside the functions
  * that return a fund, before their promise resolves - never from an effect or a
  * render, which would be one render late for the first screen's
  * `useState(todayISODate)`. Until a zone is set the helpers read WIB, never the
@@ -26,7 +26,7 @@ import { DEFAULT_TIME_ZONE, isTimeZone, zoneForDeviceOffset, type TimeZone } fro
 
 let fundZone: TimeZone = DEFAULT_TIME_ZONE
 
-/** Holds the fund's zone for the module; `lib/setup.ts` calls it with every fund payload's
+/** Holds the fund's zone for the module; `lib/fund.ts` calls it with every fund payload's
  * `time_zone`. A name outside the three is ignored (the server's CHECK forbids one). */
 export function setFundTimeZone(zone: string): void {
   if (isTimeZone(zone)) fundZone = zone

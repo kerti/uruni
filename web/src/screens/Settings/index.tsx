@@ -7,7 +7,7 @@ import PassThrough from '@/screens/Settings/PassThrough'
 import ReportLink from '@/screens/Settings/ReportLink'
 import SectionDivider from '@/components/SectionDivider'
 import { copy } from '@/copy/id'
-import type { Fund } from '@/lib/setup'
+import type { Fund } from '@/lib/fund'
 
 /**
  * The settings screen: one bundled "Pengaturan" destination with a section per

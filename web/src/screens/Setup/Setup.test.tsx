@@ -6,7 +6,9 @@ import Setup from '@/screens/Setup/Setup'
 import { openSelect, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { resetFundTimeZone } from '@/lib/dates'
-import type { DuesRate, DuesTier, Member, SetupResult } from '@/lib/setup'
+import type { DuesRate, DuesTier } from '@/lib/duesTiers'
+import type { Member } from '@/lib/members'
+import type { SetupResult } from '@/lib/fund'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -34,7 +36,7 @@ const setupResult = {
   ],
 } satisfies SetupResult
 
-/** What POST /api/members answers: the zero-valued roster fields (lib/setup.ts's Member). */
+/** What POST /api/members answers: the zero-valued roster fields (lib/members.ts's Member). */
 const createdMember = {
   id: 1,
   name: 'Warga',

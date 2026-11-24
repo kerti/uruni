@@ -4,7 +4,7 @@ import { useId } from 'react'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { copy } from '@/copy/id'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 /**
  * Picks a member from the fund's roster. An inactive member (`inactive_on`

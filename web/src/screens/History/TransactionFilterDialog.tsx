@@ -10,7 +10,7 @@ import { periodBounds } from '@/lib/dates'
 import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import { noFilters, type TransactionFilters } from '@/lib/transactionFilters'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 const text = copy.history.transactions
 

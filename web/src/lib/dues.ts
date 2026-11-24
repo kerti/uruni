@@ -1,8 +1,8 @@
 // Typed call over apiFetch for GET /api/dues-status (PRD section 7.3). The
-// Member shape is lib/setup.ts's, imported rather than redefined.
+// Member shape is lib/members.ts's, imported rather than redefined.
 
 import { apiFetch } from '@/lib/api'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 /** The dues-status values (internal/ledger's MemberDuesStatus, ADR-014: English
  * on the wire and in code, Indonesian only on screen - see copy.dues.statuses).

@@ -9,7 +9,7 @@ import ReportLink from '@/screens/Settings/ReportLink'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
 import { saveBlob } from '@/lib/api'
-import type { Fund } from '@/lib/setup'
+import type { Fund } from '@/lib/fund'
 
 // jsdom cannot save a file; what matters is what the card hands over.
 vi.mock('@/lib/api', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/api')>()), saveBlob: vi.fn() }))

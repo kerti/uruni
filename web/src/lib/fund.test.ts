@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
-import { getFund, postSetup, replaceReportSlug, updateFund } from '@/lib/setup'
-import type { Fund, SetupResult } from '@/lib/setup'
+import { type Fund, type SetupResult, getFund, postSetup, replaceReportSlug, updateFund } from '@/lib/fund'
 
 const fund = {
   id: 1,

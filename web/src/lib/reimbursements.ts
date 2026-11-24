@@ -2,7 +2,7 @@
 // (internal/http/reimbursements.go).
 
 import { apiFetch } from '@/lib/api'
-import type { Transaction } from '@/lib/setup'
+import type { Transaction } from '@/lib/transactions'
 
 /** A reimbursement claim row. Off-ledger until settled: the balance still
  * matches the wallet while a claim is outstanding (ADR-024). `settled` says a
@@ -19,7 +19,7 @@ export interface Reimbursement {
   note: string | null
   created_at: number
   /** Every receipt attached to this claim, oldest first. Optional for the
-   * same reason as lib/setup.ts's Transaction.receipt_ids. Reimbursements.tsx
+   * same reason as lib/transactions.ts's Transaction.receipt_ids. Reimbursements.tsx
    * reads it as `claim.receipt_ids ?? []`. */
   receipt_ids?: number[]
 }

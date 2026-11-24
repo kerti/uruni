@@ -16,11 +16,19 @@ import { copy } from '@/copy/id'
 import { errorText, hasCode } from '@/lib/errorCopy'
 import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
+import {
+  type DuesRate,
+  type DuesTier,
+  createDuesRate,
+  deleteDuesRate,
+  deleteDuesTier,
+  listDuesTiers,
+  renameDuesTier,
+  updateDuesRate,
+} from '@/lib/duesTiers'
 import { rateInForce, rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
-import type { DuesRate, DuesTier } from '@/lib/setup'
 import { card } from '@/components/cardClasses'
 import { Badge } from '@/components/Badge'
 

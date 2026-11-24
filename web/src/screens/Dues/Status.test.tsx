@@ -10,7 +10,7 @@ import { formatIDR } from '@/lib/money'
 import { pickMonth } from '@/test/datePicker'
 import { currentPeriod, formatPeriod } from '@/lib/dates'
 import type { DuesGrid, DuesStatusRow } from '@/lib/dues'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 const text = copy.dues
 const gridText = copy.dues.grid
