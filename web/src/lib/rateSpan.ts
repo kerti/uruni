@@ -1,5 +1,5 @@
 import { addMonthsToPeriod } from '@/lib/dates'
-import type { DuesRate } from '@/lib/setup'
+import type { DuesRate } from '@/lib/duesTiers'
 
 /** The months a rate's correction reprices (ADR-040): from the rate's own month to
  * the month before the next standing rate. `until` is null when none stands.

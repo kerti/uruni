@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import { copy } from '@/copy/id'
-import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
+import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/duesTiers'
 import { cardName } from '@/test/card'
 
 const text = copy.settings.tiers

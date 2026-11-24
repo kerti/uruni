@@ -10,7 +10,9 @@ import type { SessionStatus } from '@/lib/auth'
 import type { Balances } from '@/lib/balances'
 import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
 import type { Purpose } from '@/lib/purposes'
-import type { Account, Fund, Transaction } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Fund } from '@/lib/fund'
+import type { Transaction } from '@/lib/transactions'
 
 afterEach(() => {
   vi.unstubAllGlobals()

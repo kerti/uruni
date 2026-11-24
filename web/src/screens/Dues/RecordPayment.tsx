@@ -17,11 +17,10 @@ import { defaultAccountId } from '@/lib/accountDefault'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
 import { formatPeriod, dateBounds, currentPeriod, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { listAllMembers } from '@/lib/setup'
+import { type Member, listAllMembers } from '@/lib/members'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
-import type { Member } from '@/lib/setup'
 import { cardSurface } from '@/components/cardClasses'
 
 const text = copy.dues.payment

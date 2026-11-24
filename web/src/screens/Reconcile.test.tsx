@@ -8,7 +8,8 @@ import { formatIDR } from '@/lib/money'
 import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
 import type { ReconciliationDetail, ReconciliationLine } from '@/lib/reconciliations'
-import type { Account, Transaction } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.reconciliation
 

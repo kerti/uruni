@@ -4,7 +4,7 @@
 // the envelope's purpose (lib/transactions.ts).
 
 import { apiFetch } from '@/lib/api'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 /** One incidental envelope (internal/http/incidentals.go). `target_amount` and
  * `closed_on` are nullable: a target is optional at opening (PRD section

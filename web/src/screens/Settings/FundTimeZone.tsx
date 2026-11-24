@@ -6,11 +6,10 @@ import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import TimeZoneField from '@/components/TimeZoneField'
 import { copy } from '@/copy/id'
-import { updateFund } from '@/lib/setup'
+import { type Fund, updateFund } from '@/lib/fund'
 import { DEFAULT_TIME_ZONE, isTimeZone } from '@/lib/timeZones'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
-import type { Fund } from '@/lib/setup'
 
 const text = copy.settings.fund
 

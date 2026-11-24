@@ -30,8 +30,11 @@ import { ApiError, apiFetch } from '@/lib/api'
 import { listDuesPayments } from '@/lib/dues'
 import { listReconciliations } from '@/lib/reconciliations'
 import { listReimbursements } from '@/lib/reimbursements'
-import { listMembersPage } from '@/lib/setup'
-import { listTransactions } from '@/lib/transactions'
+import { type Member, listMembersPage } from '@/lib/members'
+import type { Account } from '@/lib/accounts'
+import type { DuesRate, DuesTierWithRates } from '@/lib/duesTiers'
+import type { Fund, SetupResult } from '@/lib/fund'
+import { type Transaction, listTransactions } from '@/lib/transactions'
 import type { TransactionSummary } from '@/lib/transactions'
 import type { AuthUser, SessionStatus } from '@/lib/auth'
 import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
@@ -56,7 +59,6 @@ import type {
   ReconciliationListItem,
 } from '@/lib/reconciliations'
 import type { Reimbursement } from '@/lib/reimbursements'
-import type { Account, DuesRate, DuesTierWithRates, Fund, Member, SetupResult, Transaction } from '@/lib/setup'
 import type { Transfer } from '@/lib/transfers'
 
 // The web app's half of the wire contract (#524). Each file under

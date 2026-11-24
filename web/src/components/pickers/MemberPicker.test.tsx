@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import MemberPicker, { MemberMultiPicker, OptionalMemberPicker } from '@/components/pickers/MemberPicker'
 import { copy } from '@/copy/id'
 import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/select'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 const members: Member[] = [
   {

@@ -10,7 +10,9 @@ import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, Participant } from '@/lib/incidentals'
 import type { Purpose } from '@/lib/purposes'
-import type { Account, Member, Transaction } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Member } from '@/lib/members'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.incidentals
 

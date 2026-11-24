@@ -10,8 +10,8 @@ import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
 import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
-import type { Member, Transaction } from '@/lib/setup'
-import type { TransactionSummary } from '@/lib/transactions'
+import type { Member } from '@/lib/members'
+import type { Transaction, TransactionSummary } from '@/lib/transactions'
 import type { Transfer } from '@/lib/transfers'
 
 afterEach(() => {

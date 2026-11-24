@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import OpenIncidentalDialog from '@/components/OpenIncidentalDialog'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
-import type { Member } from '@/lib/setup'
+import type { Member } from '@/lib/members'
 
 const text = copy.incidentals.open
 

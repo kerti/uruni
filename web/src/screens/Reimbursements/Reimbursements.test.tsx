@@ -10,7 +10,9 @@ import { copy } from '@/copy/id'
 import { dateBounds } from '@/lib/dates'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement } from '@/lib/reimbursements'
-import type { Account, Member, Transaction } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Member } from '@/lib/members'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.reimbursements
 

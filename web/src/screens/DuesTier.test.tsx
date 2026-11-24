@@ -7,7 +7,7 @@ import { copy } from '@/copy/id'
 import { addMonthsToPeriod, currentPeriod, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { pickMonth } from '@/test/datePicker'
-import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
+import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/duesTiers'
 
 const text = copy.settings.tiers
 

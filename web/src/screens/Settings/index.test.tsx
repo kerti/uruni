@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Settings from '@/screens/Settings/index'
 import { copy } from '@/copy/id'
-import type { Account, Fund } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Fund } from '@/lib/fund'
 import type { AuthUser } from '@/lib/auth'
 import type { Purpose } from '@/lib/purposes'
 

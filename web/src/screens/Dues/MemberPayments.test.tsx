@@ -7,7 +7,7 @@ import MemberPayments from '@/screens/Dues/MemberPayments'
 import { PERIOD_HYPHEN } from '@/lib/dates'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
-import type { Transaction } from '@/lib/setup'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
 

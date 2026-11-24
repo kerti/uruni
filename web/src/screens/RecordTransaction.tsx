@@ -24,14 +24,13 @@ import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
 import { defaultAccountId, soleCandidateId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
-import { listAllMembers } from '@/lib/setup'
+import { type Member, listAllMembers } from '@/lib/members'
 import { createReimbursement } from '@/lib/reimbursements'
 import { createTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
-import type { Member } from '@/lib/setup'
 
 const text = copy.record
 

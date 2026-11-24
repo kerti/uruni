@@ -12,7 +12,8 @@ import type { Purpose } from '@/lib/purposes'
 import { formatShortDate, todayISODate } from '@/lib/dates'
 import type { ReceiptUploadResult } from '@/lib/receipts'
 import type { Reimbursement } from '@/lib/reimbursements'
-import type { Account, Member } from '@/lib/setup'
+import type { Account } from '@/lib/accounts'
+import type { Member } from '@/lib/members'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
