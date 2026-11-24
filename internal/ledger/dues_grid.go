@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -64,8 +63,8 @@ type DuesGrid struct {
 //
 // A fixed handful of reads however many members or months there are (#532):
 // the fund, the members, the tier timelines, the rates, and the payments and
-// waivers of the window, folded in memory with the rules DuesStatusForPeriod owns
-// (memberOwesPeriod, pricing.priceAt, classifyDuesStatus). The paid-in-advance
+// waivers of the window, folded in memory and asked month by month of
+// duesBook.month, the decision DuesStatusForPeriod makes. The paid-in-advance
 // upgrade and its paidThrough walk are not needed: the grid draws both as paid.
 // Like it, this uses l.q directly (ADR-027).
 func (l *Ledger) DuesGrid(ctx context.Context, fundID int64, endPeriod string) (DuesGrid, error) {
@@ -124,19 +123,11 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 	if err != nil {
 		return DuesGrid{}, fmt.Errorf("listing dues waivers: %w", err)
 	}
-	waivers := foldWaivers(waiverRows)
-	paid := make(map[int64]map[string]money.Amount)
+	paid := make(duesPaid)
 	for _, row := range paidRows {
-		if row.MemberID == nil {
-			continue
-		}
-		byPeriod := paid[*row.MemberID]
-		if byPeriod == nil {
-			byPeriod = make(map[string]money.Amount)
-			paid[*row.MemberID] = byPeriod
-		}
-		byPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
+		paid.add(row.MemberID, row.DuesPeriod, row.PaidAmount)
 	}
+	book := duesBook{prices: prices, paid: paid, waivers: foldWaivers(waiverRows)}
 
 	rows := make([]DuesGridRow, 0, len(members))
 	first := duesGridMonths // index of the first month in which anyone owes
@@ -144,9 +135,9 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 		cells := make([]DuesGridCell, len(periods))
 		owes := false
 		for i, period := range periods {
-			_, waived := waivers[m.ID][period]
-			cells[i] = duesGridCell(m, prices, paid[m.ID][period], waived, period)
-			if cells[i] != DuesCellNone {
+			cells[i] = DuesCellNone
+			if dm, ok := book.month(m, period); ok {
+				cells[i] = gridCell(dm.Status)
 				owes = true
 				first = min(first, i)
 			}
@@ -164,19 +155,11 @@ func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, n
 	return DuesGrid{Periods: periods[first:], Rows: rows}, nil
 }
 
-// duesGridCell is DuesStatusForPeriod's per-member decision for one month,
-// reduced to a grid cell: the same checks in the same order, over rows already
-// in memory. paid is what the member paid toward the month (zero if nothing);
-// waived says the month has a waiver.
-func duesGridCell(m store.Member, prices pricing, paid money.Amount, waived bool, period string) DuesGridCell {
-	if !memberOwesPeriod(m, period) {
-		return DuesCellNone
-	}
-	_, rate, ok := prices.priceAt(m.ID, period)
-	if !ok {
-		return DuesCellNone
-	}
-	switch classifyDuesMonth(money.FromDB(rate), paid, waived) {
+// gridCell draws a status of a month the member owes as a grid cell. The months
+// they owe nothing for are DuesCellNone, which the caller decides from
+// duesBook.month, not from a status.
+func gridCell(status DuesStatus) DuesGridCell {
+	switch status {
 	case DuesStatusWaived:
 		return DuesCellWaived
 	case DuesStatusPartial:
