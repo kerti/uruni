@@ -164,7 +164,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
 
     // Paging: the oldest row (Belanja 1, behind every dues payment) is not
     // on the first page, and "Muat lebih banyak" reaches it.
-    const loadMore = page.getByRole('button', { name: copy.history.transactions.loadMore })
+    const loadMore = page.getByRole('button', { name: copy.common.loadMore })
     await expect(loadMore).toBeVisible()
     await expect(rows(page)).toHaveCount(PAGE)
     await expect(noteRow(page, 'Belanja 1')).toHaveCount(0)
@@ -263,7 +263,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
 
     // Iuran: 26 payments from Warga Satu and one from Warga Dua.
     await openHistoryTab(page, copy.history.tabs.dues)
-    const duesMore = page.getByRole('button', { name: copy.history.dues.loadMore })
+    const duesMore = page.getByRole('button', { name: copy.common.loadMore })
     await expect(duesMore).toBeVisible()
     await duesMore.click()
     await expect(duesMore).toBeHidden()
@@ -273,7 +273,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
 
     // Talangan: 26 outstanding claims from Warga Satu and one from Warga Dua.
     await openHistoryTab(page, copy.history.tabs.reimbursements)
-    const claimsMore = page.getByRole('button', { name: copy.history.reimbursements.loadMore })
+    const claimsMore = page.getByRole('button', { name: copy.common.loadMore })
     await expect(claimsMore).toBeVisible()
     await claimsMore.click()
     await expect(claimsMore).toBeHidden()
@@ -283,7 +283,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
 
     // Cek kas: 26 counts, no search.
     await openHistoryTab(page, copy.reconciliation.heading)
-    const countsMore = page.getByRole('button', { name: copy.history.reconciliations.loadMore })
+    const countsMore = page.getByRole('button', { name: copy.common.loadMore })
     await expect(countsMore).toBeVisible()
     await countsMore.click()
     await expect(countsMore).toBeHidden()
@@ -296,7 +296,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await expect(page.getByRole('heading', { name: copy.members.heading, exact: true })).toBeVisible()
 
     const text = copy.members.roster
-    const loadMore = page.getByRole('button', { name: text.loadMore })
+    const loadMore = page.getByRole('button', { name: copy.common.loadMore })
     await expect(loadMore).toBeVisible()
     await loadMore.click()
     await expect(loadMore).toBeHidden()

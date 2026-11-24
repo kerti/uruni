@@ -118,10 +118,10 @@ describe('Reconciliations tab (Cek kas)', () => {
     renderAt('/history/reconciliations')
 
     await screen.findAllByRole('button', { name: /Cocok/ })
-    await user.click(screen.getByRole('button', { name: tabText.loadMore }))
+    await user.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     expect(await screen.findAllByRole('button', { name: /Cocok/ })).toHaveLength(2)
-    expect(screen.queryByRole('button', { name: tabText.loadMore })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.loadMore })).not.toBeInTheDocument()
     expect(requests.at(-1)?.searchParams.get('cursor')).toBe('c1')
   })
 

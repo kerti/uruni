@@ -31,6 +31,13 @@ export function errorCode(err: unknown): string | undefined {
   return err instanceof ApiError ? err.code : undefined
 }
 
+/** Any thrown value as an ApiError: an ApiError as it is, anything else under
+ * `unknown_error` with its message, so an error state always has a code to map
+ * to copy (ADR-014). */
+export function toApiError(err: unknown): ApiError {
+  return err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+}
+
 /** The one code used for a request that never got a response. */
 export const NETWORK_ERROR_CODE = 'network_error'
 

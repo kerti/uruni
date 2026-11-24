@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
 import Loading from '@/components/states/Loading'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, toApiError } from '@/lib/api'
 import { downloadBackup, downloadStoredBackup, listStoredBackups } from '@/lib/backup'
 import { formatIsoDate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
@@ -106,7 +106,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
     try {
       await downloadStoredBackup(name)
     } catch (err) {
-      setDownloadError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
+      setDownloadError(toApiError(err))
     } finally {
       setDownloadingName(null)
     }

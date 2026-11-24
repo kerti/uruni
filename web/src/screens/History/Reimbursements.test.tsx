@@ -719,11 +719,11 @@ describe('Reimbursements tab', () => {
     renderAt()
 
     await screen.findByText('John')
-    await user.click(screen.getByRole('button', { name: searchText.loadMore }))
+    await user.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText('John')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: searchText.loadMore })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.loadMore })).not.toBeInTheDocument()
   })
 
   it('combines the outstanding filter and search in the same request', async () => {

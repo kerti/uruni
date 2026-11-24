@@ -12,7 +12,7 @@ import { useArrivalToast } from '@/components/toast/useArrivalToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError, settleUncertainWrite } from '@/lib/api'
+import { settleUncertainWrite, toApiError } from '@/lib/api'
 import { formatIsoDate, formatShortDate, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
@@ -20,6 +20,9 @@ import { listReimbursements, updateReimbursement, deleteReimbursement } from '@/
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useHeldRow } from '@/lib/useHeldRow'
+import { usePagesAfter } from '@/lib/usePagesAfter'
+import LoadMore from '@/components/LoadMore'
 import { recordOriginFrom } from '@/lib/recordOrigin'
 import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
@@ -94,14 +97,13 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // new URL lands, then gives way to it.
   const [outstandingShown, showOutstanding] = useOptimistic(tab === 'outstanding')
   const [listState, listRun] = useApi<ReimbursementsPage>()
-  // Pages after the first, appended in order - reset whenever the first page
-  // is refetched (a tab switch, a search, a write, or refetchKey).
-  // `generation` stops a slow "load more" from a stale tab/search from
-  // appending its rows to the new one, as in History/Transactions.tsx.
-  const [more, setMore] = useState<ReimbursementsPage | null>(null)
-  const [moreLoading, setMoreLoading] = useState(false)
-  const [moreError, setMoreError] = useState<ApiError | null>(null)
-  const generation = useRef(0)
+  // "Muat lebih banyak": starts over with every re-read of the first page (a
+  // tab switch, a search, a write, or refetchKey).
+  const more = usePagesAfter(
+    listState.data,
+    (cursor) => listReimbursements({ outstanding: tab === 'outstanding', q: q || undefined, cursor }),
+    (page) => page.reimbursements,
+  )
 
   const [formDataState, formDataRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
@@ -139,15 +141,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   )
 
   const refetchFirstPage = useCallback(() => {
-    generation.current += 1
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void listRun(loadFirstPage)
   }, [listRun, loadFirstPage])
 
   useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect -- a refetch on navigation resets the paging state it replaces
     refetchFirstPage()
   }, [refetchFirstPage, refetchKey])
 
@@ -158,15 +155,11 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // dialog checks its own claim: it reads it from the server, not this list.)
   const { clear: clearDialog } = dialog
   const listLoaded = listState.status === 'success' && listState.data !== undefined
-  const deleteClaim =
-    deleteId !== null && listState.data !== undefined
-      ? ([...listState.data.reimbursements, ...(more?.reimbursements ?? [])].find((c) => c.id === deleteId) ?? null)
-      : null
+  // Held, so a claim from a later page keeps its dialog when the list starts
+  // over under it.
+  const deleteClaim = useHeldRow(deleteId, more.rows)
   const listHasDeleteClaim = deleteClaim !== null
-  const entryClaim =
-    entryId !== null && listState.data !== undefined
-      ? ([...listState.data.reimbursements, ...(more?.reimbursements ?? [])].find((c) => c.id === entryId) ?? null)
-      : null
+  const entryClaim = useHeldRow(entryId, more.rows)
   const listHasEntryClaim = entryClaim !== null
   // A malformed `?entry=`, or one naming a claim the loaded list does not
   // hold, is stripped (clear(), never close(): a dead link is not a navigation
@@ -228,25 +221,6 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     setFeedback(null)
   }
 
-  async function loadMore(cursor: string) {
-    const startedIn = generation.current
-    setMoreLoading(true)
-    setMoreError(null)
-    try {
-      const page = await listReimbursements({ outstanding: tab === 'outstanding', q: q || undefined, cursor })
-      if (startedIn !== generation.current) return
-      setMore((prev) => ({
-        reimbursements: [...(prev?.reimbursements ?? []), ...page.reimbursements],
-        nextCursor: page.nextCursor,
-      }))
-    } catch (err) {
-      if (startedIn !== generation.current) return
-      setMoreError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
-    } finally {
-      if (startedIn === generation.current) setMoreLoading(false)
-    }
-  }
-
   const fetchFormData = useCallback(
     () =>
       formDataRun(async () => {
@@ -281,7 +255,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
       } catch (err) {
         // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, () => listRun(loadFirstPage, { silent: true }))
-        const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+        const apiErr = toApiError(err)
         setFeedback({ kind: 'error', text: errorText(apiErr) })
         console.error('API error', apiErr.code, apiErr.message)
       }
@@ -325,9 +299,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
       return listState.error ? <ErrorState error={listState.error} onRetry={refetchFirstPage} /> : null
     }
 
-    const page = listState.data
-    const claims = more ? [...page.reimbursements, ...more.reimbursements] : page.reimbursements
-    const nextCursor = more ? more.nextCursor : page.nextCursor
+    const claims = more.rows
 
     const fd = formDataState.data
     const memberNames = fd ? new Map(fd.members.map((m) => [m.id, m.name])) : new Map()
@@ -384,19 +356,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
           // dialog's message has to stay on screen.
           onChanged={() => listRun(loadFirstPage, { silent: true })}
         />
-        {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
-        {nextCursor && !moreError && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            disabled={moreLoading}
-            onClick={() => void loadMore(nextCursor)}
-          >
-            {moreLoading ? copy.common.loading : searchText.loadMore}
-          </Button>
-        )}
+        <LoadMore pages={more} />
       </>
     )
   }

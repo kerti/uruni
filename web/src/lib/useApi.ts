@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ApiError, settleUncertainWrite } from '@/lib/api'
+import { type ApiError, settleUncertainWrite, toApiError } from '@/lib/api'
 
 export type ApiStatus = 'idle' | 'loading' | 'error' | 'success'
 
@@ -78,8 +78,7 @@ export function useApi<T>(): [ApiState<T>, (fn: () => Promise<T>, options?: RunO
       if (silent) return
       await settleUncertainWrite(err, options?.settle ?? noop)
       if (!mountedRef.current || callId !== callIdRef.current) return
-      const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
-      setState({ status: 'error', data: undefined, error: apiError })
+      setState({ status: 'error', data: undefined, error: toApiError(err) })
     }
   }, [])
 

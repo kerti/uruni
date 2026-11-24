@@ -20,7 +20,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
-import { ApiError, settleUncertainWrite } from '@/lib/api'
+import { ApiError, settleUncertainWrite, toApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { defaultAccountId } from '@/lib/accountDefault'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -184,7 +184,7 @@ export default function Incidentals({
       } catch (err) {
         // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, refreshDetail)
-        const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+        const apiErr = toApiError(err)
         setFeedback({ kind: 'error', text: errorText(apiErr) })
         console.error('API error', apiErr.code, apiErr.message)
       }
