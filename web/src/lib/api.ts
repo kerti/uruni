@@ -159,13 +159,14 @@ function notifyConnectivity(online: boolean) {
 }
 
 /**
- * Calls an /api/* route and decodes its JSON body as T.
- *
- * Throws ApiError on any failure: the request never reaching a server
- * (isNetworkError: true, code NETWORK_ERROR_CODE), or a non-2xx response,
- * decoded from the server's error envelope when present.
+ * The one way a request reaches the server: the bounded wait and the
+ * idempotency key a write carries (ADR-043), the connectivity signal, and
+ * every failure as an ApiError - the request never answered (isNetworkError),
+ * or a non-2xx decoded from the server's error envelope. Resolves only with a
+ * 2xx; what its body is, JSON or a file, is the caller's to read. `idem` is
+ * that write's key, still open: the caller settles it once the body is read.
  */
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<{ res: Response; isWrite: boolean; idem?: ReturnType<typeof writeKey> }> {
   const method = (init?.method ?? 'GET').toUpperCase()
   const isWrite = method !== 'GET' && method !== 'HEAD'
 
@@ -204,26 +205,35 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     clearTimeout(timeout)
   }
 
+  // A response - even a failing one - proves the network is up.
+  notifyConnectivity(true)
+  if (res.ok) return { res, isWrite, idem }
+
   // A 5xx is indefinite even with the API's error envelope: the app may have
   // committed before it failed, or a proxy may have given up on an app that did.
   if (res.status >= 500) idem?.keep()
-  else if (!res.ok) idem?.settle()
+  else idem?.settle()
 
-  if (!res.ok) {
-    // A response - even a failing one - proves the network is up.
-    notifyConnectivity(true)
-    let envelope: ErrorEnvelope = {}
-    try {
-      envelope = (await res.json()) as ErrorEnvelope
-    } catch {
-      // Body wasn't JSON (or was empty) - fall through to the generic code.
-    }
-    const code = envelope.error?.code ?? 'unknown_error'
-    const message = envelope.error?.message ?? `Request failed with status ${res.status}`
-    throw new ApiError(code, message)
+  let envelope: ErrorEnvelope = {}
+  try {
+    envelope = (await res.json()) as ErrorEnvelope
+  } catch {
+    // Body wasn't JSON (or was empty) - fall through to the generic code.
   }
+  const code = envelope.error?.code ?? 'unknown_error'
+  const message = envelope.error?.message ?? `Request failed with status ${res.status}`
+  throw new ApiError(code, message)
+}
 
-  notifyConnectivity(true)
+/**
+ * Calls an /api/* route and decodes its JSON body as T.
+ *
+ * Throws ApiError on any failure: the request never reaching a server
+ * (isNetworkError: true, code NETWORK_ERROR_CODE), or a non-2xx response,
+ * decoded from the server's error envelope when present.
+ */
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const { res, isWrite, idem } = await send(path, init)
 
   if (res.status === 204) {
     idem?.settle()
@@ -276,27 +286,7 @@ export async function settleUncertainWrite(err: unknown, reload: () => Promise<v
  * ApiError apiFetch does.
  */
 export async function fetchBlob(path: string): Promise<{ blob: Blob; res: Response }> {
-  let res: Response
-  try {
-    res = await fetch(path)
-  } catch (err) {
-    notifyConnectivity(false)
-    throw new ApiError(NETWORK_ERROR_CODE, err instanceof Error ? err.message : 'network error', true)
-  }
-  notifyConnectivity(true)
-
-  if (!res.ok) {
-    let envelope: ErrorEnvelope = {}
-    try {
-      envelope = (await res.json()) as ErrorEnvelope
-    } catch {
-      // Body wasn't JSON (or was empty) - fall through to the generic code.
-    }
-    const code = envelope.error?.code ?? 'unknown_error'
-    const message = envelope.error?.message ?? `Request failed with status ${res.status}`
-    throw new ApiError(code, message)
-  }
-
+  const { res } = await send(path)
   return { blob: await res.blob(), res }
 }
 

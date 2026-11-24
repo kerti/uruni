@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
   apiFetch,
+  fetchBlob,
   heldIdempotencyKeyCount,
   IDEMPOTENCY_FORGET_MS,
   NETWORK_ERROR_CODE,
+  onConnectivityChange,
   plainConnectionError,
   resetIdempotencyKeys,
   settleUncertainWrite,
@@ -462,5 +464,40 @@ describe('apiFetch idempotency keys', () => {
       expect(localStorage.length).toBe(0)
       expect(sessionStorage.length).toBe(0)
     })
+  })
+})
+
+describe('fetchBlob', () => {
+  it('answers the file and the response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('PK', { status: 200, headers: { 'Content-Type': 'application/zip' } })))
+    const { blob, res } = await fetchBlob('/api/backup')
+    expect(await blob.text()).toBe('PK')
+    expect(res.headers.get('Content-Type')).toBe('application/zip')
+  })
+
+  it('throws the error envelope as an ApiError, as apiFetch does', async () => {
+    const envelope = JSON.stringify({ error: { code: 'not_found', message: 'no such dump' } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(envelope, { status: 404 })))
+    const err = await caught(fetchBlob('/api/backups/x.zip'))
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.code).toBe('not_found')
+    expect(err.isNetworkError).toBe(false)
+  })
+
+  it('falls back to unknown_error for a body that is not the envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>Bad gateway</html>', { status: 502 })))
+    const err = await caught(fetchBlob('/api/backup'))
+    expect(err.code).toBe('unknown_error')
+  })
+
+  it('reports no response as network_error and tells the connectivity watcher', async () => {
+    const seen: boolean[] = []
+    const stop = onConnectivityChange((online) => seen.push(online))
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    const err = await caught(fetchBlob('/api/backup'))
+    stop()
+    expect(err.code).toBe(NETWORK_ERROR_CODE)
+    expect(err.isNetworkError).toBe(true)
+    expect(seen).toEqual([false])
   })
 })

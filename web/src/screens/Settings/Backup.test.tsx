@@ -99,7 +99,7 @@ describe('Settings backup card', () => {
     await user.click(button)
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/backup')
+      expect(fetchMock).toHaveBeenCalledWith('/api/backup', undefined)
     })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: text.download })).toBeEnabled()
@@ -131,7 +131,7 @@ describe('Settings backup card', () => {
     await user.click(screen.getByRole('button', { name: text.download }))
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/backup')
+    expect(fetchMock).toHaveBeenCalledWith('/api/backup', undefined)
     const callsToBackup = fetchMock.mock.calls.filter((c) => requestURL(c[0] as RequestInfo | URL) === '/api/backup')
     expect(callsToBackup).toHaveLength(1)
 
