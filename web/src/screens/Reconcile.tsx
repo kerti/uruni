@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { hasCode } from '@/lib/errorCopy'
 import { cn } from '@/lib/utils'
 import { ApiError, settleUncertainWrite, toApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
@@ -280,12 +281,12 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       // gets an empty line, a retired one drops out, nothing she typed is
       // touched - and say what happened. If the re-read fails too, the submit
       // error alone stands.
-      if (apiError.code === 'account_inactive' || apiError.code === 'reconciliation_location_missing') {
+      if (hasCode(apiError, 'account_inactive') || hasCode(apiError, 'reconciliation_location_missing')) {
         setSubmitError(apiError)
         await loadRun(loadReconcileData, { silent: true }).catch(() => undefined)
         return
       }
-      if (apiError.code !== 'invalid_argument') {
+      if (!hasCode(apiError, 'invalid_argument')) {
         setSubmitError(apiError)
         return
       }

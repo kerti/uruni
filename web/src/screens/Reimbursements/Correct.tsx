@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { nullIfNotFound } from '@/lib/errorCopy'
 import { listAccounts } from '@/lib/accounts'
-import { errorCode, settleUncertainWrite, toApiError } from '@/lib/api'
+import { settleUncertainWrite, toApiError } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
 import { listPurposes, selectablePurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
@@ -52,10 +53,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
       dataRun(
         async () => {
           const [claim, accounts, members, allPurposes, openPurposes] = await Promise.all([
-            getReimbursement(claimId).catch((err: unknown) => {
-              if (errorCode(err) === 'not_found') return null
-              throw err
-            }),
+            getReimbursement(claimId).catch(nullIfNotFound),
             listAccounts(),
             listAllMembers(),
             listPurposes(),

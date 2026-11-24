@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { ArrowUUpLeft } from '@phosphor-icons/react'
 
 import ReversalDialog from '@/components/ReversalDialog'
-import { sharedErrorText } from '@/components/reversalCopy'
+import { duesReversalCopy } from '@/components/reversalCopy'
 import { duesPeriodsText, reversalBadge } from '@/components/rowLabel'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/toast/useToast'
@@ -151,7 +151,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
         onClose={reversal.close}
         onReversed={handleReversed}
         refresh={() => run(loadRows, { silent: true })}
-        errorText={sharedErrorText}
+        words={duesReversalCopy}
       />
     </>
   )

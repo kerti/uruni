@@ -20,7 +20,8 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
-import { ApiError, settleUncertainWrite, toApiError } from '@/lib/api'
+import { errorText } from '@/lib/errorCopy'
+import { settleUncertainWrite, toApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { defaultAccountId } from '@/lib/accountDefault'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -53,16 +54,6 @@ const text = copy.incidentals
  * Reimbursements.tsx's Feedback type. A success is a toast.
  */
 type Feedback = { kind: 'error'; text: string }
-
-/** Wire error code -> Indonesian copy, scoped first to this screen's codes
- * (incidental_already_closed) then to the shared map; never the English wire
- * message (ADR-014). Mirrors Reimbursements.tsx's errorText. */
-function errorText(err: ApiError): string {
-  const specific = text.errors[err.code as keyof typeof text.errors]
-  if (specific) return specific
-  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
-  return common ?? copy.common.unknownError
-}
 
 /**
  * The incidental-envelope detail screen (PRD section 7.5; detail-only per
@@ -185,7 +176,7 @@ export default function Incidentals({
         // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, refreshDetail)
         const apiErr = toApiError(err)
-        setFeedback({ kind: 'error', text: errorText(apiErr) })
+        setFeedback({ kind: 'error', text: errorText(apiErr, text.errors) })
         console.error('API error', apiErr.code, apiErr.message)
       }
     })
@@ -549,7 +540,7 @@ function CloseEnvelopeBody({
 
         {state.status === 'error' && state.error && (
           <p role="alert" className="text-sm text-attention-text">
-            {errorText(state.error)}
+            {errorText(state.error, text.errors)}
           </p>
         )}
 
