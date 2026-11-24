@@ -10,6 +10,7 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
 import { listTransactions } from '@/lib/transactions'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useHeldRow } from '@/lib/useHeldRow'
 import type { DuesPaymentHistoryRow } from '@/lib/dues'
 import type { Transaction } from '@/lib/transactions'
 
@@ -42,7 +43,11 @@ export default function DuesEntryDialogs({ rows, onRefresh }: { rows: DuesPaymen
   const handoff = useRef<{ kind: 'reverse' | 'receipts'; transaction: Transaction } | null>(null)
 
   const wantedId = entryId ?? reversalId ?? receiptsForId
-  const wantedRow = wantedId === null ? null : (rows.find((r) => r.id === wantedId) ?? null)
+  // Held (useHeldRow): a re-read of the list's first page drops later pages,
+  // and a dialog over one of their rows must stay open through it.
+  const wantedRow = useHeldRow(wantedId, rows)
+  const entryRow = useHeldRow(entryId, rows)
+  const reversalRow = useHeldRow(reversalId, rows)
   const wantedMember = wantedRow?.member_id
   const wantedPeriod = wantedRow?.dues_period
 
@@ -80,8 +85,8 @@ export default function DuesEntryDialogs({ rows, onRefresh }: { rows: DuesPaymen
   // URL (clear(), never close() - a dead link is not a navigation to undo).
   const { clear: clearEntry } = entry
   const { clear: clearReversal } = reversal
-  const knowsEntry = entryId !== null && rows.some((r) => r.id === entryId)
-  const knowsReversal = reversalId !== null && rows.some((r) => r.id === reversalId)
+  const knowsEntry = entryRow !== null
+  const knowsReversal = reversalRow !== null
   const unreadable = fetched !== null && fetched.transaction === null
   useEffect(() => {
     if (entryMalformed || (entryId !== null && !knowsEntry) || (entryId !== null && unreadable && fetched?.id === entryId)) clearEntry()

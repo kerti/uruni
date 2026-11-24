@@ -176,11 +176,64 @@ describe('Roster', () => {
     await screen.findByRole('button', { name: cardName(text.editVerb, 'Ana') })
     expect(screen.queryByRole('button', { name: cardName(text.editVerb, 'Budi') })).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: text.loadMore }))
+    await userEvent.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     expect(await screen.findByRole('button', { name: cardName(text.editVerb, 'Budi') })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: cardName(text.editVerb, 'Ana') })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.loadMore })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.loadMore })).not.toBeInTheDocument()
+  })
+
+  it('starts the list over when a save reloads it, rather than gluing the old later pages on', async () => {
+    const { fetchMock, getCalls } = stubRoster(
+      {
+        first: { members: [member(1, 'Ana')], next_cursor: 'cursor-2' },
+        'cursor-2': { members: [member(2, 'Budi')], next_cursor: null },
+      },
+      () => jsonResponse(member(2, 'Budi Baru')),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Ana') })
+    await userEvent.click(screen.getByRole('button', { name: copy.common.loadMore }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.editVerb, 'Budi') }))
+
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.clear(within(dialog).getByLabelText(text.nameLabel))
+    await userEvent.type(within(dialog).getByLabelText(text.nameLabel), 'Budi Baru')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+    // The reload re-reads the first page alone; page two is one tap away again.
+    await waitFor(() => expect(getCalls.filter((url) => !url.includes('cursor='))).toHaveLength(2))
+    expect(await screen.findByRole('button', { name: copy.common.loadMore })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: cardName(text.editVerb, 'Budi') })).not.toBeInTheDocument()
+  })
+
+  it("keeps a later page's member open through the re-read after a save of unknown outcome", async () => {
+    const { fetchMock, getCalls } = stubRoster(
+      {
+        first: { members: [member(1, 'Ana')], next_cursor: 'cursor-2' },
+        'cursor-2': { members: [member(2, 'Budi')], next_cursor: null },
+      },
+      () => {
+        throw new TypeError('Failed to fetch')
+      },
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Ana') })
+    await userEvent.click(screen.getByRole('button', { name: copy.common.loadMore }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.editVerb, 'Budi') }))
+
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.clear(within(dialog).getByLabelText(text.nameLabel))
+    await userEvent.type(within(dialog).getByLabelText(text.nameLabel), 'Budi Baru')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+    // The settle re-read ran and dropped page two; the dialog and its warning stay.
+    await waitFor(() => expect(getCalls.filter((url) => !url.includes('cursor='))).toHaveLength(2))
+    expect(await within(dialog).findByText(copy.common.errors.write_outcome_unknown)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: text.editTitle })).toBeInTheDocument()
+    expect(currentSearch()).toBe('?edit=member%3A2')
   })
 
   it('opens the edit dialog from the card, addressed by ?edit=member:<id>', async () => {

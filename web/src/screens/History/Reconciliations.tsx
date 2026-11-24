@@ -1,19 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import ReconciliationLines from '@/components/ReconciliationLines'
-import { Button } from '@/components/ui/button'
+import LoadMore from '@/components/LoadMore'
 import DetailField from '@/components/DetailField'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { formatUnixSeconds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { getReconciliation, listReconciliations } from '@/lib/reconciliations'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { usePagesAfter } from '@/lib/usePagesAfter'
 import type { Account } from '@/lib/accounts'
 import type { ReconciliationDetail, ReconciliationListItem, ReconciliationsPage } from '@/lib/reconciliations'
 import { tappableCard } from '@/components/cardClasses'
@@ -44,27 +44,19 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
   const { value, open, close } = useDialogParam('snapshot')
 
   const [listState, listRun] = useApi<ReconciliationsPage>()
-  // Pages after the first, appended in order - reset whenever the first page is
-  // refetched. `generation` stops a slow "load more" from a stale fetch
-  // appending its rows after a refetch has landed, as in
-  // History/Transactions.tsx and History/Reimbursements.tsx.
-  const [more, setMore] = useState<ReconciliationsPage | null>(null)
-  const [moreLoading, setMoreLoading] = useState(false)
-  const [moreError, setMoreError] = useState<ApiError | null>(null)
-  const generation = useRef(0)
+  const more = usePagesAfter(
+    listState.data,
+    (cursor) => listReconciliations({ cursor }),
+    (page) => page.reconciliations,
+  )
 
   const [accountsState, accountsRun] = useApi<Account[]>()
 
   const refetchFirstPage = useCallback(() => {
-    generation.current += 1
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void listRun(() => listReconciliations())
   }, [listRun])
 
   useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect -- refetchFirstPage resets the appended pages and refetches when the key moves; the refetch is the external sync
     refetchFirstPage()
   }, [refetchFirstPage, refetchKey])
 
@@ -74,25 +66,6 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
     // form.
     void accountsRun(listAccounts)
   }, [accountsRun])
-
-  async function loadMore(cursor: string) {
-    const startedIn = generation.current
-    setMoreLoading(true)
-    setMoreError(null)
-    try {
-      const page = await listReconciliations({ cursor })
-      if (startedIn !== generation.current) return
-      setMore((prev) => ({
-        reconciliations: [...(prev?.reconciliations ?? []), ...page.reconciliations],
-        nextCursor: page.nextCursor,
-      }))
-    } catch (err) {
-      if (startedIn !== generation.current) return
-      setMoreError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
-    } finally {
-      if (startedIn === generation.current) setMoreLoading(false)
-    }
-  }
 
   // ?snapshot= names a row by its numeric id - no prefix to parse, and no "new"
   // case: the sheet only ever opens on an existing snapshot.
@@ -106,9 +79,7 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
     return listState.error ? <ErrorState error={listState.error} onRetry={refetchFirstPage} /> : null
   }
 
-  const page = listState.data
-  const rows = more ? [...page.reconciliations, ...more.reconciliations] : page.reconciliations
-  const nextCursor = more ? more.nextCursor : page.nextCursor
+  const rows = more.rows
 
   return (
     <div className="flex flex-col gap-4">
@@ -131,19 +102,7 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
         </ul>
       )}
 
-      {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
-      {nextCursor && !moreError && (
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="w-full"
-          disabled={moreLoading}
-          onClick={() => void loadMore(nextCursor)}
-        >
-          {moreLoading ? copy.common.loading : tabText.loadMore}
-        </Button>
-      )}
+      <LoadMore pages={more} />
 
       <SnapshotDialog id={snapshotId} open={snapshotId !== null} onClose={close} accounts={accountsState.data ?? []} />
     </div>

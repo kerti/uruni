@@ -12,7 +12,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
-import { ApiError, errorCode, settleUncertainWrite } from '@/lib/api'
+import { errorCode, settleUncertainWrite, toApiError } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
 import { listPurposes, selectablePurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
@@ -86,7 +86,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
       } catch (err) {
         // A lost response may still have saved; re-read the claim before she can retry.
         await settleUncertainWrite(err, () => load(true))
-        const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+        const apiErr = toApiError(err)
         setError(errorText(apiErr))
         console.error('API error', apiErr.code, apiErr.message)
       }

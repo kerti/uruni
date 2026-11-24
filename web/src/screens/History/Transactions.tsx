@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import { listAccounts } from '@/lib/accounts'
 import { listPurposes } from '@/lib/purposes'
@@ -17,6 +16,8 @@ import { listAllMembers } from '@/lib/setup'
 import { activeFilterCount, readFilters, writeFilters, type TransactionFilters } from '@/lib/transactionFilters'
 import { getTransactionSummary, listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
+import { usePagesAfter } from '@/lib/usePagesAfter'
+import LoadMore from '@/components/LoadMore'
 import { useDialogParam } from '@/lib/useDialogParam'
 import TransactionFilterDialog from '@/screens/History/TransactionFilterDialog'
 import type { Account } from '@/lib/accounts'
@@ -118,13 +119,12 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const filterOpen = dialogValue === 'filter'
 
   const [state, run] = useApi<FirstPage>()
-  // Pages after the first, appended in order. Reset whenever the first page is
-  // refetched, and `generation` stops a slow "load more" for the previous
-  // search from appending its rows to the new one.
-  const [more, setMore] = useState<TransactionsPage | null>(null)
-  const [moreLoading, setMoreLoading] = useState(false)
-  const [moreError, setMoreError] = useState<ApiError | null>(null)
-  const generation = useRef(0)
+  // "Muat lebih banyak": starts over with every re-read of the first page.
+  const more = usePagesAfter(
+    state.data?.page,
+    (cursor) => listTransactions(pageInput(q, { purposeId, accountId, memberId, month, direction }, cursor)),
+    (page) => page.transactions,
+  )
 
   // The lookups, requested once and shared by every first-page load after
   // it, so a search costs one request rather than four. A failed request is
@@ -168,11 +168,6 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   }, [q, purposeId, accountId, memberId, month, direction, loadLookups])
 
   useEffect(() => {
-    generation.current += 1
-    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void run(loadFirstPage)
   }, [run, loadFirstPage, refetchKey])
 
@@ -225,22 +220,6 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     )
   }
 
-  async function loadMore(cursor: string) {
-    const startedIn = generation.current
-    setMoreLoading(true)
-    setMoreError(null)
-    try {
-      const page = await listTransactions(pageInput(q, { purposeId, accountId, memberId, month, direction }, cursor))
-      if (startedIn !== generation.current) return
-      setMore((prev) => ({ transactions: [...(prev?.transactions ?? []), ...page.transactions], nextCursor: page.nextCursor }))
-    } catch (err) {
-      if (startedIn !== generation.current) return
-      setMoreError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
-    } finally {
-      if (startedIn === generation.current) setMoreLoading(false)
-    }
-  }
-
   function renderList() {
     if (state.status === 'idle' || state.status === 'loading') {
       return <Loading />
@@ -250,10 +229,9 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
       return state.error ? <ErrorState error={state.error} onRetry={() => void run(loadFirstPage)} /> : null
     }
 
-    const { page, lookups: loaded, summary } = state.data
+    const { lookups: loaded, summary } = state.data
     const purposeNames = new Map(loaded.purposes.map((purpose) => [purpose.id, purpose.name]))
-    const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
-    const nextCursor = more ? more.nextCursor : page.nextCursor
+    const transactions = more.rows
 
     // An empty filtered list is not a failed search: nothing matched the
     // filters, not something she typed. A search inside the filters is still a
@@ -314,19 +292,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
           monthHeaders={month === null}
           onRefresh={() => run(loadFirstPage, { silent: true })}
         />
-        {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
-        {nextCursor && !moreError && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            disabled={moreLoading}
-            onClick={() => void loadMore(nextCursor)}
-          >
-            {moreLoading ? copy.common.loading : text.loadMore}
-          </Button>
-        )}
+        <LoadMore pages={more} />
       </>
     )
   }

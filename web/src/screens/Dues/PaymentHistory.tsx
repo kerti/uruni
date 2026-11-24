@@ -1,6 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, MagnifyingGlass } from '@phosphor-icons/react'
 import SectionLabel from '@/components/SectionLabel'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import DuesEntryDialogs from '@/screens/Dues/DuesEntryDialogs'
@@ -12,11 +12,12 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
 import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listDuesPayments } from '@/lib/dues'
 import { useApi } from '@/lib/useApi'
+import { usePagesAfter } from '@/lib/usePagesAfter'
+import LoadMore from '@/components/LoadMore'
 import type { DuesPaymentHistoryRow, DuesPaymentsPage } from '@/lib/dues'
 import { tappableCard } from '@/components/cardClasses'
 import ReceiptCount from '@/components/ReceiptCount'
@@ -55,10 +56,11 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
   const [draft, setDraft] = useState(q)
 
   const [state, run] = useApi<DuesPaymentsPage>()
-  const [more, setMore] = useState<DuesPaymentsPage | null>(null)
-  const [moreLoading, setMoreLoading] = useState(false)
-  const [moreError, setMoreError] = useState<ApiError | null>(null)
-  const generation = useRef(0)
+  const more = usePagesAfter(
+    state.data,
+    (cursor) => listDuesPayments({ q: q || undefined, cursor }),
+    (page) => page.duesPayments,
+  )
 
   const entry = useDialogParam('entry')
 
@@ -67,19 +69,10 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
   // After a reversal or a nota: re-read the first page in place, so the card
   // and the dialog over it do not drop to Loading.
   const refreshFirstPage = useCallback(() => {
-    generation.current += 1
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void run(loadFirstPage, { silent: true })
   }, [run, loadFirstPage])
 
   useEffect(() => {
-    generation.current += 1
-    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void run(loadFirstPage)
   }, [run, loadFirstPage, refetchKey])
 
@@ -108,25 +101,6 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
     return () => window.clearTimeout(timer)
   }, [draft, q, setSearchParams])
 
-  async function loadMore(cursor: string) {
-    const startedIn = generation.current
-    setMoreLoading(true)
-    setMoreError(null)
-    try {
-      const page = await listDuesPayments({ q: q || undefined, cursor })
-      if (startedIn !== generation.current) return
-      setMore((prev) => ({
-        duesPayments: [...(prev?.duesPayments ?? []), ...page.duesPayments],
-        nextCursor: page.nextCursor,
-      }))
-    } catch (err) {
-      if (startedIn !== generation.current) return
-      setMoreError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
-    } finally {
-      if (startedIn === generation.current) setMoreLoading(false)
-    }
-  }
-
   function renderList() {
     if (state.status === 'idle' || state.status === 'loading') {
       return <Loading />
@@ -136,9 +110,7 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
       return state.error ? <ErrorState error={state.error} onRetry={() => void run(loadFirstPage)} /> : null
     }
 
-    const page = state.data
-    const rows = more ? [...page.duesPayments, ...more.duesPayments] : page.duesPayments
-    const nextCursor = more ? more.nextCursor : page.nextCursor
+    const rows = more.rows
 
     if (rows.length === 0) {
       return <p className="text-muted-foreground">{q ? text.noResults(q) : text.empty}</p>
@@ -152,19 +124,7 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
           ))}
         </ul>
         <DuesEntryDialogs rows={rows} onRefresh={refreshFirstPage} />
-        {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
-        {nextCursor && !moreError && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            disabled={moreLoading}
-            onClick={() => void loadMore(nextCursor)}
-          >
-            {moreLoading ? copy.common.loading : text.loadMore}
-          </Button>
-        )}
+        <LoadMore pages={more} />
       </>
     )
   }

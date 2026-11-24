@@ -173,11 +173,11 @@ describe('Transactions tab', () => {
     renderAt('/history/transactions')
 
     expect(await screen.findByText('Galon')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: text.loadMore }))
+    await user.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     expect(await screen.findByText('Beli sapu')).toBeInTheDocument()
     expect(screen.getByText('Galon')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.loadMore })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.loadMore })).not.toBeInTheDocument()
     expect(requests.at(-1)?.searchParams.get('cursor')).toBe('c1')
   })
 
@@ -342,7 +342,7 @@ describe('Transactions tab', () => {
     renderAt('/history/transactions?purpose=11')
     await screen.findByText('Pertama')
 
-    await user.click(screen.getByRole('button', { name: text.loadMore }))
+    await user.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     expect(await screen.findByText('Kedua')).toBeInTheDocument()
     expect(requests[1].searchParams.get('purpose_id')).toBe('11')

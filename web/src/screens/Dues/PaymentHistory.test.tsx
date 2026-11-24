@@ -122,11 +122,11 @@ describe('PaymentHistory', () => {
     render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     expect(await screen.findByText('Warga Dua')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: text.loadMore }))
+    await user.click(screen.getByRole('button', { name: copy.common.loadMore }))
 
     expect(await screen.findByText('Warga Satu')).toBeInTheDocument()
     expect(screen.getByText('Warga Dua')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.loadMore })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: copy.common.loadMore })).not.toBeInTheDocument()
     expect(requests.at(-1)?.searchParams.get('cursor')).toBe('c1')
   })
 

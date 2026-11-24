@@ -15,6 +15,7 @@ import { noteForDisplay, payoutNote, placedOn } from '@/lib/transactions'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useHeldRow } from '@/lib/useHeldRow'
 import CorrectPurposeDialog from '@/components/CorrectPurposeDialog'
 import type { Purpose } from '@/lib/purposes'
 import type { Transaction } from '@/lib/transactions'
@@ -106,8 +107,18 @@ export default function TransactionList({
   // malformed one: strip it rather than leave an inert param in the URL.
   // clear(), never close() - a dead link is not a navigation to undo. A
   // `foreign` value belongs to something else on the screen and is left alone.
+  //
+  // Every dialog's row is held (useHeldRow): a re-read that starts a paged
+  // list over (usePagesAfter) drops a later page's rows from `transactions`
+  // while their dialog is still open, and that dialog must stay.
+  const correcting = useHeldRow(correctionId, transactions)
+  const reversing = useHeldRow(reversalId, transactions)
+  const receiptsForTransaction = useHeldRow(receiptsForId, transactions)
+  const entryId = entry.value !== null && String(Number(entry.value)) === entry.value ? Number(entry.value) : null
+  const detailTransaction = useHeldRow(entryId, transactions)
+
   const { clear: clearCorrection } = correction
-  const knowsCorrectionRow = correctionId !== null && transactions.some((t) => t.id === correctionId)
+  const knowsCorrectionRow = correcting !== null
   useEffect(() => {
     if (correctionKind === 'foreign' || correctionKind === 'new') return
     if (knowsCorrectionRow) return
@@ -117,7 +128,7 @@ export default function TransactionList({
   // The same strip for `reverse:`: a value naming a row this list does not
   // hold (or malformed) is cleared, a neighbour's value is left alone.
   const { clear: clearReversal } = reversal
-  const knowsReversalRow = reversalId !== null && transactions.some((t) => t.id === reversalId)
+  const knowsReversalRow = reversing !== null
   useEffect(() => {
     if (reversalKind === 'foreign' || reversalKind === 'new') return
     if (knowsReversalRow) return
@@ -127,11 +138,6 @@ export default function TransactionList({
   if (transactions.length === 0) {
     return <p className="text-muted-foreground">{emptyMessage}</p>
   }
-
-  const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
-  const correcting = transactions.find((t) => t.id === correctionId) ?? null
-  const reversing = transactions.find((t) => t.id === reversalId) ?? null
-  const detailTransaction = entry.value === null ? null : (transactions.find((t) => String(t.id) === entry.value) ?? null)
 
   // The correction dialog names a row's current pos too, which may be one this
   // list's own rows never mention (an envelope's activity knows only itself).

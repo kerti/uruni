@@ -50,7 +50,6 @@ export const copy = {
     transactions: {
       searchLabel: 'Cari transaksi',
       searchPlaceholder: 'Catatan, pos, anggota, atau jumlah',
-      loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
       // The purpose filter - also the link from an envelope's detail screen,
       // the one route ADR-032 gives a closed envelope's record. It names
@@ -120,7 +119,6 @@ export const copy = {
     reimbursements: {
       searchLabel: 'Cari talangan',
       searchPlaceholder: 'Nama anggota atau catatan',
-      loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada talangan yang cocok dengan “${q}”.`,
     },
     // Cek kas's tab: a paged, read-only list of past snapshots - no search
@@ -128,7 +126,6 @@ export const copy = {
     // copy.reconciliation.heading, so "Cek kas" has one source.
     reconciliations: {
       emptyState: 'Belum pernah cek kas. Riwayatnya muncul di sini setelah cek kas pertama.',
-      loadMore: 'Muat lebih banyak',
       // The snapshot's note, shown in the detail sheet - no existing bare
       // "Catatan" label to reuse (every other is "Catatan (opsional)", a form
       // field's label).
@@ -148,7 +145,6 @@ export const copy = {
       heading: 'Riwayat pembayaran',
       searchLabel: 'Cari pembayaran',
       searchPlaceholder: 'Nama anggota',
-      loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada pembayaran yang cocok dengan “${q}”.`,
       empty: 'Belum ada pembayaran iuran.',
       // date is already formatted (formatIsoDate) by the caller.
@@ -215,6 +211,8 @@ export const copy = {
     loading: 'Memuat…',
     offlineBanner: 'Belum tersambung. Uruni butuh koneksi.',
     retry: 'Coba lagi',
+    // Every keyset list's next page (ADR-032), one label everywhere.
+    loadMore: 'Muat lebih banyak',
     // Shown only when a new build is already downloaded and waiting. Never an
     // alarm - nothing is broken, and nothing reloads until she taps.
     updateAvailable: 'Versi baru sudah siap.',
@@ -1011,7 +1009,6 @@ export const copy = {
       noResults: (q: string) => `Tidak ada anggota yang cocok dengan "${q}".`,
       searchLabel: 'Cari anggota',
       searchPlaceholder: 'Nama anggota',
-      loadMore: 'Muat lebih banyak',
       nameLabel: 'Nama anggota',
       tierLabel: 'Kategori',
       // The "no tier" option: a member with no tier owes no dues, a real state

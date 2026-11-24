@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError, errorCode } from '@/lib/api'
+import { errorCode } from '@/lib/api'
 import { todayISODate, dateBounds, formatPeriod, periodBounds } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
@@ -23,6 +23,9 @@ import { createMember, deleteMember, listDuesTiers, listMembersPage, updateMembe
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
+import { useHeldRow } from '@/lib/useHeldRow'
+import { usePagesAfter } from '@/lib/usePagesAfter'
+import LoadMore from '@/components/LoadMore'
 import type { DuesTier, Member, MembersPage } from '@/lib/setup'
 import { tappableCard } from '@/components/cardClasses'
 import { Badge } from '@/components/Badge'
@@ -78,12 +81,14 @@ export default function Roster() {
   const toast = useToast()
 
   const [state, run] = useApi<FirstPage>()
-  // Pages after the first, appended in order - the shape History/Transactions.tsx
-  // uses for "muat lebih banyak".
-  const [more, setMore] = useState<MembersPage | null>(null)
-  const [moreLoading, setMoreLoading] = useState(false)
-  const [moreError, setMoreError] = useState<ApiError | null>(null)
-  const generation = useRef(0)
+  // "Muat lebih banyak". Any re-read of the first page - a search, a reload
+  // after a save, the silent refresh after an uncertain write - starts the
+  // list over.
+  const more = usePagesAfter(
+    state.data?.page,
+    (cursor) => listMembersPage(q || undefined, cursor),
+    (page) => page.members,
+  )
 
   const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
     const [page, tiers] = await Promise.all([listMembersPage(q || undefined), listDuesTiers()])
@@ -91,11 +96,6 @@ export default function Roster() {
   }, [q])
 
   useEffect(() => {
-    generation.current += 1
-    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
-    setMore(null)
-    setMoreLoading(false)
-    setMoreError(null)
     void run(loadFirstPage)
   }, [run, loadFirstPage])
 
@@ -131,30 +131,16 @@ export default function Roster() {
   // After a write whose response was lost, re-read in place.
   const refresh = () => run(loadFirstPage, { silent: true })
 
-  async function loadMore(cursor: string) {
-    const startedIn = generation.current
-    setMoreLoading(true)
-    setMoreError(null)
-    try {
-      const page = await listMembersPage(q || undefined, cursor)
-      if (startedIn !== generation.current) return
-      setMore((prev) => ({ members: [...(prev?.members ?? []), ...page.members], nextCursor: page.nextCursor }))
-    } catch (err) {
-      if (startedIn !== generation.current) return
-      setMoreError(err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err)))
-    } finally {
-      if (startedIn === generation.current) setMoreLoading(false)
-    }
-  }
-
-  const members = state.data ? [...state.data.page.members, ...(more?.members ?? [])] : []
+  const members = more.rows
   const tiers = state.data?.tiers ?? []
 
   // 'member' is this screen's prefix (dialogTarget.ts). Anggota is its own
   // route, so no sibling shares `?edit=`, but the parser is still what reads
   // the param, as in History/Transactions.tsx.
   const target = parseDialogTarget('member', dialogValue)
-  const editingMember = target.kind === 'edit' ? (members.find((m) => m.id === target.id) ?? null) : null
+  // Held, so a member from a later page keeps its dialog when the list starts
+  // over under it (an uncertain write's refresh).
+  const editingMember = useHeldRow(target.kind === 'edit' ? target.id : null, members)
 
   // A `member:` value naming an id this page has not loaded (a deep link, a
   // stale link, or one already removed) - strip it once the page has loaded
@@ -176,7 +162,6 @@ export default function Roster() {
       return state.error && <ErrorState error={state.error} onRetry={reload} />
     }
 
-    const nextCursor = more ? more.nextCursor : state.data.page.nextCursor
     const emptyMessage = q ? text.noResults(q) : text.empty
 
     if (members.length === 0) {
@@ -219,19 +204,7 @@ export default function Roster() {
             </li>
           ))}
         </ul>
-        {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
-        {nextCursor && !moreError && (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            disabled={moreLoading}
-            onClick={() => void loadMore(nextCursor)}
-          >
-            {moreLoading ? copy.common.loading : text.loadMore}
-          </Button>
-        )}
+        <LoadMore pages={more} />
       </>
     )
   }
