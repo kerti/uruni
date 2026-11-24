@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError, NETWORK_ERROR_CODE, WRITE_OUTCOME_UNKNOWN } from '@/lib/api'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 
 /** A promise this test resolves by hand, so two calls can be interleaved. */
 function deferred<T>() {
@@ -131,24 +131,25 @@ describe('useApi', () => {
     expect(result.current[0].error).toBeUndefined()
   })
 
-  // The settle option re-reads for an uncertain write, and only then does the
-  // error state land.
-  it('runs settle before the error state for write_outcome_unknown, and not for other codes', async () => {
+  // useApi is loads-only: a write_outcome_unknown caught here means a write
+  // went through the load hook, which dev builds say out loud.
+  it('logs in dev when a write_outcome_unknown reaches the load hook, and still sets the error', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { result } = renderHook(() => useApi<string>())
-    const settle = vi.fn(() => {
-      expect(result.current[0].status).toBe('loading')
-    })
 
     await act(async () => {
-      await result.current[1](() => Promise.reject(new ApiError(WRITE_OUTCOME_UNKNOWN, 'lost', true)), { settle })
+      await result.current[1](() => Promise.reject(new ApiError(WRITE_OUTCOME_UNKNOWN, 'lost', true)))
     })
-    expect(settle).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(String(spy.mock.calls[0]![0])).toContain('useWrite')
     expect(result.current[0].error?.code).toBe(WRITE_OUTCOME_UNKNOWN)
 
+    spy.mockClear()
     await act(async () => {
-      await result.current[1](() => Promise.reject(new ApiError(NETWORK_ERROR_CODE, 'down', true)), { settle })
+      await result.current[1](() => Promise.reject(new ApiError(NETWORK_ERROR_CODE, 'down', true)))
     })
-    expect(settle).toHaveBeenCalledTimes(1)
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
   })
 
   // The hook's other guard - not committing after unmount - is deliberately
@@ -173,5 +174,115 @@ describe('useApi', () => {
       call.resolve('too late')
       await call.promise
     })
+  })
+})
+
+describe('useWrite', () => {
+  const unknown = () => Promise.reject(new ApiError(WRITE_OUTCOME_UNKNOWN, 'lost', true))
+
+  it('runs settle once, before the error state, for write_outcome_unknown only', async () => {
+    let seen: string | undefined
+    const settle = vi.fn(() => {
+      seen = result.current[0].status
+    })
+    const { result } = renderHook(() => useWrite<string>(settle))
+
+    await act(async () => {
+      await result.current[1](unknown)
+    })
+    expect(settle).toHaveBeenCalledTimes(1)
+    // Not yet the error: settle ran first.
+    expect(seen).not.toBe('error')
+    expect(result.current[0].error?.code).toBe(WRITE_OUTCOME_UNKNOWN)
+
+    for (const err of [new ApiError(NETWORK_ERROR_CODE, 'down', true), new ApiError('invalid_argument', 'bad'), new Error('boom')]) {
+      await act(async () => {
+        await result.current[1](() => Promise.reject(err))
+      })
+      expect(result.current[0].status).toBe('error')
+    }
+    expect(settle).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not settle on success', async () => {
+    const settle = vi.fn()
+    const { result } = renderHook(() => useWrite<string>(settle))
+    await act(async () => {
+      await result.current[1](() => Promise.resolve('done'))
+    })
+    expect(settle).not.toHaveBeenCalled()
+    expect(result.current[0]).toMatchObject({ status: 'success', data: 'done' })
+  })
+
+  it('a null settle runs nothing and still sets the error', async () => {
+    const { result } = renderHook(() => useWrite<string>(null))
+    await act(async () => {
+      await result.current[1](unknown)
+    })
+    expect(result.current[0].status).toBe('error')
+    expect(result.current[0].error?.code).toBe(WRITE_OUTCOME_UNKNOWN)
+  })
+
+  it('uses the settle of the latest render, and keeps run stable', async () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const { result, rerender } = renderHook(({ settle }) => useWrite<string>(settle), { initialProps: { settle: first } })
+    const run = result.current[1]
+    rerender({ settle: second })
+    expect(result.current[1]).toBe(run)
+
+    await act(async () => {
+      await run(unknown)
+    })
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('a swallowed reload failure still lets the original error through', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { result } = renderHook(() => useWrite<string>(() => Promise.reject(new Error('reload failed'))))
+    await act(async () => {
+      await result.current[1](unknown)
+    })
+    expect(result.current[0].error?.code).toBe(WRITE_OUTCOME_UNKNOWN)
+    warn.mockRestore()
+  })
+
+  it('the latest started call wins: an older write failing late does not set error or settle', async () => {
+    const slow = deferred<string>()
+    const settle = vi.fn()
+    const { result } = renderHook(() => useWrite<string>(settle))
+
+    act(() => {
+      void result.current[1](() => slow.promise)
+    })
+    await act(async () => {
+      await result.current[1](() => Promise.resolve('newer'))
+    })
+    await act(async () => {
+      slow.reject(new ApiError(WRITE_OUTCOME_UNKNOWN, 'lost', true))
+      await slow.promise.catch(() => {})
+    })
+    expect(settle).not.toHaveBeenCalled()
+    expect(result.current[0]).toMatchObject({ status: 'success', data: 'newer' })
+  })
+
+  it('a call superseded while settle runs does not set its error', async () => {
+    const reload = deferred<void>()
+    const { result } = renderHook(() => useWrite<string>(() => reload.promise))
+
+    let first!: Promise<void>
+    act(() => {
+      first = result.current[1](unknown)
+    })
+    await waitFor(() => expect(result.current[0].status).toBe('loading'))
+    await act(async () => {
+      await result.current[1](() => Promise.resolve('newer'))
+    })
+    await act(async () => {
+      reload.resolve()
+      await first
+    })
+    expect(result.current[0]).toMatchObject({ status: 'success', data: 'newer' })
   })
 })

@@ -11,7 +11,7 @@ import { copy } from '@/copy/id'
 import { currentPeriod, formatPeriod } from '@/lib/dates'
 import { getOutstandingDues, unwaiveDues, waiveDues, type DuesStatusRow, type OutstandingDuesPeriod } from '@/lib/dues'
 import { formatIDR } from '@/lib/money'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 
 const text = copy.dues.waiver
 const paymentText = copy.dues.payment
@@ -47,6 +47,7 @@ export function WaiveDialog({
   period,
   onClose,
   onWaived,
+  refresh,
 }: {
   /** The card being waived; null keeps the dialog closed. */
   row: DuesStatusRow | null
@@ -54,6 +55,8 @@ export function WaiveDialog({
   period: string
   onClose: () => void
   onWaived: () => void
+  /** Re-reads the dues status the screen shows; runs when a waiver's outcome is unknown (ADR-043). */
+  refresh: () => Promise<void>
 }) {
   return (
     <Dialog
@@ -68,13 +71,25 @@ export function WaiveDialog({
         </DialogHeader>
         {/* Mounted per opening (DialogContent unmounts on close): every
             opening reads what the member owes afresh. */}
-        {row && <WaiveForm row={row} period={period} onClose={onClose} onWaived={onWaived} />}
+        {row && <WaiveForm row={row} period={period} onClose={onClose} onWaived={onWaived} refresh={refresh} />}
       </DialogContent>
     </Dialog>
   )
 }
 
-function WaiveForm({ row, period, onClose, onWaived }: { row: DuesStatusRow; period: string; onClose: () => void; onWaived: () => void }) {
+function WaiveForm({
+  row,
+  period,
+  onClose,
+  onWaived,
+  refresh,
+}: {
+  row: DuesStatusRow
+  period: string
+  onClose: () => void
+  onWaived: () => void
+  refresh: () => Promise<void>
+}) {
   const now = currentPeriod()
   const [monthsAhead, setMonthsAhead] = useState(() => {
     // A card for a month ahead must be in reach to come ticked.
@@ -86,7 +101,7 @@ function WaiveForm({ row, period, onClose, onWaived }: { row: DuesStatusRow; per
   const [selected, setSelected] = useState<string[]>([period])
   const [note, setNote] = useState('')
   const [owed, loadOwed] = useApi<OutstandingDuesPeriod[]>()
-  const [submit, runSubmit] = useApi<void>()
+  const [submit, runSubmit] = useWrite<void>(refresh)
   const submitting = submit.status === 'loading'
 
   const load = useCallback(() => loadOwed(() => getOutstandingDues(row.member.id, through)), [loadOwed, row.member.id, through])
@@ -216,13 +231,16 @@ export function UnwaiveDialog({
   period,
   onClose,
   onUnwaived,
+  refresh,
 }: {
   row: DuesStatusRow | null
   period: string
   onClose: () => void
   onUnwaived: () => void
+  /** Re-reads the dues status the screen shows; runs when the outcome is unknown (ADR-043). */
+  refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<void>()
+  const [state, run] = useWrite<void>(refresh)
   const busy = state.status === 'loading'
 
   function handleConfirm() {

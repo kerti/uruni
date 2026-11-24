@@ -13,7 +13,7 @@ import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { type DuesRate, type DuesTier, type DuesTierWithRates, createDuesTier, listDuesTiers } from '@/lib/duesTiers'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import { currentPeriod } from '@/lib/dates'
@@ -157,7 +157,7 @@ function AddTierDialog({
   onAdded: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<DuesTier>()
+  const [state, run] = useWrite<DuesTier>(refresh)
   const toast = useToast()
   const [name, setName] = useState('')
 
@@ -171,15 +171,12 @@ function AddTierDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '') return
-    void run(
-      async () => {
-        const created = await createDuesTier(trimmed)
-        toast.success(text.saved)
-        onAdded()
-        return created
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const created = await createDuesTier(trimmed)
+      toast.success(text.saved)
+      onAdded()
+      return created
+    })
   }
 
   return (

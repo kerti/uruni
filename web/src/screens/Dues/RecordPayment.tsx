@@ -18,7 +18,7 @@ import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
 import { formatPeriod, dateBounds, currentPeriod, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { type Member, listAllMembers } from '@/lib/members'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
 import { cardSurface } from '@/components/cardClasses'
@@ -98,7 +98,6 @@ export default function RecordDuesPayment({
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [outstandingState, outstandingRun] = useApi<OutstandingDuesPeriod[]>()
-  const [submitState, submitRun] = useApi<unknown>()
 
   const [memberId, setMemberId] = useState<number | null>(null)
   const [accountId, setAccountId] = useState<number | null>(null)
@@ -113,6 +112,15 @@ export default function RecordDuesPayment({
   // is owed up to now", each tap of the add-month button one more.
   const [monthsAhead, setMonthsAhead] = useState(0)
   const through = addMonths(currentPeriod(), monthsAhead)
+
+  // A lost response may still have saved the payment; re-read what the member
+  // owes (and the form's balances) before she can retry.
+  const [submitState, submitRun] = useWrite<unknown>(async () => {
+    await Promise.all([
+      loadRun(loadFormData, { silent: true }),
+      memberId === null ? undefined : outstandingRun(() => getOutstandingDues(memberId, through), { silent: true }),
+    ])
+  })
   // The seed from the status card is applied once: the member first, then the
   // ticks when that member's periods first arrive. A later pick of another
   // member, or a later edit, must not be redone (null once spent).
@@ -217,35 +225,21 @@ export default function RecordDuesPayment({
     event.preventDefault()
     if (!canSubmit || memberId === null || accountId === null) return
 
-    void submitRun(
-      async () => {
-        const result = await createDuesPayment({
-          memberId,
-          accountId,
-          occurredOn,
-          // No note is typed on this form (PRD section 7.3) - the row explains
-          // itself through TransactionList's display label.
-          note: null,
-          // In the order the server offered them - oldest first - so a
-          // multi-period payment reads the way it was collected.
-          periods: periods
-            .filter((p) => selected.includes(p.period))
-            .map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
-        })
-        onRecorded()
-        return result
-      },
-      {
-        // A lost response may still have saved the payment; re-read what the
-        // member owes (and the form's balances) before she can retry.
-        settle: async () => {
-          await Promise.all([
-            loadRun(loadFormData, { silent: true }),
-            memberId === null ? undefined : outstandingRun(() => getOutstandingDues(memberId, through), { silent: true }),
-          ])
-        },
-      },
-    )
+    void submitRun(async () => {
+      const result = await createDuesPayment({
+        memberId,
+        accountId,
+        occurredOn,
+        // No note is typed on this form (PRD section 7.3) - the row explains
+        // itself through TransactionList's display label.
+        note: null,
+        // In the order the server offered them - oldest first - so a
+        // multi-period payment reads the way it was collected.
+        periods: periods.filter((p) => selected.includes(p.period)).map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
+      })
+      onRecorded()
+      return result
+    })
   }
 
   if (loadState.status === 'idle' || loadState.status === 'loading') {

@@ -16,7 +16,7 @@ import { defaultAccountId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/members'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Reimbursement } from '@/lib/reimbursements'
 import ClaimSummary from './ClaimSummary'
@@ -152,7 +152,7 @@ function SettleForm({
 }) {
   // Here, not in the dialog: the form is mounted per open, so a failed
   // attempt's message never greets the next one.
-  const [submitState, submitRun] = useApi<unknown>()
+  const [submitState, submitRun] = useWrite<unknown>(reload)
   const submitting = submitState.status === 'loading'
   const error = submitState.status === 'error' && submitState.error ? errorText(submitState.error) : null
 
@@ -174,13 +174,10 @@ function SettleForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || accountId === null) return
-    void submitRun(
-      async () => {
-        await settleReimbursement(claim.id, { account_id: accountId, occurred_on: occurredOn })
-        onSettled({ frontedOn: claim.incurred_on, paidOn: occurredOn })
-      },
-      { settle: reload },
-    )
+    void submitRun(async () => {
+      await settleReimbursement(claim.id, { account_id: accountId, occurred_on: occurredOn })
+      onSettled({ frontedOn: claim.incurred_on, paidOn: occurredOn })
+    })
   }
 
   return (

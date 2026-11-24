@@ -10,7 +10,7 @@ import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { confirmRestore, inspectRestoreUpload, inspectStoredRestore } from '@/lib/restore'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import type { FundRestorePreview, RestorePreview } from '@/lib/restore'
 
 const text = copy.settings.backup
@@ -43,11 +43,11 @@ export interface RestoreDialogHandle {
  */
 const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_props, ref) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [inspectState, runInspect] = useApi<{ token: string; preview: RestorePreview }>()
-  const [confirmState, runConfirm] = useApi<void>()
+  const [inspectState, runInspect] = useWrite<{ token: string; preview: RestorePreview }>(null)
+  const [confirmState, runConfirm] = useWrite<void>(null)
   const [password, setPassword] = useState('')
   const [open, setOpen] = useState(false)
-  // useApi has no reset, and this dialog instance outlives every restore it
+  // useWrite has no reset, and this dialog instance outlives every restore it
   // runs: without this flag a wrong-password error from a cancelled attempt
   // would sit under the next preview's password field.
   const [confirmAttempted, setConfirmAttempted] = useState(false)

@@ -15,7 +15,7 @@ import { formatIsoDate, formatPeriod, formatUnixSecondsWithTime } from '@/lib/da
 import { formatIDR } from '@/lib/money'
 import { receiptUrl, uploadReceipt } from '@/lib/receipts'
 import { canCorrectPurpose, frontedOnAnotherDay, noteForDisplay } from '@/lib/transactions'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.transactionDetail
@@ -101,7 +101,7 @@ function Detail({
   onViewReceipts?: (transaction: Transaction) => void
   onReceiptsChanged?: () => void
 }) {
-  const [upload, runUpload] = useApi<unknown>()
+  const [upload, runUpload] = useWrite<unknown>(onReceiptsChanged ?? null)
   const toast = useToast()
   const fileInput = useRef<HTMLInputElement>(null)
   const incoming = transaction.direction === 'in'
@@ -140,7 +140,6 @@ function Detail({
         return result
       },
       // A lost response may still have stored the photo; re-read before she retries.
-      { settle: onReceiptsChanged },
     )
   }
 

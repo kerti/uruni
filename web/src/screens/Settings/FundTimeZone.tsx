@@ -8,7 +8,7 @@ import TimeZoneField from '@/components/TimeZoneField'
 import { copy } from '@/copy/id'
 import { type Fund, updateFund } from '@/lib/fund'
 import { DEFAULT_TIME_ZONE, isTimeZone } from '@/lib/timeZones'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 
 const text = copy.settings.fund
@@ -34,7 +34,7 @@ export function EditTimeZoneDialog({
   onChanged: (fund: Fund) => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Fund>()
+  const [state, run] = useWrite<Fund>(refresh)
   const [zone, setZone] = useState<string>(DEFAULT_TIME_ZONE)
 
   // Reset to the fund's current zone each time the dialog opens, so a cancelled
@@ -49,14 +49,11 @@ export function EditTimeZoneDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (unchanged) return
-    void run(
-      async () => {
-        const updated = await updateFund({ timeZone: zone })
-        onChanged(updated)
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await updateFund({ timeZone: zone })
+      onChanged(updated)
+      return updated
+    })
   }
 
   return (

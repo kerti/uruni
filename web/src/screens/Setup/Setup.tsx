@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { currentPeriod, setFundTimeZone, suggestedTimeZone, todayISODate } from '@/lib/dates'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { parseRupiah } from '@/lib/money'
 import { createDuesRate, createDuesTier } from '@/lib/duesTiers'
 import { createMember } from '@/lib/members'
@@ -47,7 +47,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   const [rateAmount, setRateAmount] = useState('')
   const [members, setMembers] = useState<string[]>([])
 
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(null)
   const submitting = state.status === 'loading'
   const error = state.status === 'error' ? state.error : undefined
 

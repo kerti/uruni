@@ -269,6 +269,33 @@ describe('DuesStatus', () => {
       await vi.waitFor(() => expect(deletes).toEqual([`/api/members/6/dues-waivers/${currentPeriod()}`]))
     })
 
+    // ADR-043 / #891: a take-back whose response was lost may have been applied,
+    // so the screen re-reads the month before the error shows.
+    it('re-reads the dues status when Batalkan pemutihan has an unknown outcome', async () => {
+      let statusReads = 0
+      const base = stubDuesStatus(waivedRows)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === 'string' ? input : input.toString()
+          if (url.includes('/dues-waivers/') && init?.method === 'DELETE') throw new TypeError('Failed to fetch')
+          if (url.includes('/api/dues-status') && !url.includes('/grid')) statusReads += 1
+          return base(input)
+        }),
+      )
+      const user = userEvent.setup()
+      render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })
+
+      const card = (await screen.findByText('Warga Enam')).closest('li') as HTMLElement
+      await user.click(within(card).getByRole('button', { name: text.waiver.undoAria('Warga Enam') }))
+      const dialog = await screen.findByRole('dialog', { name: text.waiver.undoHeading })
+      expect(statusReads).toBe(1)
+
+      await user.click(within(dialog).getByRole('button', { name: text.waiver.undoConfirm }))
+      expect(await within(dialog).findByText(copy.common.errors.write_outcome_unknown)).toBeInTheDocument()
+      expect(statusReads).toBe(2)
+    })
+
     it('is not "belum bayar": the filter leaves it out', async () => {
       vi.stubGlobal('fetch', stubDuesStatus(waivedRows))
       render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />, { wrapper: ListRouter })

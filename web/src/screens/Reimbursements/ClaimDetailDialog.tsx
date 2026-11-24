@@ -12,7 +12,7 @@ import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import type { Reimbursement } from '@/lib/reimbursements'
 
 const text = copy.reimbursements
@@ -95,7 +95,7 @@ function Detail({
   busy: boolean
   error: string | null
 } & ClaimDetailActions) {
-  const [upload, runUpload] = useApi<unknown>()
+  const [upload, runUpload] = useWrite<unknown>(onReceiptsChanged)
   const toast = useToast()
   const fileInput = useRef<HTMLInputElement>(null)
   const receiptIds = claim.receipt_ids ?? []
@@ -117,7 +117,6 @@ function Detail({
         return result
       },
       // A lost response may still have stored the photo; re-read before she retries.
-      { settle: onReceiptsChanged },
     )
   }
 

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { copy } from '@/copy/id'
 import { deleteReceipt, receiptUrl, uploadReceipt } from '@/lib/receipts'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { ReceiptParentKind } from '@/lib/receipts'
 import { insetPanel } from '@/components/cardClasses'
@@ -51,7 +51,8 @@ export default function ReceiptDialog({
   onClose: () => void
   onChanged: () => void
 }) {
-  const [state, run] = useApi<unknown>()
+  // A lost response may still have changed the photos; re-read them before she can retry.
+  const [state, run] = useWrite<unknown>(onChanged)
   const [newFile, setNewFile] = useState<File | null>(null)
   // The one receipt currently offering its "Ganti foto" picker, if any -
   // never more than one at a time, the single-open-form shape
@@ -83,8 +84,6 @@ export default function ReceiptDialog({
 
   const toast = useToast()
   const busy = state.status === 'loading'
-  // A lost response may still have changed the photos; re-read them before she can retry.
-  const settleOnUnknown = { settle: onChanged }
 
   function handleAdd() {
     if (parentId === null || !newFile) return
@@ -94,7 +93,7 @@ export default function ReceiptDialog({
       onChanged()
       toast.success(text.added)
       return result
-    }, settleOnUnknown)
+    })
   }
 
   function handleReplace(oldId: number) {
@@ -111,7 +110,7 @@ export default function ReceiptDialog({
       onChanged()
       toast.success(text.replaced)
       return result
-    }, settleOnUnknown)
+    })
   }
 
   function handleDelete(id: number) {
@@ -120,7 +119,7 @@ export default function ReceiptDialog({
       setConfirmingDeleteId(null)
       onChanged()
       toast.success(text.deleted)
-    }, settleOnUnknown)
+    })
   }
 
   return (
