@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { login } from '@/lib/auth'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { copy } from '@/copy/id'
 import type { AuthUser, DemoLogin } from '@/lib/auth'
 
@@ -37,7 +37,7 @@ const loginErrors = { invalid_credentials: text.invalidCredentials, too_many_req
 export default function Login({ onLoggedIn, demo = null }: { onLoggedIn: (user: AuthUser) => void; demo?: DemoLogin | null }) {
   const [email, setEmail] = useState(demo?.email ?? '')
   const [password, setPassword] = useState(demo?.password ?? '')
-  const [state, run] = useApi<AuthUser>()
+  const [state, run] = useWrite<AuthUser>(null)
 
   const submitting = state.status === 'loading'
 

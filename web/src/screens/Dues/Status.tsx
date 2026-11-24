@@ -164,6 +164,8 @@ export default function DuesStatus({
     waiveTarget.kind === 'edit' ? (rows.find((r) => r.member.id === waiveTarget.id && UNPAID_STATUSES.includes(r.status)) ?? null) : null
   const unwaiveRow =
     unwaiveTarget.kind === 'edit' ? (rows.find((r) => r.member.id === unwaiveTarget.id && r.status === 'waived') ?? null) : null
+  // A silent re-read of the month on screen, for a waiver whose outcome is unknown (ADR-043).
+  const refresh = () => run(() => getDuesStatus(period), { silent: true })
   function afterWaiver(message: string) {
     toast.success(message)
     dialog.close()
@@ -370,8 +372,20 @@ export default function DuesStatus({
         {text.recordLink}
       </Button>
 
-      <WaiveDialog row={waiveRow} period={period} onClose={dialog.close} onWaived={() => afterWaiver(waiverText.success)} />
-      <UnwaiveDialog row={unwaiveRow} period={period} onClose={dialog.close} onUnwaived={() => afterWaiver(waiverText.undoSuccess)} />
+      <WaiveDialog
+        row={waiveRow}
+        period={period}
+        onClose={dialog.close}
+        onWaived={() => afterWaiver(waiverText.success)}
+        refresh={refresh}
+      />
+      <UnwaiveDialog
+        row={unwaiveRow}
+        period={period}
+        onClose={dialog.close}
+        onUnwaived={() => afterWaiver(waiverText.undoSuccess)}
+        refresh={refresh}
+      />
     </div>
   )
 }

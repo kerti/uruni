@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { changeEmail, changePassword, getUser } from '@/lib/auth'
 import { useDemoMode } from '@/lib/demoMode'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { AuthUser } from '@/lib/auth'
 
@@ -133,7 +133,10 @@ export default function User() {
 // with nothing to reset by hand.
 
 function EmailForm({ onChanged }: { onChanged: (user: AuthUser) => void }) {
-  const [state, run] = useApi<AuthUser>()
+  // changeEmail answers a lost response with a plain connection error
+  // (lib/auth.ts, plainConnectionError), never write_outcome_unknown, so
+  // there is no unknown outcome to re-read for.
+  const [state, run] = useWrite<AuthUser>(null)
   const [email, setEmail] = useState('')
   const [current, setCurrent] = useState('')
   const demo = useDemoMode()
@@ -186,7 +189,8 @@ function EmailForm({ onChanged }: { onChanged: (user: AuthUser) => void }) {
 }
 
 function PasswordForm({ onChanged }: { onChanged: () => void }) {
-  const [state, run] = useApi<void>()
+  // Nothing on the card shows the password, so there is nothing to re-read.
+  const [state, run] = useWrite<void>(null)
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [repeat, setRepeat] = useState('')

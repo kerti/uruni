@@ -27,7 +27,7 @@ import {
   updateDuesRate,
 } from '@/lib/duesTiers'
 import { rateInForce, rateSpan } from '@/lib/rateSpan'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import { card } from '@/components/cardClasses'
 import { Badge } from '@/components/Badge'
@@ -125,7 +125,7 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 
 /** The name, on its own, with one action row. */
 function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () => void; refresh: () => Promise<void> }) {
-  const [state, run] = useApi<DuesTier>()
+  const [state, run] = useWrite<DuesTier>(refresh)
   const toast = useToast()
   const [name, setName] = useState(tier.name)
   // Follows a rename that lands from the server (the reload after saving) -
@@ -140,15 +140,12 @@ function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '' || unchanged) return
-    void run(
-      async () => {
-        const updated = await renameDuesTier(tier.id, trimmed)
-        toast.success(text.saved)
-        onRenamed()
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await renameDuesTier(tier.id, trimmed)
+      toast.success(text.saved)
+      onRenamed()
+      return updated
+    })
   }
 
   return (
@@ -248,7 +245,7 @@ function RateRow({
   onSuperseded: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const toast = useToast()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -278,17 +275,14 @@ function RateRow({
   }
 
   function applyCorrection() {
-    void run(
-      async () => {
-        const updated = await updateDuesRate(rate.id, amount)
-        setEditing(false)
-        setConfirming(false)
-        toast.success(text.rateSaved)
-        onChanged()
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await updateDuesRate(rate.id, amount)
+      setEditing(false)
+      setConfirming(false)
+      toast.success(text.rateSaved)
+      onChanged()
+      return updated
+    })
   }
 
   return (
@@ -328,15 +322,12 @@ function RateRow({
                 className="self-start px-0 text-attention-text"
                 disabled={busy}
                 onClick={() =>
-                  void run(
-                    async () => {
-                      await deleteDuesRate(rate.id)
-                      setEditing(false)
-                      toast.success(text.rateDeleted)
-                      onChanged()
-                    },
-                    { settle: refresh },
-                  )
+                  void run(async () => {
+                    await deleteDuesRate(rate.id)
+                    setEditing(false)
+                    toast.success(text.rateDeleted)
+                    onChanged()
+                  })
                 }
               >
                 {busy ? text.deletingRate : text.deleteRate}
@@ -386,7 +377,7 @@ function RateRow({
  * field. PRD section 7.1's live-arrears escape hatch depends on setting it in
  * the past. */
 function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
-  const [state, run] = useApi<DuesRate>()
+  const [state, run] = useWrite<DuesRate>(refresh)
   const toast = useToast()
   const [amount, setAmount] = useState(0)
   const [effectiveFrom, setEffectiveFrom] = useState(currentPeriod)
@@ -396,17 +387,14 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (amount <= 0 || effectiveFrom === '') return
-    void run(
-      async () => {
-        const created = await createDuesRate(tierId, amount, effectiveFrom)
-        setAmount(0)
-        setEffectiveFrom(currentPeriod())
-        toast.success(text.rateSaved)
-        onAdded()
-        return created
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const created = await createDuesRate(tierId, amount, effectiveFrom)
+      setAmount(0)
+      setEffectiveFrom(currentPeriod())
+      toast.success(text.rateSaved)
+      onAdded()
+      return created
+    })
   }
 
   return (
@@ -442,7 +430,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
  * key, and the copy names why rather than restating the wire message
  * (ADR-014). */
 function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: () => void; refresh: () => Promise<void> }) {
-  const [state, run] = useApi<void>()
+  const [state, run] = useWrite<void>(refresh)
   const toast = useToast()
   const [confirming, setConfirming] = useState(false)
 
@@ -470,14 +458,11 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
             className="bg-attention-text text-primary-foreground hover:bg-attention-text/90"
             disabled={busy}
             onClick={() =>
-              void run(
-                async () => {
-                  await deleteDuesTier(tier.id)
-                  toast.success(text.deleted)
-                  onDeleted()
-                },
-                { settle: refresh },
-              )
+              void run(async () => {
+                await deleteDuesTier(tier.id)
+                toast.success(text.deleted)
+                onDeleted()
+              })
             }
           >
             {busy ? text.deleting : text.deleteConfirmAction}

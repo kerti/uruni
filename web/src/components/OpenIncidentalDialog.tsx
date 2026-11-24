@@ -12,7 +12,7 @@ import { copy } from '@/copy/id'
 import { todayISODate, dateBounds } from '@/lib/dates'
 import { openIncidental } from '@/lib/incidentals'
 import { type Member, listAllMembers } from '@/lib/members'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Incidental } from '@/lib/incidentals'
 
@@ -38,12 +38,15 @@ export default function OpenIncidentalDialog({
   open,
   onClose,
   onOpened,
+  refresh,
 }: {
   open: boolean
   onClose: () => void
   onOpened: (opened: Incidental) => void
+  /** Re-reads the screen's data; runs when the outcome of opening is unknown (ADR-043), so a retry sees an amplop that was in fact opened. */
+  refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Incidental>()
+  const [state, run] = useWrite<Incidental>(refresh)
   const [membersState, membersRun] = useApi<Member[]>()
   const [occasion, setOccasion] = useState('')
   const [targetAmount, setTargetAmount] = useState(0)

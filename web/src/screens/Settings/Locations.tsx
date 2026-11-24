@@ -16,7 +16,7 @@ import { copy } from '@/copy/id'
 import { hasCode } from '@/lib/errorCopy'
 import { createAccount, deleteAccount, listAccounts, setAccountInactiveOn, updateAccount } from '@/lib/accounts'
 import { todayISODate } from '@/lib/dates'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
@@ -183,7 +183,7 @@ function AddLocationDialog({
   onAdded: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Account>()
+  const [state, run] = useWrite<Account>(refresh)
   const [kind, setKind] = useState<AccountKind>('cash')
   const [name, setName] = useState('')
   const [openingBalance, setOpeningBalance] = useState(0)
@@ -204,20 +204,17 @@ function AddLocationDialog({
     event.preventDefault()
     const trimmed = name.trim()
     if (trimmed === '') return
-    void run(
-      async () => {
-        const created = await createAccount(
-          kind,
-          trimmed,
-          // No note is typed here (no field for one) - the row explains itself
-          // through TransactionList's display label ("Saldo awal - {lokasi}").
-          openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
-        )
-        onAdded()
-        return created
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const created = await createAccount(
+        kind,
+        trimmed,
+        // No note is typed here (no field for one) - the row explains itself
+        // through TransactionList's display label ("Saldo awal - {lokasi}").
+        openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
+      )
+      onAdded()
+      return created
+    })
   }
 
   return (
@@ -291,7 +288,7 @@ function EditLocationDialog({
   if (account) lastAccountRef.current = account
   const shown = account ?? lastAccountRef.current
 
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const [name, setName] = useState(shown?.name ?? '')
   const [kind, setKind] = useState<AccountKind>(shown?.kind === 'bank' ? 'bank' : 'cash')
   const [confirming, setConfirming] = useState<ConfirmKind>(null)
@@ -315,14 +312,11 @@ function EditLocationDialog({
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
   async function submit(fn: () => Promise<unknown>, message: string) {
-    await run(
-      async () => {
-        const result = await fn()
-        onChanged(message)
-        return result
-      },
-      { settle: refresh },
-    )
+    await run(async () => {
+      const result = await fn()
+      onChanged(message)
+      return result
+    })
   }
 
   function handleSave(event: FormEvent) {

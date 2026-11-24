@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { errorText } from '@/lib/errorCopy'
 import { reverseTransaction } from '@/lib/transactions'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { transactionReversalCopy, type ReversalCopy } from '@/components/reversalCopy'
 import type { Transaction } from '@/lib/transactions'
 
@@ -84,23 +84,20 @@ function ReversalBody({
   words: ReversalCopy
 }) {
   const [note, setNote] = useState('')
-  const [state, run] = useApi<Transaction>()
+  const [state, run] = useWrite<Transaction>(refresh ?? null)
 
   const busy = state.status === 'loading'
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    void run(
-      async () => {
-        const trimmed = note.trim()
-        // A blank reason sends null, never a generated default: the reversal
-        // explains itself through the list's display label.
-        const result = await reverseTransaction(transaction.id, trimmed === '' ? null : trimmed)
-        onReversed()
-        return result
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const trimmed = note.trim()
+      // A blank reason sends null, never a generated default: the reversal
+      // explains itself through the list's display label.
+      const result = await reverseTransaction(transaction.id, trimmed === '' ? null : trimmed)
+      onReversed()
+      return result
+    })
   }
 
   return (

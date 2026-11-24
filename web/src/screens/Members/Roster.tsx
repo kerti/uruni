@@ -21,7 +21,7 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { type Member, type MembersPage, createMember, deleteMember, listMembersPage, updateMember } from '@/lib/members'
 import { type DuesTier, listDuesTiers } from '@/lib/duesTiers'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import { useHeldRow } from '@/lib/useHeldRow'
@@ -328,7 +328,7 @@ function AddMemberDialog({
   onAdded: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Member>()
+  const [state, run] = useWrite<Member>(refresh)
   const [name, setName] = useState('')
   const [tierId, setTierId] = useState<number | null>(null)
   const [joinedOn, setJoinedOn] = useState(todayISODate)
@@ -349,14 +349,11 @@ function AddMemberDialog({
     event.preventDefault()
     const trimmed = name.trim()
     if (trimmed === '') return
-    void run(
-      async () => {
-        const created = await createMember(trimmed, tierId, joinedOn)
-        onAdded()
-        return created
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const created = await createMember(trimmed, tierId, joinedOn)
+      onAdded()
+      return created
+    })
   }
 
   return (
@@ -422,7 +419,7 @@ function EditMemberDialog({
   if (member) lastMemberRef.current = member
   const shown = member ?? lastMemberRef.current
 
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const [name, setName] = useState(shown?.name ?? '')
   const [tierId, setTierId] = useState<number | null>(shown?.tier_id ?? null)
   const [joinedOn, setJoinedOn] = useState(shown?.joined_on ?? '')
@@ -468,14 +465,11 @@ function EditMemberDialog({
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
   async function submit(fn: () => Promise<unknown>, message: string) {
-    await run(
-      async () => {
-        const result = await fn()
-        onChanged(message)
-        return result
-      },
-      { settle: refresh },
-    )
+    await run(async () => {
+      const result = await fn()
+      onChanged(message)
+      return result
+    })
   }
 
   function handleSave(event: FormEvent) {

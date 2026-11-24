@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { register } from '@/lib/auth'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { copy } from '@/copy/id'
 import type { AuthUser } from '@/lib/auth'
 
@@ -35,7 +35,7 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [tooShort, setTooShort] = useState(false)
-  const [state, run] = useApi<AuthUser>()
+  const [state, run] = useWrite<AuthUser>(null)
 
   const submitting = state.status === 'loading'
 

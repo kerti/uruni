@@ -17,7 +17,7 @@ import type { ApiError } from '@/lib/api'
 import { type ReportGroup, type ReportSpan, fetchReportPdf, getReportMonths } from '@/lib/report'
 import { type Fund, replaceReportSlug } from '@/lib/fund'
 import { currentPeriod } from '@/lib/dates'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { card } from '@/components/cardClasses'
 
@@ -355,18 +355,15 @@ function RenewDialog({
   onRenewed: (fund: Fund) => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Fund>()
+  const [state, run] = useWrite<Fund>(refresh)
   const busy = state.status === 'loading'
 
   function handleConfirm() {
-    void run(
-      async () => {
-        const updated = await replaceReportSlug()
-        onRenewed(updated)
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await replaceReportSlug()
+      onRenewed(updated)
+      return updated
+    })
   }
 
   return (

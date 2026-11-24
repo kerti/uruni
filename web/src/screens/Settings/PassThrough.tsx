@@ -11,7 +11,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { createPassThroughPurpose, listPurposes, renamePurpose } from '@/lib/purposes'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Purpose } from '@/lib/purposes'
@@ -137,7 +137,7 @@ function AddPassThroughDialog({
   onAdded: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Purpose>()
+  const [state, run] = useWrite<Purpose>(refresh)
   const [name, setName] = useState('')
 
   // A fresh field every time the dialog opens, so a titipan added a moment ago
@@ -152,14 +152,11 @@ function AddPassThroughDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '') return
-    void run(
-      async () => {
-        const created = await createPassThroughPurpose(trimmed)
-        onAdded()
-        return created
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const created = await createPassThroughPurpose(trimmed)
+      onAdded()
+      return created
+    })
   }
 
   return (
@@ -208,7 +205,7 @@ function EditPassThroughDialog({
   onChanged: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Purpose>()
+  const [state, run] = useWrite<Purpose>(refresh)
   const [name, setName] = useState('')
 
   useResetWhen(open ? purpose : null, () => {
@@ -222,14 +219,11 @@ function EditPassThroughDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (purpose === null || trimmed === '' || unchanged) return
-    void run(
-      async () => {
-        const updated = await renamePurpose(purpose.id, trimmed)
-        onChanged()
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await renamePurpose(purpose.id, trimmed)
+      onChanged()
+      return updated
+    })
   }
 
   return (

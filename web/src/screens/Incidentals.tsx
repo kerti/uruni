@@ -36,7 +36,7 @@ import {
 import { renamePurpose } from '@/lib/purposes'
 import { type Member, listAllMembers } from '@/lib/members'
 import { listTransactions } from '@/lib/transactions'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Account } from '@/lib/accounts'
@@ -466,7 +466,7 @@ function CloseEnvelopeBody({
   onClosed: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   // Blank until she picks, unless the fund has one location (accountDefault.ts).
   const [pickedAccountId, setAccountId] = useState<number | null>(null)
   const accountId = pickedAccountId ?? defaultAccountId(accounts)
@@ -479,13 +479,10 @@ function CloseEnvelopeBody({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || accountId === null) return
-    void run(
-      async () => {
-        await closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note })
-        onClosed()
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      await closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note })
+      onClosed()
+    })
   }
 
   return (
@@ -737,7 +734,7 @@ function RenameIncidentalDialog({
   onRenamed: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const [occasion, setOccasion] = useState('')
   const [targetAmount, setTargetAmount] = useState(0)
   const [minimumPerMember, setMinimumPerMember] = useState(0)
@@ -768,20 +765,17 @@ function RenameIncidentalDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (envelope === null || trimmed === '' || !changed) return
-    void run(
-      async () => {
-        if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
-        if (targetChanged || minimumChanged || recipientsChanged) {
-          await updateIncidentalParticipation(envelope.purpose_id, {
-            targetAmount: targetAmount > 0 ? targetAmount : null,
-            minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
-            recipientMemberIds,
-          })
-        }
-        onRenamed()
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
+      if (targetChanged || minimumChanged || recipientsChanged) {
+        await updateIncidentalParticipation(envelope.purpose_id, {
+          targetAmount: targetAmount > 0 ? targetAmount : null,
+          minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
+          recipientMemberIds,
+        })
+      }
+      onRenamed()
+    })
   }
 
   return (

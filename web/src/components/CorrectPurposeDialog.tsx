@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import TransactionSummary from '@/components/TransactionSummary'
 import { copy } from '@/copy/id'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import type { Purpose } from '@/lib/purposes'
 import { type Transaction, correctPurpose } from '@/lib/transactions'
 
@@ -50,7 +50,7 @@ export default function CorrectPurposeDialog({
   onCorrected: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const [purposeId, setPurposeId] = useState<number | null>(null)
 
   // The effective tag - where the money actually is - which is the row's pos
@@ -72,14 +72,11 @@ export default function CorrectPurposeDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (transaction === null || purposeId === null || unchanged) return
-    void run(
-      async () => {
-        const result = await correctPurpose(transaction.id, purposeId)
-        onCorrected()
-        return result
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const result = await correctPurpose(transaction.id, purposeId)
+      onCorrected()
+      return result
+    })
   }
 
   return (

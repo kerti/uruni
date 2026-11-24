@@ -18,7 +18,7 @@ import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { listReimbursements, updateReimbursement, deleteReimbursement } from '@/lib/reimbursements'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useHeldRow } from '@/lib/useHeldRow'
 import { usePagesAfter } from '@/lib/usePagesAfter'
@@ -513,7 +513,7 @@ function DeleteClaimBody({
   onDeleted: () => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<unknown>()
+  const [state, run] = useWrite<unknown>(refresh)
   const busy = state.status === 'loading'
 
   return (
@@ -538,13 +538,10 @@ function DeleteClaimBody({
           variant="destructive"
           disabled={busy}
           onClick={() =>
-            void run(
-              async () => {
-                await deleteReimbursement(claim.id)
-                onDeleted()
-              },
-              { settle: refresh },
-            )
+            void run(async () => {
+              await deleteReimbursement(claim.id)
+              onDeleted()
+            })
           }
         >
           {busy ? text.actions.deleting : text.delete.confirm}

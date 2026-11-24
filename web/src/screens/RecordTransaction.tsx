@@ -27,7 +27,7 @@ import { listPurposes } from '@/lib/purposes'
 import { type Member, listAllMembers } from '@/lib/members'
 import { createReimbursement } from '@/lib/reimbursements'
 import { createTransaction } from '@/lib/transactions'
-import { useApi } from '@/lib/useApi'
+import { useApi, useWrite } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
@@ -139,7 +139,8 @@ export default function RecordTransaction({
   onDuesRecorded: () => void
 }) {
   const [loadState, loadRun] = useApi<FormData>()
-  const [submitState, submitRun] = useApi<unknown>()
+  // A write whose response was lost re-reads the balances before she can retry.
+  const [submitState, submitRun] = useWrite<unknown>(() => loadRun(loadFormData, { silent: true }))
 
   // A link naming a contributor (/record?member=) is money coming in by
   // definition - opening on 'out' would hide "Dari siapa?" and the member it
@@ -179,9 +180,6 @@ export default function RecordTransaction({
     const [accounts, purposes, balances, members] = await Promise.all([listAccounts(), listPurposes(true), getBalances(), listAllMembers()])
     return { accounts, purposes, balances, members }
   }
-
-  // A write whose response was lost re-reads the balances before she can retry.
-  const settleOnUnknown = { settle: () => loadRun(loadFormData, { silent: true }) }
 
   useEffect(() => {
     void loadRun(loadFormData)
@@ -447,7 +445,7 @@ export default function RecordTransaction({
 
       onRecorded(direction, photoFailed)
       return result
-    }, settleOnUnknown)
+    })
   }
 
   if (loadState.status === 'idle' || loadState.status === 'loading') {

@@ -9,7 +9,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { useBannerSlot } from '@/components/states/bannerSlot'
 import { copy } from '@/copy/id'
 import { logout } from '@/lib/auth'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 
 /** The footer's five destinations, in order (ADR-032). Kept here rather than
  * passed in: the bar is the app's navigation, and a caller that could vary it
@@ -76,7 +76,7 @@ export default function Shell({
   onLoggedOut: () => void
   children: ReactNode
 }) {
-  const [state, run] = useApi<void>()
+  const [state, run] = useWrite<void>(null)
 
   useEffect(() => {
     if (state.status === 'success') onLoggedOut()

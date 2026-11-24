@@ -374,6 +374,7 @@ export default function Home({
         open={dialogTarget === 'new'}
         onClose={closeDialog}
         onOpened={(opened) => onIncidentalOpened(opened.purpose_id)}
+        refresh={() => run(loadHomeData, { silent: true })}
       />
 
       {/* Everything above is the fund as it stands - balance, where it is,

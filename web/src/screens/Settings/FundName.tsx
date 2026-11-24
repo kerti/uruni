@@ -10,7 +10,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { type Fund, updateFund } from '@/lib/fund'
-import { useApi } from '@/lib/useApi'
+import { useWrite } from '@/lib/useApi'
 import { isTimeZone, DEFAULT_TIME_ZONE } from '@/lib/timeZones'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
@@ -146,7 +146,7 @@ function EditFundNameDialog({
   onRenamed: (fund: Fund) => void
   refresh: () => Promise<void>
 }) {
-  const [state, run] = useApi<Fund>()
+  const [state, run] = useWrite<Fund>(refresh)
   const [name, setName] = useState('')
 
   // Reset to the fund's current name each time the dialog opens, so a cancelled
@@ -162,14 +162,11 @@ function EditFundNameDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '' || unchanged) return
-    void run(
-      async () => {
-        const updated = await updateFund({ name: trimmed })
-        onRenamed(updated)
-        return updated
-      },
-      { settle: refresh },
-    )
+    void run(async () => {
+      const updated = await updateFund({ name: trimmed })
+      onRenamed(updated)
+      return updated
+    })
   }
 
   return (

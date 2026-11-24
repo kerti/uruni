@@ -67,7 +67,7 @@ describe('OpenIncidentalDialog', () => {
   it('opens an envelope with a minimum and a recipient, both optional fields', async () => {
     const posts = stub()
     const onOpened = vi.fn()
-    render(<OpenIncidentalDialog open onClose={vi.fn()} onOpened={onOpened} />)
+    render(<OpenIncidentalDialog open onClose={vi.fn()} onOpened={onOpened} refresh={() => Promise.resolve()} />)
 
     const dialog = screen.getByRole('dialog', { name: text.heading })
     await userEvent.type(within(dialog).getByLabelText(text.occasionLabel), 'Kerja bakti')
