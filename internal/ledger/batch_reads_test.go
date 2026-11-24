@@ -83,7 +83,7 @@ func duesStatusPerMember(ctx context.Context, l *Ledger, fundID int64, period st
 				for _, row := range memberPaid {
 					byPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
 				}
-				if through, err = paidThrough(m, prices, byPeriod, waived, period, latest); err != nil {
+				if through, err = paidThrough(duesBook{prices: prices, paid: duesPaid{m.ID: byPeriod}, waivers: map[int64]map[string]*string{m.ID: waived}}, m, period, latest); err != nil {
 					return nil, err
 				}
 			}

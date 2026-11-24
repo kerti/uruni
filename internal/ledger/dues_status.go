@@ -115,19 +115,16 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 	if err != nil {
 		return nil, fmt.Errorf("dues paid by period: %w", err)
 	}
-	paidByMember := make(map[int64]money.Amount, len(paidRows))
+	paid := make(duesPaid, len(paidRows))
 	for _, row := range paidRows {
-		if row.MemberID == nil {
-			continue
-		}
-		paidByMember[*row.MemberID] = money.FromDB(row.PaidAmount)
+		paid.add(row.MemberID, period, row.PaidAmount)
 	}
 
 	waiverRows, err := l.q.ListDuesWaiversInRange(ctx, store.ListDuesWaiversInRangeParams{FundID: fundID, FromPeriod: period, ToPeriod: period})
 	if err != nil {
 		return nil, fmt.Errorf("listing dues waivers: %w", err)
 	}
-	waivers := foldWaivers(waiverRows)
+	book := duesBook{prices: prices, paid: paid, waivers: foldWaivers(waiverRows)}
 
 	latestRows, err := l.q.LatestDuesPeriodPaidByMember(ctx, fundID)
 	if err != nil {
@@ -144,22 +141,12 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 	var statuses []MemberDuesStatus
 	var advance []int // indexes into statuses of the paid-in-advance rows
 	for _, m := range members {
-		if !memberOwesPeriod(m, period) {
-			continue // outside the joined_on..inactive_on window
-		}
-
-		// Either missing means nothing is owed: no tier is no obligation, and a
-		// tier with no rate yet effective is the undecided-rate case.
-		tierID, rate, ok := prices.priceAt(m.ID, period)
+		dm, ok := book.month(m, period)
 		if !ok {
-			continue
+			continue // owes nothing this period: not on the roster
 		}
 
-		owed := money.FromDB(rate)
-		paid := paidByMember[m.ID] // zero value if the member paid nothing this period
-
-		note, waived := waivers[m.ID][period]
-		status := classifyDuesMonth(owed, paid, waived)
+		status := dm.Status
 		if status == DuesStatusPaid {
 			if latest, ok := latestByMember[m.ID]; ok && latest > period {
 				status = DuesStatusPaidInAdvance
@@ -168,7 +155,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		}
 
 		statuses = append(statuses, MemberDuesStatus{
-			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status, WaiverNote: note,
+			Member: Member{Member: m, TierID: &dm.TierID}, OwedAmount: dm.Owed, PaidAmount: dm.Paid, Status: status, WaiverNote: dm.WaiverNote,
 		})
 	}
 
@@ -189,10 +176,10 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		if err != nil {
 			return nil, fmt.Errorf("listing dues waivers: %w", err)
 		}
-		waiversByMember := foldWaivers(waiverRows)
+		history := duesBook{prices: prices, paid: historyByMember, waivers: foldWaivers(waiverRows)}
 		for _, at := range advance {
 			s := &statuses[at]
-			s.PaidThrough, err = paidThrough(s.Member.Member, prices, historyByMember[s.Member.ID], waiversByMember[s.Member.ID], period, latestByMember[s.Member.ID])
+			s.PaidThrough, err = paidThrough(history, s.Member.Member, period, latestByMember[s.Member.ID])
 			if err != nil {
 				return nil, err
 			}
@@ -245,7 +232,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 //
 // The range:
 //   - End: through. A member who left owes nothing after they left, but that
-//     bound is memberOwesPeriod's inside the loop, not a second narrowing
+//     bound is memberOwesPeriod's, asked through duesBook.month in the loop, not a second narrowing
 //     here: one window rule, one owner.
 //   - Start: the month containing joined_on, as memberOwesPeriod bounds it.
 //     joined_on is always set (#471), so the walk never borrows a start from
@@ -253,7 +240,8 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 //     member's live arrears (PRD 7.1) put the same periods on everyone in
 //     that tier.
 //
-// Within the range DuesStatusForPeriod's rules decide what is owed:
+// Within the range duesBook.month decides what is owed, as it does for
+// DuesStatusForPeriod:
 //   - a member with no tier in any period (no member_tier row, or only rows
 //     saying "no tier"): no obligation, empty result.
 //   - each period is priced at the tier in force then, not today's (ADR-040).
@@ -262,7 +250,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 //     yet, is skipped, not invented, and does not truncate the walk: a later
 //     period can still be owed once a tier or rate exists.
 //
-// A period appears only when classifyDuesStatus says Unpaid or Partial; Paid
+// A period appears only when its status is Unpaid or Partial; Paid
 // and PaidInAdvance are "nothing outstanding" and dropped, and so is a waived
 // month (ADR-050): it is not owed, so the payment form never offers it. So unlike
 // DuesStatusForPeriod it needs no LatestDuesPeriodPaidByMember call.
@@ -310,9 +298,9 @@ func (l *Ledger) outstandingDuesWith(ctx context.Context, q store.Querier, fundI
 	if err != nil {
 		return nil, fmt.Errorf("dues paid by member: %w", err)
 	}
-	paidByPeriod := make(map[string]money.Amount, len(paidRows))
+	paid := make(duesPaid, 1)
 	for _, row := range paidRows {
-		paidByPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
+		paid.add(&memberID, row.DuesPeriod, row.PaidAmount)
 	}
 
 	waiverRows, err := q.ListDuesWaiversByMember(ctx, store.ListDuesWaiversByMemberParams{FundID: fundID, MemberID: memberID})
@@ -320,21 +308,22 @@ func (l *Ledger) outstandingDuesWith(ctx context.Context, q store.Querier, fundI
 		return nil, fmt.Errorf("listing dues waivers: %w", err)
 	}
 
-	return outstandingDues(member, prices, paidByPeriod, foldWaivers(waiverRows)[memberID], through)
+	return outstandingDues(duesBook{prices: prices, paid: paid, waivers: foldWaivers(waiverRows)}, member, through)
 }
 
-// outstandingDues is OutstandingDuesForMember's walk over rows already in
+// outstandingDues is OutstandingDuesForMember's walk over a book already in
 // memory: the one place that decides which periods up to through a member still
 // owes, shared by the single-member read and the roster's batch (#532) so the
-// two cannot drift. through is a checked "YYYY-MM". waived is the member's
-// waived months (nil for none); a waived month is not owed (ADR-050).
-func outstandingDues(member store.Member, prices pricing, paidByPeriod map[string]money.Amount, waived map[string]*string, through string) ([]OutstandingDuesPeriod, error) {
-	if !prices.hasTier(member.ID) {
+// two cannot drift. through is a checked "YYYY-MM". What a month is comes from
+// book.month; this only keeps the Unpaid and Partial ones, since a waived month
+// is not owed (ADR-050).
+func outstandingDues(book duesBook, member store.Member, through string) ([]OutstandingDuesPeriod, error) {
+	if !book.prices.hasTier(member.ID) {
 		return nil, nil // no dues obligation, in any period
 	}
 
 	// The end of the walk is `through` alone. inactive_on is deliberately not
-	// narrowed in here: memberOwesPeriod in the loop already refuses every period
+	// narrowed in here: duesBook.month in the loop already refuses every period
 	// after the month a member left, and a second bound would be a second
 	// definition of the window rule that can drift. The cost is a few string
 	// comparisons before the rate lookup, which reads rows already in memory.
@@ -357,27 +346,16 @@ func outstandingDues(member store.Member, prices pricing, paidByPeriod map[strin
 	var outstanding []OutstandingDuesPeriod
 	for t := startT; !t.After(endT); t = t.AddDate(0, 1, 0) {
 		period := t.Format(duesPeriodLayout)
-		if !memberOwesPeriod(member, period) {
-			continue // outside the joined_on..inactive_on window
-		}
-
-		// Priced as in DuesStatusForPeriod; neither found means nothing is owed.
-		_, rate, ok := prices.priceAt(member.ID, period)
+		dm, ok := book.month(member, period)
 		if !ok {
-			continue
+			continue // owes nothing this period
 		}
-
-		owed := money.FromDB(rate)
-		paid := paidByPeriod[period] // zero value if the member paid nothing this period
-
-		_, isWaived := waived[period]
-		status := classifyDuesMonth(owed, paid, isWaived)
-		if status == DuesStatusPaid || status == DuesStatusWaived {
+		if dm.Status == DuesStatusPaid || dm.Status == DuesStatusWaived {
 			continue // square for this period, or waived - not outstanding
 		}
 
 		outstanding = append(outstanding, OutstandingDuesPeriod{
-			Period: period, OwedAmount: owed, PaidAmount: paid, Status: status,
+			Period: period, OwedAmount: dm.Owed, PaidAmount: dm.Paid, Status: dm.Status,
 		})
 	}
 
@@ -469,7 +447,7 @@ func (l *Ledger) ArrearsMonthsForMembers(ctx context.Context, fundID int64, memb
 	for i, m := range members {
 		ids[i] = m.ID
 	}
-	paidByMember, err := duesPaidByPeriodForMembers(ctx, l.q, fundID, ids)
+	paid, err := duesPaidByPeriodForMembers(ctx, l.q, fundID, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -477,10 +455,10 @@ func (l *Ledger) ArrearsMonthsForMembers(ctx context.Context, fundID int64, memb
 	if err != nil {
 		return nil, fmt.Errorf("listing dues waivers: %w", err)
 	}
-	waivers := foldWaivers(waiverRows)
+	book := duesBook{prices: prices, paid: paid, waivers: foldWaivers(waiverRows)}
 
 	for _, m := range members {
-		outstanding, err := outstandingDues(m, prices, paidByMember[m.ID], waivers[m.ID], through)
+		outstanding, err := outstandingDues(book, m, through)
 		if err != nil {
 			return nil, err
 		}
@@ -492,7 +470,7 @@ func (l *Ledger) ArrearsMonthsForMembers(ctx context.Context, fundID int64, memb
 // duesPaidByPeriodForMembers is DuesPaidByMemberGroupedByPeriod for several
 // members in one read: member id, then period, to the amount paid toward it,
 // reversed payments excluded (ADR-029). A member who paid nothing has no entry.
-func duesPaidByPeriodForMembers(ctx context.Context, q store.Querier, fundID int64, memberIDs []int64) (map[int64]map[string]money.Amount, error) {
+func duesPaidByPeriodForMembers(ctx context.Context, q store.Querier, fundID int64, memberIDs []int64) (duesPaid, error) {
 	ptrs := make([]*int64, len(memberIDs))
 	for i := range memberIDs {
 		ptrs[i] = &memberIDs[i]
@@ -501,17 +479,9 @@ func duesPaidByPeriodForMembers(ctx context.Context, q store.Querier, fundID int
 	if err != nil {
 		return nil, fmt.Errorf("dues paid by members: %w", err)
 	}
-	paid := make(map[int64]map[string]money.Amount, len(memberIDs))
+	paid := make(duesPaid, len(memberIDs))
 	for _, row := range rows {
-		if row.MemberID == nil {
-			continue
-		}
-		byPeriod := paid[*row.MemberID]
-		if byPeriod == nil {
-			byPeriod = make(map[string]money.Amount)
-			paid[*row.MemberID] = byPeriod
-		}
-		byPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
+		paid.add(row.MemberID, row.DuesPeriod, row.PaidAmount)
 	}
 	return paid, nil
 }
@@ -532,9 +502,10 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 
 // classifyDuesMonth is a month's status as every dues read decides it:
 // classifyDuesStatus, except that a waived month (ADR-050) is DuesStatusWaived
-// whatever owed and paid say. DuesStatusForPeriod (followed by its paid-in-advance
-// upgrade), OutstandingDuesForMember (followed by dropping Paid and Waived), the
-// grid and the paid-through walk all go through it, so "waived" has one meaning.
+// whatever owed and paid say. duesBook.month is its one caller: DuesStatusForPeriod
+// (followed by its paid-in-advance upgrade), OutstandingDuesForMember (followed by
+// dropping Paid and Waived), the grid and the paid-through walk all ask that, so
+// "waived" has one meaning.
 func classifyDuesMonth(owed, paid money.Amount, waived bool) DuesStatus {
 	if waived {
 		return DuesStatusWaived
@@ -563,32 +534,39 @@ func foldWaivers(rows []store.DuesWaiver) map[int64]map[string]*string {
 // but skipped November is paid through October, not December. `latest` is
 // LatestDuesPeriodPaidByMember's value and bounds the walk.
 //
-// Each step applies DuesStatusForPeriod's rules: a period outside the
-// member's active window ends the run; a period with no tier in force or no
-// effective rate owes nothing, so it is skipped without breaking the run; a
-// period paid below what its own tier and rate say breaks it, so a rate or tier
-// rise in a prepaid month reads honestly as not paid through. A waived month
-// breaks it too (ADR-050): Lunas, Diputihkan, Lunas is paid through the first,
-// because nobody paid the second.
-func paidThrough(m store.Member, prices pricing, paidByPeriod map[string]money.Amount, waived map[string]*string, period, latest string) (string, error) {
+// Each step asks duesBook.month, the same decision the roster makes: a period
+// the member owes nothing for (outside their active window, no tier in force, no
+// effective rate) is skipped without breaking the run; a period paid below what
+// its own tier and rate say breaks it, so a rate or tier rise in a prepaid month
+// reads honestly as not paid through. A waived month breaks it too (ADR-050):
+// Lunas, Diputihkan, Lunas is paid through the first, because nobody paid the
+// second.
+//
+// Skipping the months after inactive_on, rather than ending the run at the first,
+// changes nothing: the walk starts at an owed month and moves forward, so the
+// only months outside the window it can meet are after inactive_on, and every
+// later one is too, so through cannot advance. The loop ends at latest alone.
+//
+// book must hold the member's whole payment history and waivers, not just the
+// month being read: DuesStatusForPeriod fills one for all its paid-in-advance
+// members in a single read (#532).
+func paidThrough(book duesBook, m store.Member, period, latest string) (string, error) {
 	t, err := time.Parse(duesPeriodLayout, period)
 	if err != nil {
 		return "", fmt.Errorf("parsing period %q: %w", period, err)
 	}
-
 	var through string
 	for {
 		t = t.AddDate(0, 1, 0)
 		next := t.Format(duesPeriodLayout)
-		if next > latest || !memberOwesPeriod(m, next) {
+		if next > latest {
 			return through, nil
 		}
-		_, rate, ok := prices.priceAt(m.ID, next)
+		dm, ok := book.month(m, next)
 		if !ok {
-			continue // nothing owed this period - skipped, not a break
+			continue // owes nothing this period - skipped, not a break
 		}
-		_, isWaived := waived[next]
-		if classifyDuesMonth(money.FromDB(rate), paidByPeriod[next], isWaived) != DuesStatusPaid {
+		if dm.Status != DuesStatusPaid {
 			return through, nil
 		}
 		through = next
