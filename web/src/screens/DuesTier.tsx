@@ -13,12 +13,12 @@ import { useToast } from '@/components/toast/useToast'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { errorText, hasCode } from '@/lib/errorCopy'
 import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { rateInForce, rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
-import { errorCode } from '@/lib/api'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 import { card } from '@/components/cardClasses'
@@ -249,7 +249,7 @@ function RateRow({
   const busy = state.status === 'loading'
 
   // A refused write on an id that no longer stands: reload the list, show the notice.
-  const supersededError = state.status === 'error' && errorCode(state.error) === 'dues_rate_superseded'
+  const supersededError = state.status === 'error' && hasCode(state.error, 'dues_rate_superseded')
   useEffect(() => {
     if (supersededError) onSuperseded()
     // oxlint-disable-next-line react/exhaustive-deps -- once per refusal; onSuperseded is a fresh closure every render
@@ -441,11 +441,6 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
   const busy = state.status === 'loading'
   const error = state.status === 'error' ? (state.error ?? null) : null
 
-  function errorTextFor(code: string): string {
-    if (code === 'referenced_by_other_records') return text.deleteRefused
-    return copy.common.errors[code as keyof typeof copy.common.errors] ?? copy.common.unknownError
-  }
-
   return (
     <section className="flex flex-col gap-2">
       {/* The consequence, named just above the button that does it -
@@ -453,7 +448,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
       {confirming && <p className="text-sm text-attention-text">{text.deleteConfirm}</p>}
       {error !== null && (
         <p role="alert" className="text-sm text-attention-text">
-          {errorTextFor(error.code)}
+          {errorText(error, { referenced_by_other_records: text.deleteRefused })}
         </p>
       )}
       {confirming ? (

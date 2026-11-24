@@ -7,10 +7,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
-import type { ApiError } from '@/lib/api'
+import { errorText } from '@/lib/errorCopy'
 import { reverseTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
-import { transactionReversalCopy, transactionReversalErrorText, type ReversalCopy } from '@/components/reversalCopy'
+import { transactionReversalCopy, type ReversalCopy } from '@/components/reversalCopy'
 import type { Transaction } from '@/lib/transactions'
 
 /**
@@ -34,7 +34,6 @@ export default function ReversalDialog({
   onReversed,
   refresh,
   words = transactionReversalCopy,
-  errorText = transactionReversalErrorText,
 }: {
   transaction: Transaction | null
   /** The pos as it reads now, for the summary; omitted where the caller has
@@ -45,7 +44,6 @@ export default function ReversalDialog({
   onReversed: () => void
   refresh?: () => Promise<void> | void
   words?: ReversalCopy
-  errorText?: (err: ApiError) => string
 }) {
   return (
     <Dialog
@@ -63,7 +61,6 @@ export default function ReversalDialog({
             onReversed={onReversed}
             refresh={refresh}
             words={words}
-            errorText={errorText}
           />
         )}
       </DialogContent>
@@ -78,7 +75,6 @@ function ReversalBody({
   onReversed,
   refresh,
   words,
-  errorText,
 }: {
   transaction: Transaction
   purposeName?: string
@@ -86,7 +82,6 @@ function ReversalBody({
   onReversed: () => void
   refresh?: () => Promise<void> | void
   words: ReversalCopy
-  errorText: (err: ApiError) => string
 }) {
   const [note, setNote] = useState('')
   const [state, run] = useApi<Transaction>()
@@ -133,7 +128,7 @@ function ReversalBody({
 
         {state.status === 'error' && state.error && (
           <p role="alert" className="text-sm text-attention-text">
-            {errorText(state.error)}
+            {errorText(state.error, words.errors)}
           </p>
         )}
 

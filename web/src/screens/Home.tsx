@@ -9,7 +9,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import SectionLabel from '@/components/SectionLabel'
 import { copy } from '@/copy/id'
-import { errorCode } from '@/lib/api'
+import { nullIfNotFound } from '@/lib/errorCopy'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { getBalances } from '@/lib/balances'
 import { formatUnixSeconds } from '@/lib/dates'
@@ -121,10 +121,7 @@ export default function Home({
       // /api/reconciliations/latest answers 404 `not_found` for that, a normal
       // first-run state, not a load failure. Any other error still fails the
       // whole load, as for the other three calls.
-      getLatestReconciliation().catch((err: unknown) => {
-        if (errorCode(err) === 'not_found') return null
-        throw err
-      }),
+      getLatestReconciliation().catch(nullIfNotFound),
     ])
     return { balances, incidentals, openLines, transactions: transactionsPage.transactions, latest }
   }

@@ -13,7 +13,7 @@ import AmountInput from '@/components/money/AmountInput'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { errorCode } from '@/lib/api'
+import { hasCode } from '@/lib/errorCopy'
 import { createAccount, deleteAccount, listAccounts, setAccountInactiveOn, updateAccount } from '@/lib/accounts'
 import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
@@ -419,7 +419,7 @@ function EditLocationDialog({
               specific one. */}
           {state.status === 'error' &&
             state.error &&
-            (errorCode(state.error) === 'referenced_by_other_records' ? (
+            (hasCode(state.error, 'referenced_by_other_records') ? (
               <p role="alert" className="text-sm text-attention-text">
                 {text.deleteRefused}
               </p>

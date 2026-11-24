@@ -1,6 +1,7 @@
 import { copy } from '@/copy/id'
 import type { ArrivalToast } from '@/components/toast/useArrivalToast'
 import type { ApiError } from '@/lib/api'
+import { errorText as sharedErrorText } from '@/lib/errorCopy'
 
 const text = copy.reimbursements
 
@@ -28,10 +29,7 @@ export function pickTalanganArrival(state: unknown): ArrivalToast | null {
 
 /** Wire error code -> Indonesian copy, scoped first to this feature's codes
  * (reimbursement_already_settled, reimbursement_waived) then to the shared
- * map; never the English wire message (ADR-014). */
+ * map (lib/errorCopy.ts). */
 export function errorText(err: ApiError): string {
-  const specific = text.errors[err.code as keyof typeof text.errors]
-  if (specific) return specific
-  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
-  return common ?? copy.common.unknownError
+  return sharedErrorText(err, text.errors)
 }

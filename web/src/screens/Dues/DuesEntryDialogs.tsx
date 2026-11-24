@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReversalDialog from '@/components/ReversalDialog'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
-import { sharedErrorText } from '@/components/reversalCopy'
+import { duesReversalCopy } from '@/components/reversalCopy'
 import { useToast } from '@/components/toast/useToast'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -153,10 +153,7 @@ export default function DuesEntryDialogs({ rows, onRefresh }: { rows: DuesPaymen
           refresh()
         }}
         refresh={refresh}
-        // Opened from the entry detail's "Batalkan transaksi", so it reads as
-        // it does on Transaksi (title, explainer, buttons); only the error map
-        // is the shared one, whose already-reversed wording says "iuran".
-        errorText={sharedErrorText}
+        words={duesReversalCopy}
       />
     </>
   )

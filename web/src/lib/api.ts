@@ -26,11 +26,6 @@ export class ApiError extends Error {
   }
 }
 
-/** The envelope code of a thrown value, or undefined when it is not an ApiError. */
-export function errorCode(err: unknown): string | undefined {
-  return err instanceof ApiError ? err.code : undefined
-}
-
 /** Any thrown value as an ApiError: an ApiError as it is, anything else under
  * `unknown_error` with its message, so an error state always has a code to map
  * to copy (ADR-014). */

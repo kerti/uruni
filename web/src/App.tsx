@@ -40,7 +40,7 @@ import type { SessionStatus, AuthUser } from '@/lib/auth'
 import type { Fund } from '@/lib/setup'
 import type { RecordOriginState } from '@/lib/recordOrigin'
 import { copy } from '@/copy/id'
-import { errorCode } from '@/lib/api'
+import { hasCode } from '@/lib/errorCopy'
 
 /**
  * Router root for the whole SPA.
@@ -308,7 +308,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }
 
   if (state.status === 'error') {
-    if (errorCode(state.error) === 'not_found') {
+    if (hasCode(state.error, 'not_found')) {
       return <Setup onDone={() => void run(getFund)} />
     }
     return (

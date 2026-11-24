@@ -1,5 +1,5 @@
 import { copy } from '@/copy/id'
-import type { ApiError } from '@/lib/api'
+import type { ErrorMessages } from '@/lib/errorCopy'
 
 const reverseText = copy.history.transactions
 
@@ -13,6 +13,8 @@ export interface ReversalCopy {
   cancel: string
   confirm: string
   submitting: string
+  /** Words for refusals checked before the shared map (lib/errorCopy.ts). */
+  errors?: ErrorMessages
 }
 
 /** The transaction list's own wording (ADR-042). */
@@ -23,19 +25,12 @@ export const transactionReversalCopy: ReversalCopy = {
   cancel: reverseText.reverseCancel,
   confirm: reverseText.reverseConfirm,
   submitting: reverseText.reverseSubmitting,
+  // transaction_already_reversed reads as "iuran" in the shared map (ADR-042).
+  errors: reverseText.errors,
 }
 
-/** Wire error code -> Indonesian copy, scoped first to the transaction list's
- * wording (transaction_already_reversed reads as "iuran" in the shared map,
- * ADR-042) then falling back to it. */
-export function transactionReversalErrorText(err: ApiError): string {
-  const specific = reverseText.errors[err.code as keyof typeof reverseText.errors]
-  if (specific) return specific
-  return sharedErrorText(err)
-}
-
-/** The shared map alone: a dues payment's wording is the shared one. */
-export function sharedErrorText(err: ApiError): string {
-  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
-  return common ?? copy.common.unknownError
-}
+/** A dues payment's reversal: opened from the entry detail's "Batalkan
+ * transaksi", so it reads as it does on Transaksi (title, explainer,
+ * buttons); only the refusals are the shared map's, whose already-reversed
+ * wording says "iuran". */
+export const duesReversalCopy: ReversalCopy = { ...transactionReversalCopy, errors: undefined }

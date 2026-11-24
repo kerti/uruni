@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { WarningCircle } from '@phosphor-icons/react'
 
 import AuthChrome from '@/components/AuthChrome'
 import { Button } from '@/components/ui/button'
@@ -11,11 +10,14 @@ import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { login } from '@/lib/auth'
 import { useApi } from '@/lib/useApi'
-import { errorCode } from '@/lib/api'
 import { copy } from '@/copy/id'
 import type { AuthUser, DemoLogin } from '@/lib/auth'
 
 const text = copy.auth.login
+
+/** Login's own words for its two expected refusals; anything else reads from
+ * the shared map. */
+const loginErrors = { invalid_credentials: text.invalidCredentials, too_many_requests: text.tooManyRequests }
 
 /**
  * The everyday door (POST /api/login). Rendered by App.tsx when
@@ -48,8 +50,6 @@ export default function Login({ onLoggedIn, demo = null }: { onLoggedIn: (user: 
     })
   }
 
-  const code = state.status === 'error' ? errorCode(state.error) : undefined
-
   return (
     <AuthChrome>
       <Card className="w-full max-w-sm shadow-card" size="default">
@@ -80,21 +80,7 @@ export default function Login({ onLoggedIn, demo = null }: { onLoggedIn: (user: 
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-            {code === 'invalid_credentials' && (
-              <p role="alert" className="flex items-center gap-2 text-attention-text">
-                <WarningCircle aria-hidden="true" />
-                {text.invalidCredentials}
-              </p>
-            )}
-            {code === 'too_many_requests' && (
-              <p role="alert" className="flex items-center gap-2 text-attention-text">
-                <WarningCircle aria-hidden="true" />
-                {text.tooManyRequests}
-              </p>
-            )}
-            {state.status === 'error' && state.error && code !== 'invalid_credentials' && code !== 'too_many_requests' && (
-              <ErrorState error={state.error} />
-            )}
+            {state.status === 'error' && state.error && <ErrorState error={state.error} messages={loginErrors} />}
             <Button type="submit" size="lg" disabled={submitting}>
               {submitting ? text.submitting : text.submit}
             </Button>

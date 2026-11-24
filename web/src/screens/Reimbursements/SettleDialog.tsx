@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { nullIfNotFound } from '@/lib/errorCopy'
 import { listAccounts } from '@/lib/accounts'
-import { errorCode } from '@/lib/api'
 import { dateBounds, todayISODate } from '@/lib/dates'
 import { defaultAccountId } from '@/lib/accountDefault'
 import { listPurposes } from '@/lib/purposes'
@@ -71,10 +71,7 @@ export default function SettleDialog({
       dataRun(
         async () => {
           const [claim, accounts, members, purposes] = await Promise.all([
-            getReimbursement(id).catch((err: unknown) => {
-              if (errorCode(err) === 'not_found') return null
-              throw err
-            }),
+            getReimbursement(id).catch(nullIfNotFound),
             listAccounts(),
             listAllMembers(),
             listPurposes(),
