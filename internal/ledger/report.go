@@ -1178,7 +1178,8 @@ func (rp reportPeriod) holds(day string, to *string) bool {
 // duesGroupKey is the key a dues row folds under in the report's list (ADR-048),
 // "" for every row that stands alone: "p<payment>" for a payment's month and
 // "r<payment>:<date>" for a reversal of one, the reversed row's payment and the
-// reversal's date, the same key ListTransactionsPage groups by.
+// reversal's date, the same key ListTransactionsPage groups by in SQL;
+// TestRiwayatAndTheReportFoldDuesRowsIntoTheSameGroups holds the two together.
 func duesGroupKey(row store.ListReportTransactionsRow) string {
 	switch {
 	case row.Kind == string(TransactionKindDues) && row.DuesPaymentID != nil:
