@@ -183,6 +183,17 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 	memberID := func(name string) int64 {
 		return s.id(t, `SELECT id FROM member WHERE name = ?`, name)
 	}
+	// arrearsOf is the roster's badge for one member: the production call
+	// (ArrearsMonthsForMembers) over that member alone.
+	arrearsOf := func(name string) (int, error) {
+		id := memberID(name)
+		m, err := q.GetMemberForFund(ctx, store.GetMemberForFundParams{FundID: s.fundID, ID: id})
+		if err != nil {
+			return 0, err
+		}
+		arrears, err := s.l.ArrearsMonthsForMembers(ctx, s.fundID, []store.Member{m}, periodAt(t, now, 0))
+		return arrears[id], err
+	}
 	envelope := func(occasion string) int64 {
 		return s.id(t, `SELECT purpose_id FROM incidental WHERE occasion = ?`, occasion)
 	}
@@ -365,9 +376,9 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 
 		behind := 0
 		for _, name := range []string{"Mas Rizki", "Mbak Wulan"} {
-			months, err := s.l.ArrearsMonthsForMember(ctx, s.fundID, memberID(name), periodAt(t, now, 0))
+			months, err := arrearsOf(name)
 			if err != nil {
-				t.Fatalf("ArrearsMonthsForMember(%s) = %v", name, err)
+				t.Fatalf("ArrearsMonthsForMembers(%s) = %v", name, err)
 			}
 			if months >= 3 {
 				behind++
@@ -398,7 +409,7 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 				t.Errorf("Mas Rizki has no dues row at M%d", offset)
 			}
 		}
-		if months, err := s.l.ArrearsMonthsForMember(ctx, s.fundID, memberID("Mas Rizki"), periodAt(t, now, 0)); err != nil || months != 3 {
+		if months, err := arrearsOf("Mas Rizki"); err != nil || months != 3 {
 			t.Errorf("Mas Rizki's arrears = %d, %v, want 3 (M-3 to M-1; the two waived months are not owed)", months, err)
 		}
 

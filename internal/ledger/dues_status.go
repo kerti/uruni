@@ -362,58 +362,35 @@ func outstandingDues(book duesBook, member store.Member, through string) ([]Outs
 	return outstanding, nil
 }
 
-// ArrearsMonthsForMember is Anggota's roster badge (#233, ADR-032): N, in
-// whole months, of periods strictly BEFORE currentPeriod that fundID's member
-// memberID still owes something for. It is a thin count over
-// OutstandingDuesForMember, not a second derivation: every rule deciding who
-// owes what lives once, there and in DuesStatusForPeriod beneath it.
+// ArrearsMonthsForMembers is Anggota's roster badge (#233, ADR-032): for each
+// of a page of members, keyed by member id, N in whole months of periods
+// strictly BEFORE currentPeriod that the member still owes something for. It is
+// what GET /api/members calls, so a roster costs a fixed handful of reads
+// however many members it lists or how long they have been members (#532). The
+// tier timelines and rates are read once for the fund and the page's
+// paid-by-period figures in one grouped read; the per-member walk is
+// outstandingDues, the same one OutstandingDuesForMember runs, over those rows
+// in memory. Every rule deciding who owes what lives once, in outstandingDues
+// and in DuesStatusForPeriod beneath it, not in a second derivation here.
 //
-// currentPeriod is excluded by construction (OutstandingDuesForMember is
-// asked for everything through the month before it). ADR-032 spells out why:
-// on the first of every month the whole roster would flip to "owing", and
-// early in a month the badge could not tell a member who has not paid yet
-// (benign) from one six months behind (the only case the badge exists to
-// surface). A member who joined this period, or paid ahead of it, reads zero
-// arrears with no special case: neither has anything before currentPeriod.
+// currentPeriod is excluded by construction (the walk runs through the month
+// before it). ADR-032 spells out why: on the first of every month the whole
+// roster would flip to "owing", and early in a month the badge could not tell
+// a member who has not paid yet (benign) from one six months behind (the only
+// case the badge exists to surface). A member who joined this period, or paid
+// ahead of it, reads zero arrears with no special case: neither has anything
+// before currentPeriod.
 //
 // currentPeriod is passed in rather than computed with a second clock read.
-// GET /api/members has no ?through= or ?period= to override it (ADR-032
-// keeps a period selector out of Anggota), so the handler computes it once
-// per request with CurrentDuesPeriod and hands it to ArrearsMonthsForMembers
-// and to ListMembersPage's current_rate column, so a clock tick cannot make a
-// row's current_rate and arrears count disagree about "now".
-//
-// This is the one-member form; the roster calls ArrearsMonthsForMembers, which
-// counts the same months for a page in a fixed number of reads (#532).
+// GET /api/members has no ?through= or ?period= to override it (ADR-032 keeps a
+// period selector out of Anggota), so the handler computes it once per request
+// with CurrentDuesPeriod and hands it here and to ListMembersPage's
+// current_rate column, so a clock tick cannot make a row's current_rate and
+// arrears count disagree about "now".
 //
 // A part-paid earlier period counts as one month, like an unpaid one
-// (ADR-032): OutstandingDuesForMember makes no Unpaid/Partial distinction,
-// so len() of its result is the count.
-func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID int64, currentPeriod string) (int, error) {
-	if err := checkPeriodShape("current period", currentPeriod); err != nil {
-		return 0, err
-	}
-
-	t, err := time.Parse(duesPeriodLayout, currentPeriod)
-	if err != nil {
-		return 0, fmt.Errorf("parsing current period %q: %w", currentPeriod, err)
-	}
-	through := t.AddDate(0, -1, 0).Format(duesPeriodLayout)
-
-	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through) // through is non-empty: the clock is never read
-	if err != nil {
-		return 0, err
-	}
-	return len(outstanding), nil
-}
-
-// ArrearsMonthsForMembers is ArrearsMonthsForMember for a page of members at
-// once, keyed by member id: what GET /api/members calls, so a roster costs a
-// fixed handful of reads however many members it lists or how long they have
-// been members (#532). The tier timelines and rates are read once for the fund
-// and the page's paid-by-period figures in one grouped read; the per-member walk
-// is outstandingDues, the same one OutstandingDuesForMember runs, over those
-// rows in memory.
+// (ADR-032): the walk makes no Unpaid/Partial distinction, so the count is the
+// number of periods it returns.
 //
 // members are the page's rows as listed (their joined_on and inactive_on bound
 // each walk). A member with nothing outstanding, or no tier, reads 0 and is

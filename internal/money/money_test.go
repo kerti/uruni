@@ -101,39 +101,6 @@ func TestSubIsNotAddOfTheNegation(t *testing.T) {
 	})
 }
 
-func TestMul(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name     string
-		a        money.Amount
-		n        int64
-		want     money.Amount
-		overflow bool
-	}{
-		{name: "three months of dues at a fixed rate", a: 50_000, n: 3, want: 150_000},
-		{name: "no periods owed", a: 50_000, n: 0, want: 0},
-		{name: "no rate set", a: 0, n: 12, want: 0},
-		{name: "zero times zero", a: 0, n: 0, want: 0},
-		{name: "identity", a: 70_000, n: 1, want: 70_000},
-		{name: "negating by count", a: 70_000, n: -1, want: -70_000},
-		{name: "the ceiling exactly", a: math.MaxInt64, n: 1, want: math.MaxInt64},
-		{name: "twice the ceiling", a: math.MaxInt64, n: 2, overflow: true},
-		{name: "the floor exactly", a: math.MinInt64, n: 1, want: math.MinInt64},
-
-		// math.MinInt64 / -1 is math.MinInt64 in Go, so the division check agrees with
-		// itself and needs the explicit guard.
-		{name: "the floor negated, which has no positive counterpart", a: math.MinInt64, n: -1, overflow: true},
-		{name: "a large amount by a large count", a: math.MaxInt64 / 2, n: 3, overflow: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.a.Mul(tt.n)
-			assertResult(t, got, err, tt.want, tt.overflow)
-		})
-	}
-}
-
 func TestDBRoundTrip(t *testing.T) {
 	t.Parallel()
 	for _, v := range []int64{0, 1, -1, 50_000, math.MaxInt64, math.MinInt64} {

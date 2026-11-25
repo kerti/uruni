@@ -54,12 +54,11 @@ func TestReportListsADuesPaymentAsOneRow(t *testing.T) {
 	// same member on the same day for one month, and a reversal of the first.
 	first := payDues(t, l, f, "2026-08-12", 25_000, "2026-08", "2026-06", "2026-07")
 	payDues(t, l, f, "2026-08-12", 30_000, "2026-09")
-	reversed, err := l.at(onTheDay("2026-08-12")).ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: *first[0].DuesPaymentID})
-	if err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+	if _, err := l.at(onTheDay("2026-08-12")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: first[0].ID}); err != nil {
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
-	if len(reversed) != 3 {
-		t.Fatalf("ReverseDuesPayment() posted %d rows, want 3", len(reversed))
+	if reversed := reversalRowsOf(t, l, f.fundID); len(reversed) != 3 {
+		t.Fatalf("ReverseTransaction() posted %d rows, want 3", len(reversed))
 	}
 
 	report := monthlyReportAt(t, l, reportNow, ReportParams{FundID: f.fundID, Month: "2026-08"})

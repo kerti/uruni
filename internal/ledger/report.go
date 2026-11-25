@@ -957,24 +957,16 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 	return e.OpenedOn <= *through && (e.ClosedOn == nil || *e.ClosedOn > *through)
 }
 
-// MonthInOut is the running month's In and Out for the whole fund, as Beranda
+// monthInOut is the running month's In and Out for the whole fund, as Beranda
 // shows them (ADR-038): the figures the report's running month carries as
 // Walk.In and Walk.Out, read through the same reportRows over the same
-// unbounded, unfiltered month. The month is read from the ledger clock in the fund's time zone. In
-// is net of the reversals of income and Out of the reversals of spending, so
-// either can be negative (ADR-042); Out is otherwise a magnitude.
-func (l *Ledger) MonthInOut(ctx context.Context, fundID int64) (in, out money.Amount, err error) {
-	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
-		var err error
-		in, out, err = l.onQuerier(q).monthInOut(ctx, fundID, l.now())
-		return err
-	})
-	return in, out, err
-}
-
-// monthInOut is MonthInOut's read over l.q, whatever that is: a transaction the
-// caller already opened (Balances reads it beside the rest of the home answer),
-// or the pool.
+// unbounded, unfiltered month. The month is read from now in the fund's time
+// zone, which it reads itself (ADR-041). In is net of the reversals of income
+// and Out of the reversals of spending, so either can be negative (ADR-042);
+// Out is otherwise a magnitude.
+//
+// It reads over l.q, whatever that is: a transaction the caller already opened
+// (Balances reads it beside the rest of the home answer), or the pool.
 func (l *Ledger) monthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	fund, err := l.q.GetFund(ctx, fundID)
 	if err != nil {

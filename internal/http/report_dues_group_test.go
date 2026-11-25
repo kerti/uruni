@@ -36,8 +36,8 @@ func TestReportListsAMultiMonthPaymentAsOneRow(t *testing.T) {
 	}
 	pay("2026-09-05", "2026-05", "2026-06", "2026-10")
 	one := pay("2026-09-06", "2026-09")
-	if _, err := f.l.ReverseDuesPayment(ctx, ledger.ReverseDuesPaymentParams{FundID: f.fund.ID, DuesPaymentID: *one[0].DuesPaymentID}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v", err)
+	if _, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: one[0].ID}); err != nil {
+		t.Fatalf("ReverseTransaction() = %v", err)
 	}
 
 	path := "/report/" + f.fund.ReportSlug + "?month=2026-09"

@@ -503,7 +503,7 @@ type Querier interface {
 	//
 	// current_period is "YYYY-MM", the caller's one snapshot of "now", shared with
 	// the arrears figure computed in Go - see
-	// Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
+	// Ledger.ArrearsMonthsForMembers. A LEFT JOIN, not a scalar subquery, on
 	// purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 	// codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 	// must say. A tier with no rate yet effective (the undecided-rate case, PRD

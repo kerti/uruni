@@ -36,7 +36,7 @@ type balancesResponse struct {
 	OwedToMembers int64 `json:"owed_to_members"`
 
 	// Month is the running month's money in and out (ADR-038), for Beranda's
-	// "Bulan ini" card: Ledger.MonthInOut, the report's own figures.
+	// "Bulan ini" card: Ledger.Balances (monthInOut), the report's own figures.
 	Month monthInOutResponse `json:"month"`
 }
 
