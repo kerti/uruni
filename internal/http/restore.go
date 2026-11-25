@@ -209,7 +209,7 @@ func (a *api) inspectRestoreUpload(w http.ResponseWriter, r *http.Request) {
 // the same format is, so ParseUpload is the one place judging format version.
 //
 // The dump is streamed into a staging file rather than read into memory. This
-// also fixes a correctness gap: WritePreRestoreDump's ApplyRetention call,
+// also fixes a correctness gap: WritePreRestoreDump's prune,
 // inside Restore, could prune the very dump being restored if confirm read
 // the original path. Confirm reads only the staged copy, so the original can
 // be pruned or deleted after this request answers.
@@ -420,7 +420,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// must remove it once backup.Restore has read it, on success and failure
 	// alike: nothing could still confirm with this token.
 	restoreErr := backup.Restore(r.Context(), backup.RestoreParams{
-		DB: a.sqlDB, UploadsDir: a.uploadsDir, BackupDir: a.backupDir, Parsed: parsed, Now: a.now(),
+		DB: a.sqlDB, UploadsDir: a.uploadsDir, BackupDir: a.backupDir, Parsed: parsed, Now: a.now(), Logger: a.log(r),
 	})
 	if err := os.Remove(parsed.StagingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		a.log(r).Error("removing restore staging file after confirm", "error", err)

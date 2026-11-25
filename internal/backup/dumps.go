@@ -403,13 +403,22 @@ func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, 
 // Both, not either: a restart on a day nothing changed since yesterday's dump
 // writes nothing (ADR-012: retention counts versions, not days), and a fund
 // that changed twice in a day still gets one daily dump.
-func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+//
+// A write that happens ends by pruning (pruneAfterWrite): the caller never
+// calls ApplyRetention itself, and a prune that fails is logged on logger, not
+// returned, because the dump it follows exists. logger must not be nil.
+func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) (name string, written bool, err error) {
 	zone, err := InstanceZone(ctx, store.New(sqlDB))
 	if err != nil {
 		return "", false, err
 	}
 	check := func(ctx context.Context) error { return db.QuickCheck(ctx, sqlDB) }
-	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, check, uploadsDir, backupDir, zone, now)
+	name, written, err = writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, check, uploadsDir, backupDir, zone, now)
+	if err != nil || !written {
+		return name, written, err
+	}
+	pruneAfterWrite(backupDir, logger)
+	return name, true, nil
 }
 
 // writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader,
@@ -468,17 +477,36 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 // WritePreRestoreDump is the safety-net dump ADR-012's restore path takes
 // before it changes a row. Restore calls it before its transaction opens,
 // and `migrate down` before it rolls a step back. Unconditional, like
-// WriteDump, and it prunes its kind's quota afterward so callers need not
-// know about ApplyRetention.
-func WritePreRestoreDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, err error) {
+// WriteDump, and it ends by pruning (pruneAfterWrite) so callers need not know
+// about ApplyRetention. A prune that fails is logged on logger and never
+// returned: once the dump is on disk the safety net exists, and an old dump
+// that cannot be deleted must not refuse the restore or rollback it was taken
+// for. An error here means no dump was written. logger must not be nil.
+func WritePreRestoreDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) (name string, err error) {
 	name, err = WriteDump(ctx, sqlDB, uploadsDir, backupDir, KindPreRestore, now)
 	if err != nil {
 		return "", err
 	}
-	if err := ApplyRetention(backupDir, DailyRetention, PreRestoreRetention); err != nil {
-		return name, err
-	}
+	pruneAfterWrite(backupDir, logger)
 	return name, nil
+}
+
+// removeOldDump deletes one dump file for ApplyRetention. It is os.Remove; a
+// variable only so a test can make one deletion fail, which no portable
+// filesystem trick does for a file its own process just created in a directory
+// it can write (ListDumps skips directories, and the write that precedes every
+// prune needs the same directory permission a delete does).
+var removeOldDump = os.Remove
+
+// pruneAfterWrite is the one prune every dump write ends with: ApplyRetention
+// at the standing quotas. A failure is a warning, never the write's failure:
+// the dump the caller asked for exists, repeated failures only pile dumps up
+// and keep warning, and a full disk fails the next write itself. logger must
+// not be nil.
+func pruneAfterWrite(backupDir string, logger *slog.Logger) {
+	if err := ApplyRetention(backupDir, DailyRetention, PreRestoreRetention); err != nil {
+		logger.Warn("backup: pruning old dumps failed", "error", err, "backup_dir", backupDir)
+	}
 }
 
 // NeedsFormatVersionDump is serve's boot check (ADR-012: serve writes a fresh
@@ -515,18 +543,20 @@ func ApplyRetention(backupDir string, dailyKeep, preRestoreKeep int) error {
 		if seen[d.Kind] <= quota[d.Kind] {
 			continue
 		}
-		if err := os.Remove(filepath.Join(backupDir, d.Name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := removeOldDump(filepath.Join(backupDir, d.Name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("backup: removing old dump %s: %w", d.Name, err)
 		}
 	}
 	return nil
 }
 
-// EnsureBootDump is serve's boot-time call (cmd/uruni/main.go): write and
-// retain a fresh dump when NeedsFormatVersionDump says the newest one (or
-// none) is not in the running binary's format. It returns an error; main.go
-// treats it as non-fatal, since a backup failing must never keep the
-// treasurer from recording a transaction.
+// EnsureBootDump is serve's boot-time call (cmd/uruni/main.go): write a fresh
+// dump, then prune (pruneAfterWrite), when NeedsFormatVersionDump says the
+// newest one (or none) is not in the running binary's format. It returns an
+// error only when the dump was not written; a prune that fails is logged on
+// logger as a warning, not returned. main.go treats the error as non-fatal,
+// since a backup failing must never keep the treasurer from recording a
+// transaction. logger must not be nil.
 func EnsureBootDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) error {
 	// Also sweeps any restore-staging file a restart between an inspect and its
 	// confirm left behind: CreateRestoreStagingTemp uses tempPrefix, so a
@@ -551,5 +581,6 @@ func EnsureBootDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir st
 	// One message for both triggers NeedsFormatVersionDump covers, so the log
 	// never says a version changed when none did.
 	logger.Info("wrote boot backup dump (none yet in the current format)", "name", name, "format_version", FormatVersion)
-	return ApplyRetention(backupDir, DailyRetention, PreRestoreRetention)
+	pruneAfterWrite(backupDir, logger)
+	return nil
 }
