@@ -9,6 +9,7 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/store"
 )
 
 // The backfill is neutral (ADR-040): for every member and every period, the new
@@ -350,10 +351,15 @@ func TestBackfillOfAVersion1FileIsNeutralForEveryMemberAndPeriod(t *testing.T) {
 		}
 
 		const current = "2026-08"
-		n, err := l.ArrearsMonthsForMember(ctx, 1, m.ID, current)
+		page, err := store.New(destDB).GetMemberForFund(ctx, store.GetMemberForFundParams{FundID: 1, ID: m.ID})
 		if err != nil {
-			t.Fatalf("ArrearsMonthsForMember(%s) = %v", m.Name, err)
+			t.Fatalf("GetMemberForFund(%s) = %v", m.Name, err)
 		}
+		arrears, err := l.ArrearsMonthsForMembers(ctx, 1, []store.Member{page}, current)
+		if err != nil {
+			t.Fatalf("ArrearsMonthsForMembers(%s) = %v", m.Name, err)
+		}
+		n := arrears[m.ID]
 		if want := len(world.outstanding(m, "2026-07")); n != want {
 			t.Errorf("%s arrears at %s = %d, the old rule says %d", m.Name, current, n, want)
 		}

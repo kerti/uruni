@@ -250,7 +250,7 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 // the item stands for the whole group (ADR-048): the sum of its months, its
 // periods, and reversal facts judged per payment - reversible when at least one
 // month stands and ledger.DuesPaymentRefusal does not refuse, the same rule
-// Ledger.ReverseDuesPayment applies.
+// Ledger.ReverseTransaction applies to a dues row.
 func toTransactionsPageResponse(t store.ListTransactionsPageRow, group []store.ListDuesGroupRowsRow, today string) transactionResponse {
 	resp := toTransactionResponse(store.Transaction{
 		ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,

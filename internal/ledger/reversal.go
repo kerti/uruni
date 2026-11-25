@@ -98,7 +98,7 @@ func ReversalDate(occurredOn string, counted bool, today string) string {
 }
 
 // DuesPaymentRefusal answers whether a dues payment can be reversed now (ADR-048):
-// nil when it can, otherwise the named error ReverseDuesPayment returns. months
+// nil when it can, otherwise the named error ReverseTransaction returns for a dues row. months
 // are the facts of every dues row of the payment. A month an earlier reversal
 // already took back is skipped, never refused; the first standing month
 // ReversalRefusal refuses refuses the whole act; a payment with no month
@@ -215,8 +215,9 @@ func (l *Ledger) postReversalTx(ctx context.Context, q store.Querier, fundID int
 // copied from the original.
 //
 // A dues row is never reversed alone (ADR-048): the call reverses its whole
-// payment, exactly as ReverseDuesPayment does, and returns the reversal of the
-// row asked about, or - when that month was already reversed before this act
+// payment (one reversal row for each month still standing, all in one database
+// transaction, in the order of the months they reverse), and returns the
+// reversal of the row asked about, or - when that month was already reversed before this act
 // (data from before ADR-048 only) - the first reversal the act posted.
 //
 // The original is fetched fund-scoped, so ErrReversalNotFound answers for
@@ -273,44 +274,18 @@ func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionPar
 	return reversal, nil
 }
 
-// ReverseDuesPaymentParams is every argument ReverseDuesPayment needs: the
-// payment and the caller's note. As with ReverseTransactionParams, everything
-// else is copied from the rows being reversed.
-type ReverseDuesPaymentParams struct {
-	FundID        int64
-	DuesPaymentID int64
-	Note          *string
-}
-
-// ReverseDuesPayment reverses a dues payment whole (ADR-048): one reversal row
-// for each of its months still standing, all in one database transaction, so
-// either every month is taken back or none is. It returns the posted rows in
-// the order of the months they reverse.
-//
-// Each row keeps ADR-042's rules exactly as ReverseTransaction applies them to
-// one: ReversalRefusal decides it, ReversalDate dates it, and the first
-// refusal (a month under a closed envelope, a counted month dated after today)
-// refuses the whole act with its named error. A month an earlier reversal
-// already took back is skipped, not refused - only data from before ADR-048
-// holds a payment reversed in part, and *batalkan* takes the rest. A payment
-// with no month standing is ErrAlreadyReversed; another fund's payment, or
-// none, is ErrReversalNotFound. The reversal rows carry no dues_payment_id.
-func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) ([]store.Transaction, error) {
-	var posted []store.Transaction
-	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
-		var err error
-		posted, err = l.reverseDuesPaymentTx(ctx, q, p.FundID, p.DuesPaymentID, p.Note)
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("reversing dues payment: %w", err)
-	}
-	return posted, nil
-}
-
-// reverseDuesPaymentTx is ReverseDuesPayment on the caller's open querier
-// (ADR-027's ...Tx rule). Every standing month is checked before any row is
-// written, so a refusal leaves nothing behind even without the transaction.
+// reverseDuesPaymentTx reverses a dues payment whole on the caller's open
+// querier (ADR-027's ...Tx rule; ADR-048): one reversal row for each of its
+// months still standing, so either every month is taken back or none is. Each
+// row keeps ADR-042's rules exactly as ReverseTransaction applies them to one:
+// ReversalRefusal decides it, ReversalDate dates it, and the first refusal (a
+// month under a closed envelope, a counted month dated after today) refuses
+// the whole act with its named error. A month an earlier reversal already took
+// back is skipped, not refused - only data from before ADR-048 holds a payment
+// reversed in part. A payment with no month standing is ErrAlreadyReversed;
+// another fund's payment, or none, is ErrReversalNotFound. Every standing month
+// is checked before any row is written, so a refusal leaves nothing behind even
+// without the transaction. The reversal rows carry no dues_payment_id.
 func (l *Ledger) reverseDuesPaymentTx(ctx context.Context, q store.Querier, fundID, paymentID int64, note *string) ([]store.Transaction, error) {
 	rows, err := q.ListDuesPaymentReversalTargets(ctx, store.ListDuesPaymentReversalTargetsParams{FundID: fundID, DuesPaymentID: &paymentID})
 	if err != nil {

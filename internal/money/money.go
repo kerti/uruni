@@ -6,7 +6,7 @@
 // minus and the six comparisons already work between two Amounts. What the
 // native operators get wrong is silent wraparound at the int64 boundary, which
 // a trust core cannot tolerate: a wrapped balance is a confidently wrong
-// number on the calmest screen. So Add, Sub and Mul are the checked versions,
+// number on the calmest screen. So Add and Sub are the checked versions,
 // and FormatIDR (format.go) is the server-side twin of the SPA's formatter,
 // for the one renderer without JavaScript: the public report (ADR-035).
 //
@@ -18,7 +18,6 @@ package money
 import (
 	"errors"
 	"fmt"
-	"math"
 )
 
 // ErrOverflow reports that an operation's true result cannot be represented in
@@ -75,25 +74,6 @@ func (a Amount) Sub(b Amount) (Amount, error) {
 		return 0, fmt.Errorf("%w: %d - %d", ErrOverflow, a, b)
 	}
 	return diff, nil
-}
-
-// Mul returns a repeated n times, or ErrOverflow if the true product is not
-// representable.
-//
-// n is a plain int64 count, not an Amount: money times money is meaningless.
-// The domain's only multiplication is a dues rate times a number of periods.
-func (a Amount) Mul(n int64) (Amount, error) {
-	if a == 0 || n == 0 {
-		return 0, nil
-	}
-	product := int64(a) * n
-	// The division check catches every wraparound except where the check itself
-	// wraps: math.MinInt64 / -1 is math.MinInt64 in Go, which would agree with a
-	// and let the overflow through.
-	if product/n != int64(a) || (int64(a) == math.MinInt64 && n == -1) {
-		return 0, fmt.Errorf("%w: %d * %d", ErrOverflow, a, n)
-	}
-	return Amount(product), nil
 }
 
 // AboveCeiling reports whether a is larger than MaxAmount. It says nothing

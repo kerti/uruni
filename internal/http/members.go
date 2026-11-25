@@ -55,7 +55,7 @@ type memberResponse struct {
 	CurrentRate *int64 `json:"current_rate"`
 	// ArrearsMonths is N whole months of periods strictly before the current one
 	// that the member still owes something for, the Tunggakan badge's figure
-	// (see Ledger.ArrearsMonthsForMember). 0 on POST/PATCH's reply: only the
+	// (see Ledger.ArrearsMonthsForMembers). 0 on POST/PATCH's reply: only the
 	// roster listing reads a member as in arrears.
 	ArrearsMonths int `json:"arrears_months"`
 }
@@ -156,7 +156,7 @@ type membersPageResponse struct {
 // the month. This route has no ?through= to override it (ADR-032: a period
 // selector does not belong in Anggota), so unlike
 // GET /api/members/{id}/outstanding-dues there is nothing to defer to (see
-// Ledger.ArrearsMonthsForMember).
+// Ledger.ArrearsMonthsForMembers).
 func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {

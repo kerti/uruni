@@ -89,10 +89,11 @@ type HomeBalances struct {
 // for the purposes, each merged onto its ordered list. An account or purpose
 // with no entry reads Rp0.
 //
-// Every figure is what FundBalance, AccountBalance, PurposeBalance,
-// OwedToMembers and MonthInOut return for it. The total is its own sum, not the
-// accounts added up, though the two agree (a test holds them to it). The month
-// MonthInOut reads is the ledger clock's.
+// Every figure is what FundBalance, AccountBalance, PurposeBalance and
+// OwedToMembers return for it, and the month's In and Out are monthInOut's: the
+// report's own running-month figures (ADR-038). The total is its own sum, not
+// the accounts added up, though the two agree (a test holds them to it). The
+// month monthInOut reads is the ledger clock's.
 func (l *Ledger) Balances(ctx context.Context, fundID int64) (HomeBalances, error) {
 	var b HomeBalances
 	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {

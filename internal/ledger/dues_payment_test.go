@@ -159,7 +159,7 @@ func reversalRowsOf(t *testing.T, l *Ledger, fundID int64) []store.Transaction {
 	return out
 }
 
-func TestReverseDuesPaymentReversesEveryStandingMonthInOneAct(t *testing.T) {
+func TestReverseTransactionOnADuesRowReversesEveryStandingMonthInOneAct(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
@@ -172,10 +172,14 @@ func TestReverseDuesPaymentReversesEveryStandingMonthInOneAct(t *testing.T) {
 	rows := payDues(t, l, f, "2026-08-12", 25_000, "2026-06", "2026-07", "2026-08")
 	note := "salah catat"
 
-	got, err := l.at(onTheDay("2026-08-20")).ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: *rows[0].DuesPaymentID, Note: &note})
+	asked, err := l.at(onTheDay("2026-08-20")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[0].ID, Note: &note})
 	if err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
+	if asked.ReversesTransactionID == nil || *asked.ReversesTransactionID != rows[0].ID {
+		t.Errorf("returned reversal reverses %v, want the month named (%d)", asked.ReversesTransactionID, rows[0].ID)
+	}
+	got := reversalRowsOf(t, l, f.fundID)
 	if len(got) != 3 {
 		t.Fatalf("posted %d reversals, want one per month (3)", len(got))
 	}
@@ -244,7 +248,7 @@ func TestReverseTransactionOnADuesRowReversesTheWholePayment(t *testing.T) {
 
 // Data from before ADR-048 can hold a payment reversed in part. Batalkan takes
 // the rest, and only the rest, by either door.
-func TestReverseDuesPaymentOfAPartlyReversedPaymentTakesTheRest(t *testing.T) {
+func TestReverseTransactionOfAPartlyReversedPaymentTakesTheRest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -274,15 +278,19 @@ func TestReverseDuesPaymentOfAPartlyReversedPaymentTakesTheRest(t *testing.T) {
 		}
 	}
 
-	t.Run("by the payment", func(t *testing.T) {
+	t.Run("by a month still standing", func(t *testing.T) {
 		t.Parallel()
 		l, f, rows := partlyReversed(t)
-		got, err := l.at(onTheDay("2026-08-20")).ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: *rows[1].DuesPaymentID})
+		before := len(reversalRowsOf(t, l, f.fundID))
+		got, err := l.at(onTheDay("2026-08-20")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[1].ID})
 		if err != nil {
-			t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+			t.Fatalf("ReverseTransaction() = %v, want no error", err)
 		}
-		if len(got) != 2 {
-			t.Fatalf("posted %d reversals, want the 2 months still standing", len(got))
+		if got.ReversesTransactionID == nil || *got.ReversesTransactionID != rows[1].ID {
+			t.Errorf("returned reversal reverses %v, want the month named (%d)", got.ReversesTransactionID, rows[1].ID)
+		}
+		if posted := len(reversalRowsOf(t, l, f.fundID)) - before; posted != 2 {
+			t.Fatalf("posted %d reversals, want the 2 months still standing", posted)
 		}
 		assertTakenInFull(t, l, f)
 	})
@@ -297,16 +305,15 @@ func TestReverseDuesPaymentOfAPartlyReversedPaymentTakesTheRest(t *testing.T) {
 	})
 }
 
-func TestReverseDuesPaymentRefusesWhatIsAlreadyReversedOrNotThere(t *testing.T) {
+func TestReverseTransactionOnADuesRowRefusesWhatIsAlreadyReversedOrNotThere(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	rows := payDues(t, l, f, "2026-08-12", 25_000, "2026-07", "2026-08")
-	paymentID := *rows[0].DuesPaymentID
 
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: paymentID}); err != nil {
-		t.Fatalf("first ReverseDuesPayment() = %v, want no error", err)
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[0].ID}); err != nil {
+		t.Fatalf("first ReverseTransaction() = %v, want no error", err)
 	}
 	before := transactionCount(t, l, f.fundID)
 
@@ -316,20 +323,20 @@ func TestReverseDuesPaymentRefusesWhatIsAlreadyReversedOrNotThere(t *testing.T) 
 		call func() error
 		want error
 	}{
-		{"the payment again", func() error {
-			_, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: paymentID})
+		{"the month named the first time, again", func() error {
+			_, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[0].ID})
 			return err
 		}, ErrAlreadyReversed},
-		{"any month of it by the transaction path", func() error {
+		{"any other month of the payment", func() error {
 			_, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[1].ID})
 			return err
 		}, ErrAlreadyReversed},
-		{"a payment that does not exist", func() error {
-			_, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: paymentID + 100})
+		{"a transaction that does not exist", func() error {
+			_, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[1].ID + 100})
 			return err
 		}, ErrReversalNotFound},
 		{"another fund's payment", func() error {
-			_, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: otherFund, DuesPaymentID: paymentID})
+			_, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: otherFund, TransactionID: rows[0].ID})
 			return err
 		}, ErrReversalNotFound},
 	} {
@@ -344,7 +351,7 @@ func TestReverseDuesPaymentRefusesWhatIsAlreadyReversedOrNotThere(t *testing.T) 
 
 // One month the ledger refuses refuses the whole act, and nothing is written:
 // the other months, which alone could be reversed, stay standing.
-func TestReverseDuesPaymentIsAllOrNothing(t *testing.T) {
+func TestReverseTransactionOnADuesRowIsAllOrNothing(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
@@ -359,21 +366,26 @@ func TestReverseDuesPaymentIsAllOrNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var firstMonth int64
 	for _, r := range []struct{ period, on string }{{"2026-06", "2026-08-01"}, {"2026-07", "2026-12-20"}} {
 		period := r.period
-		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		posted, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
 			OccurredOn: r.on, Kind: "dues", MemberID: &f.memberID, DuesPeriod: &period, DuesPaymentID: &payment.ID, CreatedAt: 1,
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatal(err)
+		}
+		if firstMonth == 0 {
+			firstMonth = posted.ID
 		}
 	}
 	countEverything(t, l, f.fundID, f.cashID, f.bankID)
 	before := transactionCount(t, l, f.fundID)
 
-	_, err = l.at(onTheDay("2026-10-02")).ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: payment.ID})
+	_, err = l.at(onTheDay("2026-10-02")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: firstMonth})
 	if !errors.Is(err, ErrReversalBeforeOriginal) {
-		t.Fatalf("ReverseDuesPayment() = %v, want ErrReversalBeforeOriginal", err)
+		t.Fatalf("ReverseTransaction() = %v, want ErrReversalBeforeOriginal", err)
 	}
 	if got := transactionCount(t, l, f.fundID); got != before {
 		t.Errorf("rows after the refusal = %d, want %d: the refused act left nothing", got, before)
@@ -382,7 +394,7 @@ func TestReverseDuesPaymentIsAllOrNothing(t *testing.T) {
 
 // The cek kas rule is ADR-042's, applied month by month: a counted payment's
 // reversals are all dated today, an uncounted one's on its own day.
-func TestReverseDuesPaymentDatesEveryMonthByTheCountRule(t *testing.T) {
+func TestReverseTransactionOnADuesRowDatesEveryMonthByTheCountRule(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	for _, tc := range []struct {
@@ -401,9 +413,12 @@ func TestReverseDuesPaymentDatesEveryMonthByTheCountRule(t *testing.T) {
 			if tc.counted {
 				countEverything(t, l, f.fundID, f.cashID, f.bankID)
 			}
-			got, err := l.at(onTheDay("2026-10-02")).ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, DuesPaymentID: *rows[0].DuesPaymentID})
-			if err != nil {
-				t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+			if _, err := l.at(onTheDay("2026-10-02")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: rows[0].ID}); err != nil {
+				t.Fatalf("ReverseTransaction() = %v, want no error", err)
+			}
+			got := reversalRowsOf(t, l, f.fundID)
+			if len(got) != 3 {
+				t.Fatalf("reversal rows = %d, want one per month (3)", len(got))
 			}
 			for _, r := range got {
 				if r.OccurredOn != tc.want {
