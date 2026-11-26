@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -202,7 +203,7 @@ func TestMigrateDownAboveTheBaselineWritesADumpFirst(t *testing.T) {
 			t.Error("the dump ran after the rollback, want it before")
 		}
 		calls++
-		return dumpBeforeDown(sqlDB, cfg)(ctx)
+		return dumpBeforeDown(sqlDB, cfg, quietLogger())(ctx)
 	}
 
 	var out bytes.Buffer
@@ -262,7 +263,7 @@ func TestMigrateDownRefusesWhenTheDumpFails(t *testing.T) {
 			t.Fatal(err)
 		}
 		cfg.BackupDir = filepath.Join(t.TempDir(), "no-such-dir")
-		err = migrateDown(context.Background(), sqlDB, fsys, quietLogger(), io.Discard, dumpBeforeDown(sqlDB, cfg))
+		err = migrateDown(context.Background(), sqlDB, fsys, quietLogger(), io.Discard, dumpBeforeDown(sqlDB, cfg, quietLogger()))
 		if err == nil {
 			t.Fatal("migrateDown() with an unwritable backup dir = nil, want a refusal")
 		}
@@ -270,4 +271,53 @@ func TestMigrateDownRefusesWhenTheDumpFails(t *testing.T) {
 			t.Errorf("migration 2 was rolled back although no dump could be written")
 		}
 	})
+}
+
+// #903: the dump `migrate down` takes prunes its own kind afterward, and what
+// that prune does never decides the rollback. The prune's failure path (one old
+// dump that cannot be deleted) is proven in internal/backup, where a deletion
+// can be made to fail; the CLI package has no seam for it, so this test covers
+// what is reachable here: dumpBeforeDown hands the write a logger, and with a
+// full quota of old safety nets the rollback proceeds, the dump is on disk and
+// the oldest net is pruned.
+func TestMigrateDownPrunesOldSafetyNetsAndProceeds(t *testing.T) {
+	_, backupDir := migrateEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fsys := twoVersionMigrations(t)
+	sqlDB := openAtTwoVersions(t, fsys)
+
+	var old []string
+	for day := 1; day <= backup.PreRestoreRetention; day++ {
+		name := fmt.Sprintf("uruni-202609%02d-120000-pre-restore-fv1-%012d.zip", day, day)
+		if err := os.WriteFile(filepath.Join(backupDir, name), []byte("stub"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		old = append(old, name)
+	}
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	var out bytes.Buffer
+	if err := migrateDown(context.Background(), sqlDB, fsys, logger, &out, dumpBeforeDown(sqlDB, cfg, logger)); err != nil {
+		t.Fatalf("migrateDown() = %v, want no error", err)
+	}
+	if tableExists(t, sqlDB, "extra") {
+		t.Errorf("migration 2 was not rolled back")
+	}
+	dumps, err := backup.ListDumps(backupDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dumps) != backup.PreRestoreRetention {
+		t.Errorf("backup dir holds %d dumps, want %d (the new net in, the oldest pruned)", len(dumps), backup.PreRestoreRetention)
+	}
+	if _, err := os.Stat(filepath.Join(backupDir, old[0])); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("oldest safety net: stat = %v, want it pruned", err)
+	}
+	if strings.Contains(logs.String(), "level=WARN") {
+		t.Errorf("log = %q, want no warning when the prune works", logs.String())
+	}
 }

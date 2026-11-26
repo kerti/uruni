@@ -170,7 +170,7 @@ func TestWriteDumpIsStampedInTheFundsZone(t *testing.T) {
 			sqlDB := newTestDB(t)
 			buildFixture(t, sqlDB, t.TempDir())
 			setZone(t, sqlDB, zone)
-			name, written, err := WriteDailyIfNeeded(context.Background(), sqlDB, t.TempDir(), t.TempDir(), instant)
+			name, written, err := WriteDailyIfNeeded(context.Background(), sqlDB, t.TempDir(), t.TempDir(), instant, testDiscardLogger())
 			if err != nil || !written {
 				t.Fatalf("WriteDailyIfNeeded() = %q, %v, %v", name, written, err)
 			}
@@ -394,7 +394,7 @@ func TestRestoreRefusesAZoneOutsideTheThreeThroughTheCheck(t *testing.T) {
 	if err := os.WriteFile(path, zipOfDocument(t, bad), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: bad, StagingPath: path}, Now: time.Unix(1800000000, 0)})
+	err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: bad, StagingPath: path}, Now: time.Unix(1800000000, 0), Logger: testDiscardLogger()})
 	if err == nil || !strings.Contains(err.Error(), "CHECK") {
 		t.Fatalf("Restore(time_zone=Asia/Tokyo) = %v, want the CHECK to refuse it", err)
 	}

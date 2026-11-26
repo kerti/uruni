@@ -94,7 +94,7 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 		}
 		return migrateUp(ctx, sqlDB, logger, out, cfg.DBPath)
 	case "down":
-		return migrateDown(ctx, sqlDB, nil, logger, out, dumpBeforeDown(sqlDB, cfg))
+		return migrateDown(ctx, sqlDB, nil, logger, out, dumpBeforeDown(sqlDB, cfg, logger))
 	default:
 		return printMigrationStatus(ctx, sqlDB, out, cfg.DBPath)
 	}
@@ -119,13 +119,16 @@ func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.W
 
 // dumpBeforeDown is the dump `migrate down` takes before changing anything. It
 // goes to `serve`'s dump directory so it shows in the Cadangan list; a missing
-// or read-only directory fails here, before the rollback.
-func dumpBeforeDown(sqlDB *sql.DB, cfg config.Config) func(context.Context) (string, error) {
+// or read-only directory fails here, before the rollback. Only a dump that is
+// not written fails it: an old dump the prune afterward could not delete is a
+// warning on logger (backup.WritePreRestoreDump), not a refusal, because the
+// safety net exists.
+func dumpBeforeDown(sqlDB *sql.DB, cfg config.Config, logger *slog.Logger) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
 		if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
 			return "", err
 		}
-		return backup.WritePreRestoreDump(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, time.Now())
+		return backup.WritePreRestoreDump(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, time.Now(), logger)
 	}
 }
 

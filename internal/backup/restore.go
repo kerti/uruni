@@ -24,6 +24,7 @@ import (
 	_ "image/png" // registers the PNG decoder - decode-only, same reasoning
 	// as receipt_image.go.
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -579,6 +580,10 @@ type RestoreParams struct {
 	BackupDir  string
 	Parsed     ParsedUpload
 	Now        time.Time
+	// Logger receives the one thing Restore reports without failing: the
+	// safety-net dump's prune warning. Required, never nil (internal/http
+	// passes the request's logger).
+	Logger *slog.Logger
 }
 
 // Restore is the in-app write side of ADR-012's restore path: a safety-net
@@ -596,9 +601,11 @@ type RestoreParams struct {
 //
 // WritePreRestoreDump runs before the transaction opens, reads the live
 // state in its own read transaction (BuildDocument), and releases the
-// connection before the write transaction asks for it.
+// connection before the write transaction asks for it. Only a failure to write
+// that dump refuses the restore; an old dump it could not prune afterward is
+// logged on p.Logger and the restore goes on.
 func Restore(ctx context.Context, p RestoreParams) error {
-	if _, err := WritePreRestoreDump(ctx, p.DB, p.UploadsDir, p.BackupDir, p.Now); err != nil {
+	if _, err := WritePreRestoreDump(ctx, p.DB, p.UploadsDir, p.BackupDir, p.Now, p.Logger); err != nil {
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
 	_, err := restoreCore(ctx, p.DB, p.UploadsDir, p.Parsed, keepLiveUser)

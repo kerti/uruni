@@ -26,8 +26,8 @@ const schedulerInterval = time.Hour
 // HTTP server.
 //
 // It never overlaps itself, by construction not a mutex: one goroutine runs
-// one sequential loop, and each tick's work (WriteDailyIfNeeded, then
-// ApplyRetention) completes before the loop waits again. A slow tick delays
+// one sequential loop, and each tick's work (WriteDailyIfNeeded, which
+// prunes after a write it makes) completes before the loop waits again. A slow tick delays
 // the next; time.Ticker drops undeliverable ticks rather than queue them.
 //
 // Ordering with the boot-time dump keeps the two writers from racing on one
@@ -47,7 +47,7 @@ const schedulerInterval = time.Hour
 // would take the whole process down, request handlers and all.
 func RunScheduler(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, logger *slog.Logger) {
 	tick := func() {
-		name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, time.Now())
+		name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, time.Now(), logger)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Shutdown cut the tick short; the next boot's dump picks the day up.
@@ -63,9 +63,6 @@ func RunScheduler(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir stri
 			return
 		}
 		logger.Info("wrote daily backup dump", "name", name)
-		if err := ApplyRetention(backupDir, DailyRetention, PreRestoreRetention); err != nil {
-			logger.Error("backup retention failed", "error", err)
-		}
 	}
 
 	runLoop(ctx, schedulerInterval, tick, logger)

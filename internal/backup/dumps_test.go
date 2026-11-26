@@ -329,7 +329,7 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 	// hash is compared.
 	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), tz.Jakarta, KindDaily, FormatVersion, "0000000000000000"))
 
-	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, now)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, now, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() = %v, want no error", err)
 	}
@@ -355,7 +355,7 @@ func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T
 	ctx := context.Background()
 
 	yesterday := jakartaTime(2026, 9, 29, 3, 0, 0)
-	firstName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday)
+	firstName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(yesterday) = %v, want no error", err)
 	}
@@ -364,7 +364,7 @@ func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T
 	}
 
 	today := jakartaTime(2026, 9, 30, 3, 0, 0)
-	secondName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today)
+	secondName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(today) = %v, want no error", err)
 	}
@@ -383,7 +383,7 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 	q := store.New(sqlDB)
 
 	yesterday := jakartaTime(2026, 9, 29, 3, 0, 0)
-	if _, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday); err != nil || !written {
+	if _, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday, testDiscardLogger()); err != nil || !written {
 		t.Fatalf("WriteDailyIfNeeded(yesterday) = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 
@@ -412,7 +412,7 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 	}
 
 	today := jakartaTime(2026, 9, 30, 3, 0, 0)
-	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(today) = %v, want no error", err)
 	}
@@ -437,7 +437,7 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 	ctx := context.Background()
 
 	utcJustBeforeJakartaMidnight := time.Date(2026, 9, 29, 18, 0, 0, 0, time.UTC)
-	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, utcJustBeforeJakartaMidnight)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, utcJustBeforeJakartaMidnight, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() = %v, want no error", err)
 	}
@@ -460,7 +460,7 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 	// same date) must not roll over early.
 	utcStillSameJakartaDay := time.Date(2026, 9, 29, 16, 0, 0, 0, time.UTC) // 23:00 WIB, 2026-09-29
 	backupDir2 := t.TempDir()
-	name2, written2, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir2, utcStillSameJakartaDay)
+	name2, written2, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir2, utcStillSameJakartaDay, testDiscardLogger())
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() (second) = %v, want no error", err)
 	}
@@ -487,7 +487,7 @@ func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
 	var names []string
 	for i := 0; i < PreRestoreRetention+2; i++ {
 		when := jakartaTime(2026, 9, 20+i, 12, 0, 0)
-		name, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, when)
+		name, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, when, testDiscardLogger())
 		if err != nil {
 			t.Fatalf("WritePreRestoreDump() = %v, want no error", err)
 		}
